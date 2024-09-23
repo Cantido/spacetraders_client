@@ -35,3 +35,4 @@ spacetraders_client-*.tar
 npm-debug.log
 /assets/node_modules/
 
+.envrc

@@ -42,3 +42,9 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
+
+window.addEventListener("fuel_dialog_opened", () => {
+  console.log("opening fuel dialog");
+  const dialog = document.getElementById("fuel_dialog");
+  dialog.showModal();
+})

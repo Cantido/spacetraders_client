@@ -589,11 +589,19 @@ defmodule SpacetradersClientWeb.CoreComponents do
       <.icon name="hero-arrow-path" class="ml-1 w-3 h-3 animate-spin" />
   """
   attr :name, :string, required: true
+  attr :hex, :string, default: "ffffff"
   attr :class, :string, default: nil
 
   def icon(%{name: "hero-" <> _} = assigns) do
     ~H"""
     <span class={[@name, @class]} />
+    """
+  end
+
+  def icon(%{name: "game-" <> name} = assigns) do
+    assigns = assign(assigns, :game_icon, name)
+    ~H"""
+    <span><img phx-track-static src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={32} class="min-w-8" /></span>
     """
   end
 

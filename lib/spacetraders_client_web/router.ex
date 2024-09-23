@@ -18,6 +18,13 @@ defmodule SpacetradersClientWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    live "/game", GameLive, :agent
+    live "/game/agent", GameLive, :agent
+    live "/game/fleet/:ship_symbol", GameLive, :fleet
+    live "/game/systems", GameLive, :systems
+    live "/game/systems/:system_symbol", GameLive, :systems
+    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", GameLive, :systems
   end
 
   # Other scopes may use custom stacks.
