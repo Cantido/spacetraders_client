@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "daisyui": "^4.12.10"
+  },
+  "dependencies": {
+    "three": "^0.168.0"
   }
 }

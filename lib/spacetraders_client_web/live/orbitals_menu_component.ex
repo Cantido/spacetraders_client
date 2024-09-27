@@ -48,7 +48,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
                 <summary class="bg-base-100"><%= section_name %></summary>
                 <ul>
                   <%= for waypoint <- in_section do %>
-                    <.submenu fleet={@fleet} system={@system} waypoint={waypoint} />
+                    <.submenu fleet={@fleet} system={@system} waypoint={waypoint} active_waypoint={@active_waypoint} />
                   <% end %>
                 </ul>
               </details>
@@ -63,14 +63,14 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   attr :system, :map, required: true
   attr :waypoint, :map, required: true
   attr :fleet, :list, required: true
-  attr :active, :boolean, default: false
+  attr :active_waypoint, :string, default: nil
 
   defp submenu(assigns) do
     ~H"""
     <li>
       <.link
         patch={~p"/game/systems/#{@system["symbol"]}/waypoints/#{@waypoint["symbol"]}"}
-        class={if @active, do: ["active"], else: []}
+        class={if @active_waypoint == @waypoint["symbol"], do: ["active"], else: []}
       >
         <%= case @waypoint["type"] do %>
           <% "PLANET" -> %>

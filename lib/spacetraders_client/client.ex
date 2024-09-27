@@ -12,12 +12,14 @@ defmodule SpacetradersClient.Client do
 
       {
         Tesla.Middleware.Retry,
+        delay: 500,
         should_retry: fn
           {:ok, %{status: status}} when status == 429 -> true
           {:ok, _} -> false
           {:error, _} -> true
         end
-      }
+      },
+      Tesla.Middleware.Logger,
       ],
       {Tesla.Adapter.Finch, name: SpacetradersClient.Finch}
     )

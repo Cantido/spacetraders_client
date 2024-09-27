@@ -1,190 +1,154 @@
 defmodule SpacetradersClientWeb.ShipComponent do
+  alias SpacetradersClientWeb.ShipStatsComponent
   use SpacetradersClientWeb, :live_component
 
   alias SpacetradersClient.Systems
 
   def render(assigns) do
     ~H"""
-    <section class="p-8 h-full w-full flex flex-col">
-      <header class="mb-4 shrink-0">
-        <h2 class="text-neutral-500">Ship</h2>
-        <h1 class="text-2xl"><%= @ship["registration"]["name"] %></h1>
+    <section class="p-8 w-full flex flex-col overflow-y-auto">
+      <header class="mb-4 flex-none">
+        <h1 class="text-2xl font-bold"><%= @ship["registration"]["name"] %></h1>
       </header>
 
-      <section class="stats mb-8 shrink-0">
-        <div class="stat">
-          <h3 class="stat-title">Role</h3>
-          <div class="stat-value"><%= @ship["registration"]["role"] %></div>
-          <div class="stat-desc invisible"></div>
-          <div class="stat-actions invisible">
-            <button class="btn btn-neutral" disabled></button>
-          </div>
-        </div>
-
-        <div class="stat">
-          <h3 class="stat-title">Navigation</h3>
-          <%= case @ship["nav"]["status"] do %>
-            <% "IN_TRANSIT" -> %>
-              <div class="stat-value">
-                In transit
-              </div>
-              <div class="stat-desc">
-                Traveling to <%= get_in(@ship, ~w(nav route destination symbol)) %>
-              </div>
-              <div class="stat-actions">
-                <button class="btn btn-neutral" disabled>Undock</button>
-                <button class="btn btn-neutral" disabled>Dock</button>
-              </div>
-            <% "IN_ORBIT" -> %>
-              <div class="stat-value">
-                In orbit
-              </div>
-              <div class="stat-desc">
-                Orbiting <%= get_in(@ship, ~w(nav waypointSymbol)) %>
-              </div>
-              <div class="stat-actions">
-                <button class="btn btn-neutral" disabled>Undock</button>
-                <button phx-click="dock-ship" phx-value-ship-symbol={@ship["symbol"]} class="btn btn-neutral">Dock</button>
-              </div>
-            <% "DOCKED" -> %>
-              <div class="stat-value">
-                Docked
-              </div>
-              <div class="stat-desc">
-                Docked at <%= get_in(@ship, ~w(nav waypointSymbol)) %>
-              </div>
-              <div class="stat-actions">
-                <button phx-click="orbit-ship" phx-value-ship-symbol={@ship["symbol"]} class="btn btn-neutral">Undock</button>
-                <button class="btn btn-neutral" disabled>Dock</button>
-              </div>
-          <% end %>
-        </div>
-
-        <div class="stat">
-          <%
-            fuel_current = @ship["fuel"]["current"]
-            fuel_capacity = @ship["fuel"]["capacity"]
-            fuel_percent = trunc(Float.ceil(fuel_current / fuel_capacity * 100))
-          %>
-
-          <h3 class="stat-title">Fuel</h3>
-          <div class="stat-value">
-            <%= if fuel_capacity == 0 do %>
-              <span>No tank</span>
-            <% else %>
-              <span><%= fuel_current %>u</span>
-            <% end %>
-          </div>
-          <div class="stat-figure">
-            <div class="radial-progress" style={"--value:#{fuel_percent};"} role="progressbar"><%= fuel_percent%>%</div>
-          </div>
-          <div class="stat-desc">
-            <div>Capacity of <%= fuel_capacity %>u</div>
-          </div>
+      <section class="stats mb-8 flex-none">
+        <ShipStatsComponent.registration ship={@ship} />
+        <ShipStatsComponent.navigation ship={@ship} cooldown_remaining={@cooldown_remaining} />
+        <ShipStatsComponent.fuel ship={@ship}>
           <div class="stat-actions">
-            <button class="btn btn-neutral" disabled>Refuel</button>
+            <button
+              class="btn btn-neutral"
+              phx-click="purchase-fuel"
+              phx-value-ship-symbol={@ship["symbol"]}
+            >
+              Refuel
+            </button>
           </div>
-        </div>
-
-
-        <div class="stat">
-          <%
-            cargo_current = get_in(@ship, ~w(cargo units))
-            cargo_capacity = get_in(@ship, ~w(cargo capacity))
-            cargo_percent = trunc(Float.ceil(cargo_current / cargo_capacity * 100))
-          %>
-          <h3 class="stat-title">Cargo</h3>
-          <div class="stat-value">
-            <%= cargo_current %>u
-          </div>
-          <div class="stat-figure">
-            <div class="radial-progress" style={"--value:#{cargo_percent};"} role="progressbar"><%= cargo_percent %>%</div>
-          </div>
-          <div class="stat-desc">
-            <div>Capacity of <%= cargo_capacity %>u</div>
-          </div>
-          <div class="stat-actions invisible">
-            <button class="btn btn-neutral" disabled></button>
-          </div>
-        </div>
+        </ShipStatsComponent.fuel>
+        <ShipStatsComponent.cargo ship={@ship} />
       </section>
 
-      <div role="tablist" class="tabs tabs-bordered mb-8">
-        <a role="tab" class="tab tab-active">Current Location</a>
-        <a role="tab" class="tab">Navigate</a>
-        <a role="tab" class="tab">Cargo</a>
-        <a role="tab" class="tab">Subsystems</a>
-        <a role="tab" class="tab">Registration</a>
-      </div>
-
-      <section class="grow flex flex-col">
-        <div class="bg-base-200 p-4 rounded grow">
-          <header class="mb-8">
-            <div class="text-2xl font-bold"><%= get_in(@ship, ~w(nav route destination symbol)) %></div>
-            <div class="text-xl text-neutral-500"><%= get_in(@ship, ~w(nav route destination type)) %></div>
-          </header>
-          <.async_result :let={waypoint} assign={@waypoint}>
-            <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-            <:failed :let={_failure}>There was an error loading the waypoint.</:failed>
+      <.tablist
+        active_tab_id={@tab}
+        target={@myself}
+        tabs={[
+          cargo: "Cargo",
+          navigate: "Navigate",
+          subsystems: "Subsystems",
+          registration: "Registration"
+        ]}
+      />
 
 
-            <div class="flex justify-start gap-8">
-              <section class="basis-44">
-                <div class="font-bold text-lg">Traits</div>
-                <ul class="list-disc ml-4">
-                <%= for trait <- waypoint["traits"] do %>
-                  <li>
-                    <span
-                      class={["tooltip"] ++ badge_class_for_trait(trait["symbol"])}
-                      data-tip={trait["description"]}
-                    >
-                      <%= trait["name"] %>
-                    </span>
-                  </li>
-                <% end %>
-                </ul>
-              </section>
-
-              <section class="basis-44">
-                <div class="font-bold text-lg">Modifiers</div>
-
-                <%= if Enum.empty?(waypoint["modifiers"]) do %>
-                  <p>No modifiers</p>
-                <% else %>
-                  <ul class="list-disc ml-4">
-                    <%= for trait <- waypoint["modifiers"] do %>
-                      <li><%= trait["name"] %></li>
-                    <% end %>
-                  </ul>
-                <% end %>
-              </section>
-
-              <section class="basis-44">
-                <div class="mb-4">
-                  <div class="font-bold text-lg">Orbits</div>
-
-                  <%= if is_nil(waypoint["orbits"]) do %>
-                    <p>This body does not orbit anything.</p>
-                  <% else %>
-                    <%= waypoint["orbits"] %>
-                  <% end %>
+      <section class="flex flex-col">
+        <%= case @tab do %>
+          <% :cargo -> %>
+            <SpacetradersClientWeb.ShipCargoComponent.cargo ship={@ship} />
+          <% :navigate -> %>
+            <div>
+              <div class="mb-8">
+                <div class="font-bold text-lg mb-4">
+                  Flight mode
                 </div>
 
-                <div class="font-bold text-lg">Orbitals</div>
+                <form phx-change="set-flight-mode" phx-value-ship-symbol={@ship["symbol"]}>
+                  <select class="select select-bordered w-full max-w-xs" name="flight-mode">
+                    <option value="BURN" selected={@ship["nav"]["flightMode"] == "BURN"}>Burn</option>
+                    <option value="CRUISE" selected={@ship["nav"]["flightMode"] == "CRUISE"}>Cruise</option>
+                    <option value="DRIFT" selected={@ship["nav"]["flightMode"] == "DRIFT"}>Drift</option>
+                    <option value="STEALTH" selected={@ship["nav"]["flightMode"] == "STEALTH"}>Stealth</option>
+                  </select>
+                </form>
+              </div>
 
-                <%= if Enum.empty?(waypoint["orbitals"]) do %>
-                  <p>None</p>
-                <% else %>
-                  <ul class="list-disc ml-4">
-                    <%= for orbital <- waypoint["orbitals"] do %>
-                      <li><%= orbital["symbol"] %></li>
-                    <% end %>
-                  </ul>
-                <% end %>
-              </section>
+              <div class="font-bold text-lg mb-4">
+                Waypoints in this system
+              </div>
+
+              <div class="">
+                <.async_result :let={system} assign={@system}>
+                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                  <:failed :let={_failure}>There was an error loading the system.</:failed>
+
+                  <table class="table table-zebra">
+                    <thead>
+                      <tr>
+                        <th>Symbol</th>
+                        <th>Type</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <%= for waypoint <- system["waypoints"] do %>
+                        <tr>
+                          <td><%= waypoint["symbol"] %></td>
+                          <td><%= waypoint["type"] %></td>
+                          <td>
+
+                            <% disabled = @ship["nav"]["status"] != "IN_ORBIT" %>
+
+                            <div {if disabled, do: %{"class" => "tooltip", "data-tip" => "Ship must be undocked to travel"}, else: %{}}>
+                              <button
+                                class="btn btn-sm btn-accent"
+                                phx-click="navigate-ship"
+                                phx-value-ship-symbol={@ship["symbol"]}
+                                phx-value-system-symbol={waypoint["systemSymbol"]}
+                                phx-value-waypoint-symbol={waypoint["symbol"]}
+                                disabled={disabled}
+                              >
+                                Travel to
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      <% end %>
+                    </tbody>
+                  </table>
+                </.async_result>
+              </div>
             </div>
-          </.async_result>
-        </div>
+
+          <% :subsystems -> %>
+            <div>
+              Modules installed:
+              <ul>
+                <%= for module <- @ship["modules"] do %>
+                  <li>
+                    <p>
+                      <%= module["name"] %>
+                    </p>
+                    <p class="text-sm">
+                      <%= module["description"] %>
+                    </p>
+                  </li>
+                <% end %>
+              </ul>
+
+              Mounts installed:
+              <ul>
+                <%= for mount <- @ship["mounts"] do %>
+                  <li>
+                    <p>
+                      <%= mount["name"] %>
+                    </p>
+                    <div class="text-sm">
+                      <p>
+                        <%= mount["description"] %>
+                      </p>
+                      <p>Detects the following goods:</p>
+                      <ul>
+                        <%= for deposit <- mount["deposits"] do %>
+                          <li><%= deposit %></li>
+                        <% end %>
+                      </ul>
+                    </div>
+                  </li>
+                <% end %>
+              </ul>
+            </div>
+          <% :registration -> %>
+            <span>Registration here</span>
+        <% end %>
       </section>
     </section>
     """
@@ -192,12 +156,22 @@ defmodule SpacetradersClientWeb.ShipComponent do
 
   def mount(socket) do
     {:ok, assign(socket, %{
-      tab: :waypoint
+      tab: :cargo
     })}
   end
 
   def update(assigns, socket) do
     socket = assign(socket, assigns)
+
+    socket =
+      if socket.assigns[:ship] do
+        socket
+        |> assign(:cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns[:ship]))
+        |> schedule_cooldown_update()
+      else
+        socket
+      end
+
     socket =
       if socket.assigns[:tab] == :waypoint do
         client = socket.assigns.client
@@ -220,7 +194,43 @@ defmodule SpacetradersClientWeb.ShipComponent do
 
   end
 
-  defp badge_class_for_trait("MARKETPLACE"), do: ["badge badge-accent"]
-  defp badge_class_for_trait(_trait_symbol), do: ["badge badge-neutral"]
+  def handle_event("select-tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, :tab, String.to_existing_atom(tab))}
+  end
 
+  def handle_async(:update_counter, _, socket) do
+    socket = assign(socket, :cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns.ship))
+    socket = schedule_cooldown_update(socket)
+
+    {:noreply, socket}
+  end
+
+  defp schedule_cooldown_update(socket) do
+    if socket.assigns.cooldown_remaining > 0 do
+      start_async(socket, :update_counter, fn ->
+        Process.sleep(250)
+        :ok
+      end)
+    else
+      socket
+    end
+  end
+
+  defp seconds_til_cooldown_expiration(ship) do
+    if cooldown = ship["cooldown"]["expiration"] do
+      {:ok, exp_at, _} = DateTime.from_iso8601(cooldown)
+
+      DateTime.diff(exp_at, DateTime.utc_now())
+      |> max(0)
+    else
+      if arrival_ts = ship["nav"]["route"]["arrival"] do
+        {:ok, arrive_at, _} = DateTime.from_iso8601(arrival_ts)
+
+        DateTime.diff(arrive_at, DateTime.utc_now())
+        |> max(0)
+      else
+        0
+      end
+    end
+  end
 end

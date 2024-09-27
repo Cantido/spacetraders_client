@@ -21,10 +21,11 @@ defmodule SpacetradersClientWeb.Router do
 
     live "/game", GameLive, :agent
     live "/game/agent", GameLive, :agent
-    live "/game/fleet/:ship_symbol", GameLive, :fleet
-    live "/game/systems", GameLive, :systems
-    live "/game/systems/:system_symbol", GameLive, :systems
-    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", GameLive, :systems
+    live "/game/contracts/:contract_id", GameLive, :contract
+    live "/game/systems/:system_symbol", GameLive, :system
+    live "/game/systems/:system_symbol/map", GameLive, :map
+    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", GameLive, :waypoint
+    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol/ships/:ship_symbol", GameLive, :ship
   end
 
   # Other scopes may use custom stacks.

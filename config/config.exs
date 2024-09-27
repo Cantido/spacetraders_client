@@ -30,6 +30,9 @@ config :spacetraders_client, SpacetradersClientWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :spacetraders_client, SpacetradersClient.Mailer, adapter: Swoosh.Adapters.Local
 
+config :tesla, Tesla.Middleware.Logger,
+  filter_headers: ["authorization"]
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",

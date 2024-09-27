@@ -36,5 +36,6 @@ defmodule SpacetradersClientWeb.WaypointInfoComponent do
   end
 
   defp badge_class_for_trait("MARKETPLACE"), do: ["badge badge-accent"]
+  defp badge_class_for_trait("SHIPYARD"), do: ["badge badge-accent"]
   defp badge_class_for_trait(_trait_symbol), do: ["badge badge-neutral"]
 end

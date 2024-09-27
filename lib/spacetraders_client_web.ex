@@ -86,6 +86,7 @@ defmodule SpacetradersClientWeb do
       import Phoenix.HTML
       # Core UI components and translation
       import SpacetradersClientWeb.CoreComponents
+      import SpacetradersClientWeb.SharedComponents
       import SpacetradersClientWeb.Gettext
 
       # Shortcut for generating JS commands

@@ -8,7 +8,6 @@ defmodule Miner do
     :ok = mine_until_full(client, ship_symbol)
 
     {:ok, %{body: body, status: 200}} = Client.navigate_to_waypoint(client, ship_symbol, "X1-BU22-H54")
-    dbg(body)
   end
 
   def mine_until_full(client, ship_symbol) do
