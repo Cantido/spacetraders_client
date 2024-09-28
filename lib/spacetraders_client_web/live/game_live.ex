@@ -14,7 +14,11 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def render(assigns) do
     ~H"""
-    <div class="flex flex-row min-h-screen max-h-screen h-screen" phx-hook="SurveyStorage" id="game">
+    <div id="game" phx-hook="TokenStorage">
+    <%= if @client do %>
+
+
+    <div class="flex flex-row min-h-screen max-h-screen h-screen" phx-hook="SurveyStorage" id="gamedata">
       <div class="bg-base-300 w-1/6 flex-none">
         <.async_result :let={agent} assign={@agent}>
           <:loading><span class="loading loading-ring loading-lg"></span></:loading>
@@ -132,7 +136,11 @@ defmodule SpacetradersClientWeb.GameLive do
 
       <%= case @live_action do %>
         <% :agent -> %>
-          <.live_component module={SpacetradersClientWeb.AgentComponent} id="my-agent" client={@client} agent={@agent} />
+          <.async_result :let={agent} assign={@agent}>
+            <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+            <:failed :let={_failure}>There was an error loading your agent.</:failed>
+            <.live_component module={SpacetradersClientWeb.AgentComponent} id="my-agent" client={@client} agent={agent} />
+          </.async_result>
 
         <% :contract -> %>
           <div class="min-h-screen max-h-screen w-full">
@@ -342,90 +350,106 @@ defmodule SpacetradersClientWeb.GameLive do
 
     </div>
 
-    """
+    <% else %>
+      <div class="w-1/4 h-screen mx-auto flex flex-col items-center justify-center gap-8">
+        <p>Enter your SpaceTraders token to start playing.</p>
 
-    #   <form phx-submit="save-token">
-    #     <article class="form-control">
-    #       <label class="input input-bordered flex items-center gap-2">SpaceTraders token
-    #         <input name="spacetraders-token" type="password" class="grow" />
-    #       </label>
-    #     </article>
-    #     <button class="btn btn-primary">Play SpaceTraders</button>
-    #   </form>
-    #   <% end %>
+        <form class="w-full" phx-change="token-form-changed" phx-submit="token-submitted" phx-debounce="1000">
+          <div class="form-control mb-8">
+            <input type="password" name="spacetraders-token" class="input input-bordered w-full" />
+            <div class="text-sm text-error text-center mt-2 h-6">
+              <.async_result :let={token_valid?} assign={@token_valid?}>
+                <%= if @token_attempted? && not token_valid? do %>
+                  That token is not valid.
+                <% end %>
+              </.async_result>
+            </div>
+          </div>
+
+          <.async_result :let={token_valid?} assign={@token_valid?}>
+            <:loading>
+              <button class="btn btn-primary w-full" disabled>
+                <span class="loading loading-spinner"></span>
+                Checking...
+              </button>
+            </:loading>
+            <button class="btn btn-primary w-full" disabled={not token_valid?}>Start playing</button>
+          </.async_result>
+        </form>
+
+        <.link href="https://spacetraders.io" class="link text-sm" target="_blank">Learn more about SpaceTraders</.link>
+      </div>
+
+    <% end %>
+    </div>
+
+    """
   end
 
   def mount(_params, _session, socket) do
-    token = System.fetch_env!("SPACETRADERS_TOKEN")
-    client = Client.new(token)
-
     socket =
       socket
-      |> assign_async(:agent, fn ->
-        {:ok, %{status: 200, body: body}} = Agents.my_agent(client)
-
-        {:ok, %{agent: body["data"]}}
-      end)
-      |> assign(:fleet, AsyncResult.loading())
-      |> start_async(:load_fleet, fn ->
-        {:ok, %{status: 200, body: ships_body}} = Fleet.list_ships(client)
-
-        %{fleet: ships_body["data"]}
-      end)
-      |> assign_async(:contracts, fn ->
-        {:ok, %{status: 200, body: body}} = Contracts.my_contracts(client)
-
-        {:ok, %{contracts: body["data"]}}
-      end)
       |> assign(%{
-        client: client,
+        #client: client,
+        token_attempted?: false,
+        token_valid?: AsyncResult.ok(false),
+        client: nil,
         surveys: [],
         selected_waypoint_symbol: nil,
         selected_ship_symbol: nil,
         selected_survey_id: nil,
-        system: AsyncResult.loading()
+        system: AsyncResult.loading(),
+        agent: AsyncResult.loading()
       })
 
     {:ok, socket}
   end
 
-  def handle_params(unsigned_params, _uri, socket) do
-    case socket.assigns.live_action do
-      :agent ->
-        {:noreply, socket}
+  def handle_params(unsigned_params, uri, socket) do
+    if socket.assigns[:client] do
+      case socket.assigns.live_action do
+        :agent ->
+          {:noreply, socket}
 
-      :contract ->
-        socket = assign(socket, %{
-          contract_id: unsigned_params["contract_id"]
-        })
+        :contract ->
+          socket = assign(socket, %{
+            contract_id: unsigned_params["contract_id"]
+          })
 
-        {:noreply, socket}
+          {:noreply, socket}
 
-      :system ->
-        socket = assign(socket, %{
-          system_symbol: unsigned_params["system_symbol"]
-        })
-        |> load_system()
-        {:noreply, socket}
+        :system ->
+          socket = assign(socket, %{
+            system_symbol: unsigned_params["system_symbol"]
+          })
+          |> load_system()
+          {:noreply, socket}
 
-      :waypoint ->
-        socket = assign(socket, %{
-          system_symbol: unsigned_params["system_symbol"],
-          waypoint_symbol: unsigned_params["waypoint_symbol"]
-        })
-        |> load_system()
-        {:noreply, socket}
-
-      :ship ->
-        socket =
-          socket
-          |> assign(%{
-            ship_symbol: unsigned_params["ship_symbol"],
+        :waypoint ->
+          socket = assign(socket, %{
             system_symbol: unsigned_params["system_symbol"],
             waypoint_symbol: unsigned_params["waypoint_symbol"]
           })
-        |> load_system()
+          |> load_system()
+          {:noreply, socket}
+
+        :ship ->
+          socket =
+            socket
+            |> assign(%{
+              ship_symbol: unsigned_params["ship_symbol"],
+              system_symbol: unsigned_params["system_symbol"],
+              waypoint_symbol: unsigned_params["waypoint_symbol"]
+            })
+          |> load_system()
+          {:noreply, socket}
+      end
+    else
+      if String.ends_with?(uri, "/game") do
         {:noreply, socket}
+      else
+        {:noreply, push_patch(socket, to: "/game")}
+      end
     end
   end
 
@@ -452,6 +476,51 @@ defmodule SpacetradersClientWeb.GameLive do
       end
 
     assign(socket, :selected_ship_symbol, ship["symbol"])
+  end
+
+  def handle_event("token-form-changed", %{"spacetraders-token" => token}, socket) do
+    socket =
+      socket
+      |> assign(:token_attempted?, true)
+      |> assign_async(:token_valid?, fn ->
+        client = Client.new(token)
+
+        case Agents.my_agent(client) do
+          {:ok, %{status: 200}} ->
+            {:ok, %{token_valid?: true}}
+          _ ->
+            {:ok, %{token_valid?: false}}
+        end
+      end)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("token-submitted", %{"spacetraders-token" => token}, socket) do
+    client = Client.new(token)
+
+    socket =
+      socket
+      |> push_event("token-submitted", %{token: token})
+      |> assign(:client, client)
+      |> assign_async(:agent, fn ->
+        {:ok, %{status: 200, body: body}} = Agents.my_agent(client)
+
+        {:ok, %{agent: body["data"]}}
+      end)
+      |> assign(:fleet, AsyncResult.loading())
+      |> start_async(:load_fleet, fn ->
+        {:ok, %{status: 200, body: ships_body}} = Fleet.list_ships(client)
+
+        %{fleet: ships_body["data"]}
+      end)
+      |> assign_async(:contracts, fn ->
+        {:ok, %{status: 200, body: body}} = Contracts.my_contracts(client)
+
+        {:ok, %{contracts: body["data"]}}
+      end)
+
+    {:noreply, socket}
   end
 
   def handle_event("purchase-fuel", %{"ship-symbol" => ship_symbol}, socket) do
