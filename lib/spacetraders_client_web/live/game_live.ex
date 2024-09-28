@@ -326,7 +326,7 @@ defmodule SpacetradersClientWeb.GameLive do
                     </li>
                     <li>
                       <.link
-                        patch={~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}/ships/#{@ship_symbol}"}
+                        patch={~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}/ships/#{@selected_ship_symbol}"}
                       >
                         <%= @selected_ship_symbol %>
                       </.link>
@@ -437,7 +437,7 @@ defmodule SpacetradersClientWeb.GameLive do
           socket =
             socket
             |> assign(%{
-              ship_symbol: unsigned_params["ship_symbol"],
+              selected_ship_symbol: unsigned_params["ship_symbol"],
               system_symbol: unsigned_params["system_symbol"],
               waypoint_symbol: unsigned_params["waypoint_symbol"]
             })
@@ -497,30 +497,35 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   def handle_event("token-submitted", %{"spacetraders-token" => token}, socket) do
-    client = Client.new(token)
+    if socket.assigns[:token] && socket.assigns.token == token do
+      {:noreply, socket}
+    else
+      client = Client.new(token)
 
-    socket =
-      socket
-      |> push_event("token-submitted", %{token: token})
-      |> assign(:client, client)
-      |> assign_async(:agent, fn ->
-        {:ok, %{status: 200, body: body}} = Agents.my_agent(client)
+      socket =
+        socket
+        |> push_event("token-submitted", %{token: token})
+        |> assign(:client, client)
+        |> assign(:token, token)
+        |> assign_async(:agent, fn ->
+          {:ok, %{status: 200, body: body}} = Agents.my_agent(client)
 
-        {:ok, %{agent: body["data"]}}
-      end)
-      |> assign(:fleet, AsyncResult.loading())
-      |> start_async(:load_fleet, fn ->
-        {:ok, %{status: 200, body: ships_body}} = Fleet.list_ships(client)
+          {:ok, %{agent: body["data"]}}
+        end)
+        |> assign(:fleet, AsyncResult.loading())
+        |> start_async(:load_fleet, fn ->
+          {:ok, %{status: 200, body: ships_body}} = Fleet.list_ships(client)
 
-        %{fleet: ships_body["data"]}
-      end)
-      |> assign_async(:contracts, fn ->
-        {:ok, %{status: 200, body: body}} = Contracts.my_contracts(client)
+          %{fleet: ships_body["data"]}
+        end)
+        |> assign_async(:contracts, fn ->
+          {:ok, %{status: 200, body: body}} = Contracts.my_contracts(client)
 
-        {:ok, %{contracts: body["data"]}}
-      end)
+          {:ok, %{contracts: body["data"]}}
+        end)
 
-    {:noreply, socket}
+      {:noreply, socket}
+    end
   end
 
   def handle_event("purchase-fuel", %{"ship-symbol" => ship_symbol}, socket) do
