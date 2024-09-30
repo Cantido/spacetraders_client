@@ -54,4 +54,16 @@ defmodule SpacetradersClient.Fleet do
   def jettison_cargo(client, ship_symbol, item_symbol, units) do
     Tesla.post(client, "/v2/my/ships/#{ship_symbol}/jettison", %{symbol: item_symbol, units: units})
   end
+
+  def transfer_cargo(client, source_ship_symbol, destination_ship_symbol, item_symbol, units) do
+    Tesla.post(
+      client,
+      "/v2/my/ships/#{source_ship_symbol}/transfer",
+      %{
+        tradeSymbol: item_symbol,
+        units: units,
+        shipSymbol: destination_ship_symbol
+      }
+    )
+  end
 end
