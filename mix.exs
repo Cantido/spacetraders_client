@@ -52,6 +52,7 @@ defmodule SpacetradersClient.MixProject do
       {:finch, "~> 0.13"},
       {:taido, path: "../taido"},
       {:tesla, "~> 1.12"},
+      {:hammer, "~> 6.2"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 0.20"},

@@ -1,0 +1,26 @@
+<div class="w-1/4 h-screen mx-auto flex flex-col items-center justify-center gap-8">
+  <p>Enter your SpaceTraders token to start playing.</p>
+
+  <form class="w-full" action={~p"/login"} method="post">
+    <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+    <div class="form-control mb-8">
+      <input
+        type="password"
+        name="token"
+        class="input input-bordered w-full"
+        required="true"
+        minlength="20"
+        autofocus="true"
+      />
+      <div class="text-sm text-error text-center mt-2 h-6">
+        <%= if @error_message do %>
+          <%= @error_message %>
+        <% end %>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-full">Start playing</button>
+  </form>
+
+  <.link href="https://spacetraders.io" class="link text-sm" target="_blank">Learn more about SpaceTraders</.link>
+</div>

@@ -135,12 +135,14 @@ defmodule SpacetradersClientWeb.ShipComponent do
                       <p>
                         <%= mount["description"] %>
                       </p>
-                      <p>Detects the following goods:</p>
-                      <ul>
-                        <%= for deposit <- mount["deposits"] do %>
-                          <li><%= deposit %></li>
-                        <% end %>
-                      </ul>
+                      <%= if mount["deposits"] do %>
+                        <p>Detects the following goods:</p>
+                        <ul>
+                          <%= for deposit <- mount["deposits"] do %>
+                            <li><%= deposit %></li>
+                          <% end %>
+                        </ul>
+                      <% end %>
                     </div>
                   </li>
                 <% end %>
@@ -212,6 +214,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
         :ok
       end)
     else
+      send self(), {:travel_cooldown_expired, socket.assigns.ship["symbol"]}
       socket
     end
   end

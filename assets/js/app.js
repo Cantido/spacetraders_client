@@ -28,25 +28,6 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 
 let Hooks = {};
 
-// Save user tokens
-
-Hooks.TokenStorage = {
-  mounted() {
-    if (!!localStorage.getItem("token")) {
-      const token = localStorage.getItem("token");
-
-      this.pushEvent("token-submitted", {"spacetraders-token": token}, (reply, ref) => {});
-    };
-
-    this.handleEvent("token-submitted", (payload) => {
-      console.log("got token");
-      const token = payload.token;
-
-      localStorage.setItem("token", token);
-    });
-  }
-};
-
 // LiveView hook into localstorage
 
 Hooks.SurveyStorage = {
@@ -57,9 +38,19 @@ Hooks.SurveyStorage = {
 
     const surveys = JSON.parse(localStorage.getItem("surveys"));
 
+    const validSurveys = [];
+
     surveys.forEach((survey) => {
-      this.pushEvent("survey-loaded", survey, (reply, ref) => {});
+      const now = new Date();
+      const expiration = new Date(survey.expiration);
+
+      if (now.getTime() < expiration.getTime()) {
+        this.pushEvent("survey-loaded", survey, (reply, ref) => {});
+        validSurveys.push(survey);
+      }
     });
+
+    localStorage.setItem("surveys", JSON.stringify(validSurveys));
 
     this.handleEvent("survey-completed", (survey) => {
       let surveys = JSON.parse(localStorage.getItem("surveys"));

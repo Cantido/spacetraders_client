@@ -265,6 +265,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th class="w-32">Location</th>
                     <th class="w-24">Distance</th>
                     <th class="w-32">Role</th>
                     <th class="w-24">Status</th>
@@ -286,9 +287,18 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                         </.link>
                       </td>
                       <td>
+
+                        <.link
+                          class="link-hover"
+                          patch={~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}"}
+                        >
+                          <%= ship["nav"]["waypointSymbol"] %>
+                        </.link>
+
+                      </td>
+                      <td>
                         <%= trunc(Float.round(distance(@system, @waypoint_symbol, ship["nav"]["waypointSymbol"]))) %>u
                       </td>
-
                       <td><%= ship["registration"]["role"] %></td>
                       <td>
                         <%= ship["nav"]["status"] %>
@@ -303,16 +313,31 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                       </td>
 
                       <td class="flex gap-3">
-                <button
-                  class="btn btn-sm btn-accent join-item"
-                  phx-click="navigate-ship"
-                  phx-value-ship-symbol={ship["symbol"]}
-                  phx-value-system-symbol={@system_symbol}
-                  phx-value-waypoint-symbol={@waypoint_symbol}
-                  disabled={ship["nav"]["status"] != "IN_ORBIT"}
-                >
-                  Bring here
-                </button>
+                        <div class="join">
+                          <button
+                            class="btn btn-sm btn-accent join-item"
+                            phx-click="navigate-ship"
+                            phx-value-ship-symbol={ship["symbol"]}
+                            phx-value-system-symbol={@system_symbol}
+                            phx-value-waypoint-symbol={@waypoint_symbol}
+                            phx-value-flight-mode={@selected_flight_mode}
+                            disabled={ship["nav"]["status"] != "IN_ORBIT"}
+                          >
+                            <%= @selected_flight_mode %> here
+                          </button>
+                          <details class="dropdown">
+                            <summary class="btn btn-sm btn-outline btn-accent btn-square rounded-l-none">
+                              <.icon name="hero-chevron-down" class="w-4 h-4" />
+                            </summary>
+                            <ul class="menu dropdown-content bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+                              <li><a phx-click="flight-mode-selected" phx-value-flight-mode="CRUISE" phx-target={@myself}>CRUISE</a></li>
+                              <li><a phx-click="flight-mode-selected" phx-value-flight-mode="BURN" phx-target={@myself}>BURN</a></li>
+                              <li><a phx-click="flight-mode-selected" phx-value-flight-mode="DRIFT" phx-target={@myself}>DRIFT</a></li>
+                              <li><a phx-click="flight-mode-selected" phx-value-flight-mode="STEALTH" phx-target={@myself}>STEALTH</a></li>
+                            </ul>
+                          </details>
+
+                        </div>
 
                 <div class="join">
                   <button
@@ -342,6 +367,17 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
           <% "market" -> %>
             <.async_result :let={market} assign={@market}>
+
+              <%= if market do %>
+                <div class="mb-8">
+                  <SpacetradersClientWeb.WaypointMarketComponent.imports_exports
+                    market={market}
+                    system_symbol={waypoint["systemSymbol"]}
+                    waypoint_symbol={waypoint["symbol"]}
+                  />
+                </div>
+              <% end %>
+
               <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
                 <div class="text-lg font-bold text-right">
                   Select ship
@@ -379,7 +415,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
               <%= case @market_action do %>
                 <% "sell" -> %>
                   <div>
-
                     <%= if anything_to_sell?(@ships_at_waypoint, market) do %>
                       <table class="table table-zebra">
                         <thead>
@@ -429,11 +464,9 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
                   <div>
                     <%= if market do %>
-                      <SpacetradersClientWeb.WaypointMarketComponent.table
-                        market={market}
-                        system_symbol={waypoint["systemSymbol"]}
-                        waypoint_symbol={waypoint["symbol"]}
-                      />
+                      <%= if items = market["tradeGoods"] do %>
+                        <SpacetradersClientWeb.WaypointMarketComponent.item_table items={items} />
+                      <% end %>
                     <% end %>
                   </div>
               <% end %>
@@ -734,7 +767,15 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   end
 
   def mount(socket) do
-    {:ok, assign(socket, %{waypoint_tab: "info", market_action: "buy", cooldown_remaining: 0, selected_survey_id: nil})}
+    socket =
+      assign(socket, %{
+        waypoint_tab: "info",
+        market_action: "buy",
+        cooldown_remaining: 0,
+        selected_survey_id: nil,
+        selected_flight_mode: "CRUISE"
+      })
+    {:ok, socket}
   end
 
   def update(assigns, socket) do
@@ -812,6 +853,10 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   def handle_event("set-market-action", %{"radio-market" => action}, socket) when action in ~w(buy sell) do
     {:noreply, assign(socket, :market_action, action)}
+  end
+
+  def handle_event("flight-mode-selected", %{"flight-mode" => mode}, socket) when mode in ~w(CRUISE BURN DRIFT STEALTH) do
+    {:noreply, assign(socket, :selected_flight_mode, mode)}
   end
 
   def handle_async(:get_waypoint, {:ok, {:ok, %{status: 200, body: body}}}, socket) do

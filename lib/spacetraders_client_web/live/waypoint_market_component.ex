@@ -8,41 +8,47 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
   def table(assigns) do
     ~H"""
     <div class="flex-1 grow">
-      <%= if items = @market["tradeGoods"] do %>
-        <.item_table items={items} />
-      <% else %>
-        <div class="flex">
-          <div class="flex-1">
-            <div class="text-center font-bold mb-8">Imports</div>
+      <%!-- <%= if items = @market["tradeGoods"] do %> --%>
+        <%!-- <.item_table items={items} /> --%>
+      <%!-- <% else %> --%>
+        <.imports_exports market={@market} system_symbol={@system_symbol} waypoint_symbol={@waypoint_symbol} />
+      <%!-- <% end %> --%>
+    </div>
+    """
+  end
 
-            <%= if Enum.any?(@market["imports"]) do %>
-              <.item_list items={@market["imports"]} />
-            <% else %>
-              <div class="text-center mt-16">No imports</div>
-            <% end %>
-          </div>
-          <div class="divider divider-horizontal"></div>
-          <div class="flex-1">
-            <div class="text-center font-bold mb-8">Exchanges</div>
+  def imports_exports(assigns) do
+    ~H"""
+    <div class="flex">
+      <div class="flex-1">
+        <div class="text-center font-bold mb-8">Imports</div>
 
-            <%= if Enum.any?(@market["exchange"]) do %>
-              <.item_list items={@market["exchange"]} />
-            <% else %>
-              <div class="text-center mt-16">No exchanges</div>
-            <% end %>
-          </div>
-          <div class="divider divider-horizontal"></div>
-          <div class="flex-1">
-            <div class="text-center font-bold mb-8">Exports</div>
+        <%= if Enum.any?(@market["imports"]) do %>
+          <.item_list items={@market["imports"]} />
+        <% else %>
+          <div class="text-center mt-16">No imports</div>
+        <% end %>
+      </div>
+      <div class="divider divider-horizontal"></div>
+      <div class="flex-1">
+        <div class="text-center font-bold mb-8">Exchanges</div>
 
-            <%= if Enum.any?(@market["exports"]) do %>
-              <.item_list items={@market["exports"]} />
-            <% else %>
-              <div class="text-center mt-16">No exports</div>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
+        <%= if Enum.any?(@market["exchange"]) do %>
+          <.item_list items={@market["exchange"]} />
+        <% else %>
+          <div class="text-center mt-16">No exchanges</div>
+        <% end %>
+      </div>
+      <div class="divider divider-horizontal"></div>
+      <div class="flex-1">
+        <div class="text-center font-bold mb-8">Exports</div>
+
+        <%= if Enum.any?(@market["exports"]) do %>
+          <.item_list items={@market["exports"]} />
+        <% else %>
+          <div class="text-center mt-16">No exports</div>
+        <% end %>
+      </div>
     </div>
     """
   end

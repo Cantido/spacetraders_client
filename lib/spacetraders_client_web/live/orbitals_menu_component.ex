@@ -1,11 +1,12 @@
 defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
-  use SpacetradersClientWeb, :html
+  use SpacetradersClientWeb, :live_component
 
   attr :fleet, :list, required: true
   attr :system, :map, required: true
+  attr :waypoints, :map, required: true
   attr :active_waypoint, :string, default: nil
 
-  def menu(assigns) do
+  def render(assigns) do
     section_types = [
         %{name: "Planets", types: ~w(PLANET)},
         %{name: "Gas giants", types: ~w(GAS_GIANT)},
@@ -23,7 +24,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
       |> Map.new()
 
     section_waypoints =
-      get_orbiting_waypoint(assigns.system, nil)
+      get_orbiting_waypoint(assigns.system["waypoints"], nil)
       |> Enum.reduce(%{}, fn wp, sections_acc ->
         if section_name = Map.get(type_sections, wp["type"]) do
           sections_acc
@@ -48,7 +49,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
                 <summary class="bg-base-100"><%= section_name %></summary>
                 <ul>
                   <%= for waypoint <- in_section do %>
-                    <.submenu fleet={@fleet} system={@system} waypoint={waypoint} active_waypoint={@active_waypoint} />
+                    <.submenu fleet={@fleet} system={@system} waypoint={waypoint} waypoints={@waypoints} active_waypoint={@active_waypoint} />
                   <% end %>
                 </ul>
               </details>
@@ -61,6 +62,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   end
 
   attr :system, :map, required: true
+  attr :waypoints, :map, required: true
   attr :waypoint, :map, required: true
   attr :fleet, :list, required: true
   attr :active_waypoint, :string, default: nil
@@ -94,32 +96,58 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
           <% _ -> %>
             <.icon name="game-orbital" />
         <% end %>
-        <%= @waypoint["symbol"] %>
+        <span class="flex flex-row items-center justify-between">
+          <span><%= @waypoint["symbol"] %></span>
 
-        <%= if Enum.any?(@fleet, fn ship -> ship["nav"]["waypointSymbol"] == @waypoint["symbol"] end) do %>
-          <span class="tooltip tooltip-left tooltip-accent" data-tip="You have ships here">
-            <span class="badge badge-xs badge-accent" ></span>
-          </span>
-        <% end %>
+
+          <span>
+            <% waypoint = Map.get(@waypoints, @waypoint["symbol"], %{}) %>
+            <% traits = Enum.map(Map.get(waypoint, "traits", []), fn t -> t["symbol"] end) %>
+            <span class="w-4">
+              <%= if "SHIPYARD" in traits do %>
+                <span class="tooltip tooltip-left tooltip-info" data-tip="This waypoint has a shipyard">
+                  <.icon name="hero-rocket-launch" class="mr-1 w-4 h-4 aspect-square" />
+                </span>
+              <% end %>
+            </span>
+            <span class="w-4">
+              <%= if "MARKETPLACE" in traits do %>
+                <span class="tooltip tooltip-left tooltip-info" data-tip="This waypoint has a marketplace">
+                  <.icon name="hero-building-storefront" class="mr-1 w-4 h-4 aspect-square" />
+                </span>
+              <% end %>
+            </span>
+        </span>
+
+        </span>
+
+        <span class="w-4">
+          <%= if Enum.any?(@fleet, fn ship -> ship["nav"]["waypointSymbol"] == @waypoint["symbol"] end) do %>
+            <span class="tooltip tooltip-left tooltip-accent" data-tip="You have ships here">
+              <span class="badge badge-xs badge-accent" ></span>
+            </span>
+          <% end %>
+        </span>
       </.link>
       <ul>
-        <%= for waypoint <- get_orbiting_waypoint(@system, @waypoint["symbol"]) do %>
-          <.submenu fleet={@fleet} system={@system} waypoint={waypoint} />
+        <%= for waypoint <- get_orbiting_waypoint(@waypoints, @waypoint["symbol"]) do %>
+          <.submenu fleet={@fleet} system={@system} waypoint={waypoint} waypoints={@waypoints} />
         <% end %>
       </ul>
     </li>
     """
   end
 
-  defp get_orbiting_waypoint(system, waypoint_symbol) do
-    Enum.filter(system["waypoints"], fn waypoint ->
+  defp get_orbiting_waypoint(waypoints, waypoint_symbol) when is_list(waypoints) do
+    Enum.filter(waypoints, fn waypoint ->
       waypoint["orbits"] == waypoint_symbol
     end)
   end
 
-  defp filter_waypoints_by_type(waypoints, type) do
-    Enum.filter(waypoints, fn wp ->
-      wp["type"] =~ type
+  defp get_orbiting_waypoint(waypoints, waypoint_symbol) when is_map(waypoints) do
+    Map.filter(waypoints, fn {_key, waypoint} ->
+      waypoint["orbits"] == waypoint_symbol
     end)
+    |> Map.values()
   end
 end

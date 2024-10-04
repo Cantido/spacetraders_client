@@ -19,6 +19,8 @@ defmodule SpacetradersClientWeb.Router do
 
     get "/", PageController, :home
 
+    get "/login", SessionController, :index
+    post "/login", SessionController, :log_in
     live "/game", GameLive, :agent
     live "/game/agent", GameLive, :agent
     live "/game/contracts/:contract_id", GameLive, :contract

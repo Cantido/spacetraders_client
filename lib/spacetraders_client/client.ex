@@ -7,12 +7,15 @@ defmodule SpacetradersClient.Client do
     Tesla.client(
       [
         {Tesla.Middleware.BaseUrl, "https://api.spacetraders.io"},
+        {Tesla.Middleware.Headers, [{"user-agent", "SpacetradersBot +https://github.com/Cantido/spacetraders_client"}]},
         {Tesla.Middleware.BearerAuth, token: token},
         Tesla.Middleware.JSON,
+        SpacetradersClient.RateLimit,
 
       {
         Tesla.Middleware.Retry,
-        delay: 500,
+        delay: 5_000,
+        max_delay: 30_000,
         should_retry: fn
           {:ok, %{status: status}} when status == 429 -> true
           {:ok, _} -> false

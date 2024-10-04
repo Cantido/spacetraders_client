@@ -26,17 +26,26 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
     <%= case @ship["nav"]["status"] do %>
       <% "IN_TRANSIT" -> %>
         <div class="stat-figure">
-          <div class="countdown font-mono text-4xl">
-            <span style="--value:#{trunc(@cooldown_remaining / 60)};"></span>
-            :
-            <span style="--value:#{mod(@cooldown_remaining, 60)};"></span>
+          <div class="radial-progress" style={"--value:#{transit_complete_percentage(@ship, @cooldown_remaining)};"} role="progressbar">
+            <div class="countdown font-mono ">
+              <span style={"--value:#{trunc(@cooldown_remaining / 60)};"}></span>
+              :
+              <span style={"--value:#{Integer.mod(@cooldown_remaining, 60)};"}></span>
+            </div>
           </div>
         </div>
         <div class="stat-value">
           In transit
         </div>
         <div class="stat-desc">
-          Traveling to <%= get_in(@ship, ~w(nav route destination symbol)) %>
+          <% waypoint_symbol = get_in(@ship, ~w(nav route destination symbol)) %>
+          <%= @ship["nav"]["flightMode"] %> to
+          <.link
+            class="link"
+            patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{waypoint_symbol}"}
+          >
+            <%= waypoint_symbol %>
+          </.link>
         </div>
         <div class="stat-actions">
           <button class="btn btn-neutral" disabled>Undock</button>
@@ -138,4 +147,19 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
     """
   end
 
+
+  def transit_complete_percentage(ship, _cooldown_remaining) do
+    {:ok, departure, _} = DateTime.from_iso8601(ship["nav"]["route"]["departureTime"])
+    {:ok, arrival, _} = DateTime.from_iso8601(ship["nav"]["route"]["arrival"])
+    now = DateTime.utc_now()
+
+    total_duration = DateTime.diff(arrival, departure)
+    remaining_duration = DateTime.diff(arrival, now)
+
+    if remaining_duration >= 0 do
+      remaining_duration / total_duration * 100
+    else
+      100
+    end
+  end
 end
