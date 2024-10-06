@@ -1,72 +1,57 @@
 defmodule SpacetradersClient.ShipAutomaton do
+  alias SpacetradersClient.Behaviors
   alias SpacetradersClient.Game
   require Logger
 
   @enforce_keys [
     :ship_symbol,
-    :phase,
     :tree,
-    :behavior_fun,
+    :current_action,
     :state_fun
   ]
   defstruct [
     :ship_symbol,
-    :phase,
     :tree,
-    :behavior_fun,
+    :current_action,
     :state_fun
   ]
 
-  def new(%Game{} = game, ship_symbol, task_fun, behavior_fun) when is_binary(ship_symbol) and is_function(task_fun, 2) and is_function(behavior_fun, 1) do
+  def new(%Game{} = game, ship_symbol, task_fun) when is_binary(ship_symbol) and is_function(task_fun, 2) do
     task = task_fun.(game, ship_symbol)
 
     tree =
       if task do
-        behavior_fun.(task)
+        Behaviors.for_task(task)
       end
 
     %__MODULE__{
       ship_symbol: ship_symbol,
-      phase: task,
       tree: tree,
-      behavior_fun: behavior_fun,
-      state_fun: task_fun
+      state_fun: task_fun,
+      current_action: task
     }
   end
 
   def tick(%__MODULE__{} = struct, %Game{} = game) do
-    next_task = struct.state_fun.(game, struct.ship_symbol)
+    {result, tree, %{game: game}} = Taido.BehaviorTree.tick(struct.tree, %{ship_symbol: struct.ship_symbol, game: game})
 
-    # yes I wrote Taido to maintain its own state,
-    # but I realized I need it coordinated somewhere...
+    Logger.debug("Automaton for #{struct.ship_symbol} returned #{result} for task #{struct.current_action.name}")
 
-    if next_task do
-      struct =
-        if struct.phase == next_task do
-          Logger.debug("Ship #{struct.ship_symbol} at phase #{inspect struct.phase.name}")
-          struct
-        else
-          transition_to(struct, next_task)
+    case result do
+      :running ->
+        {%{struct | tree: tree}, game}
+
+      _ ->
+        if struct.tree do
+          _ = Taido.BehaviorTree.terminate(struct.tree)
         end
 
-      {_result, tree, %{game: game}} = Taido.BehaviorTree.tick(struct.tree, %{ship_symbol: struct.ship_symbol, game: game})
+        next_task = struct.state_fun.(game, struct.ship_symbol)
 
-      {%{struct | tree: tree}, game}
-    else
-      {struct, game}
+        tree = Behaviors.for_task(next_task)
+
+        {%{struct | tree: tree, current_action: next_task}, game}
     end
-  end
-
-  defp transition_to(%__MODULE__{} = struct, next_action) do
-    Logger.debug("Ship #{struct.ship_symbol} performing #{inspect next_action.name}")
-
-    if struct.tree do
-      _ = Taido.BehaviorTree.terminate(struct.tree)
-    end
-
-    tree = struct.behavior_fun.(next_action)
-
-    %{struct | tree: tree, phase: next_action}
   end
 
   def handle_message(%__MODULE__{} = struct, msg) do

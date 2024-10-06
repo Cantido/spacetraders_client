@@ -5,6 +5,10 @@ defmodule SpacetradersClient.DecisionFactors do
     Curves.quadratic(i, 10_000, 0.333)
   end
 
+  def fuel_consumed(u) do
+    1 - Curves.smoothstep(u, 0, 50_000)
+  end
+
   def time(s) do
     Curves.smoothstep(s, 15 * 60, 0)
   end

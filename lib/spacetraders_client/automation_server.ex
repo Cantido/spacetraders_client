@@ -30,12 +30,36 @@ defmodule SpacetradersClient.AutomationServer do
     token = Keyword.fetch!(opts, :token)
     client = SpacetradersClient.Client.new(token)
 
+    if :ets.whereis(:ledgers) == :undefined do
+      :ets.new(:ledgers, [:named_table, :public, write_concurrency: true, read_concurrency: true])
+    end
+
     {:ok, %{client: client}, {:continue, :load_data}}
   end
 
   def current_task(callsign, ship_symbol) do
     if is_pid(:global.whereis_name(callsign)) do
-      GenServer.call({:global, callsign}, {:get_task, ship_symbol}, 10_000)
+      GenServer.call({:global, callsign}, {:get_task, ship_symbol}, 20_000)
+    else
+      {:error, :callsign_not_found}
+    end
+  end
+
+  def transactions(callsign, opts \\ []) do
+    if GenServer.whereis({:global, callsign}) do
+      if since = Keyword.get(opts, :since) do
+        GenServer.call({:global, callsign}, {:get_transactions, since}, 20_000)
+      else
+        GenServer.call({:global, callsign}, :get_transactions, 20_000)
+      end
+    else
+      {:error, :agent_not_found}
+    end
+  end
+
+  def ledger(callsign) do
+    if is_pid(:global.whereis_name(callsign)) do
+      GenServer.call({:global, callsign}, :get_ledger, 20_000)
     else
       {:error, :callsign_not_found}
     end
@@ -43,10 +67,28 @@ defmodule SpacetradersClient.AutomationServer do
 
   def handle_call({:get_task, ship_symbol}, _from, state) do
     if automaton = Map.get(state.automatons, ship_symbol) do
-      {:reply, {:ok, automaton.phase}, state}
+      {:reply, {:ok, automaton.current_action}, state}
     else
       {:reply, {:error, :ship_not_found}, state}
     end
+  end
+
+  def handle_call(:get_ledger, _from, state) do
+    {:reply, {:ok, state.game_state.ledger}, state}
+  end
+
+  def handle_call(:get_transactions, _from, state) do
+    {:reply, {:ok, state.game_state.transactions}, state}
+  end
+
+  def handle_call({:get_transactions, since}, _from, state) do
+    transactions =
+      state.game_state.transactions
+      |> Enum.filter(fn txn ->
+        {:ok, ts, _} = DateTime.from_iso8601(txn["timestamp"])
+        DateTime.after?(ts, since)
+      end)
+    {:reply, {:ok, transactions}, state}
   end
 
   def handle_continue(:load_data, state) do
@@ -64,7 +106,7 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def handle_continue(:schedule_tick, state) do
-    timer = Process.send_after(self(), :tick_behaviors, :timer.seconds(10))
+    timer = Process.send_after(self(), :tick_behaviors, :timer.seconds(15))
 
     {:noreply, Map.put(state, :timer, timer)}
   end
@@ -79,6 +121,9 @@ defmodule SpacetradersClient.AutomationServer do
     state =
       Enum.reduce(state.automatons, state, fn {ship_symbol, automaton}, state ->
         {automaton, game_state} = ShipAutomaton.tick(automaton, state.game_state)
+
+        record = {state.game_state.agent["symbol"], game_state.ledger}
+        :ets.insert(:ledgers, record)
 
         state
         |> Map.update!(:automatons, fn automatons ->
@@ -119,6 +164,26 @@ defmodule SpacetradersClient.AutomationServer do
       |> Game.load_fleet!()
       |> Game.load_fleet_waypoints!()
       |> Game.load_markets!()
+
+    game_state =
+      if state[:game_state] do
+        txns = state.game_state.transactions
+        ledger = state.game_state.ledger
+
+        game_state
+        |> Map.put(:transactions, txns)
+        |> Map.put(:ledger, ledger)
+      else
+        game_state
+      end
+
+    game_state =
+      case :ets.lookup(:ledgers, game_state.agent["symbol"]) do
+        [] ->
+          game_state
+        [{_symbol, ledger}] ->
+          Map.put(game_state, :ledger, ledger)
+      end
 
     Map.put(state, :game_state, game_state)
   end

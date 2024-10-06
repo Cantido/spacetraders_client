@@ -1,8 +1,14 @@
 defmodule SpacetradersClient.Systems do
+  use Nebulex.Caching
+
+  alias SpacetradersClient.Cache
+
+  @decorate cacheable(cache: Cache, key: {:system, system_symbol})
   def get_system(client, system_symbol) do
     Tesla.get(client, "/v2/systems/#{system_symbol}")
   end
 
+  @decorate cacheable(cache: Cache, key: {:waypoint, waypoint_symbol})
   def get_waypoint(client, system_symbol, waypoint_symbol) do
     Tesla.get(client, "/v2/systems/#{system_symbol}/waypoints/#{waypoint_symbol}")
   end

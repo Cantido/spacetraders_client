@@ -1,9 +1,10 @@
 defmodule SpacetradersClient.Game do
-  alias SpacetradersClient.Ship
   alias SpacetradersClient.ShipTask
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Systems
+
+  alias Motocho.Ledger
 
   require Logger
 
@@ -15,7 +16,9 @@ defmodule SpacetradersClient.Game do
     systems: %{},
     markets: %{},
     shipyards: %{},
-    surveys: %{}
+    surveys: %{},
+    transactions: [],
+    ledger: nil
   ]
 
   def new(client) do
@@ -28,15 +31,27 @@ defmodule SpacetradersClient.Game do
     %{game | agent: body["data"]}
   end
 
-  def load_fleet!(game) do
-    {:ok, %{status: 200, body: body}} = Fleet.list_ships(game.client)
+  def load_fleet!(game, page \\ 1) do
+    {:ok, %{status: 200, body: body}} = Fleet.list_ships(game.client, page: page)
 
     fleet =
-      Map.new(body["data"], fn ship ->
-        {ship["symbol"], ship}
-      end)
+      if page == 1 do
+        %{}
+      else
+        game.fleet
+      end
+      |> Map.merge(
+        Map.new(body["data"], fn ship ->
+          {ship["symbol"], ship}
+        end)
+      )
 
-    %{game | fleet: fleet}
+    if Enum.count(game.fleet) < body["meta"]["total"] do
+      %{game | fleet: fleet}
+      |> load_fleet!(page + 1)
+    else
+      %{game | fleet: fleet}
+    end
   end
 
   def load_ship!(game, ship_symbol) do
@@ -109,6 +124,60 @@ defmodule SpacetradersClient.Game do
         game
       end
     end)
+    |> then(fn game ->
+      if game.ledger do
+        game
+      else
+        reset_ledger(game)
+      end
+    end)
+
+  end
+
+  def reset_ledger(game) do
+    ledger =
+      Ledger.new()
+      |> Ledger.open_account("Cash", :assets)
+      |> Ledger.open_account("Merchandise", :assets)
+      |> Ledger.open_account("Sales", :revenue)
+      |> Ledger.open_account("Natural Resources", :revenue)
+      |> Ledger.open_account("Starting Balances", :revenue)
+      |> Ledger.open_account("Cost of Merchandise Sold", :expenses)
+      |> Ledger.open_account("Fuel", :expenses)
+      |> Ledger.post(
+        DateTime.utc_now(),
+        "Starting Balance",
+        "Cash",
+        "Starting Balances",
+        game.agent["credits"]
+      )
+
+    starting_merchandise_balance =
+      Enum.flat_map(game.fleet, fn {_id, ship} ->
+        ship["cargo"]["inventory"]
+      end)
+      |> Enum.map(fn item ->
+        price = average_purchase_price(game, item["symbol"])
+
+        price * item["units"]
+      end)
+      |> Enum.sum()
+
+    ledger =
+      Ledger.post(
+        ledger,
+        DateTime.utc_now(),
+        "Starting Merchandise Balance",
+        "Merchandise",
+        "Starting Balances",
+        starting_merchandise_balance
+      )
+
+    %{game | ledger: ledger}
+  end
+
+  def add_transaction(game, transaction) do
+    Map.update!(game, :transactions, fn txs -> [transaction | txs] end)
   end
 
   def add_survey(game, survey) do
@@ -152,6 +221,12 @@ defmodule SpacetradersClient.Game do
   def update_ship!(%__MODULE__{} = game, ship_symbol, update_fun) do
     Map.update!(game, :fleet, fn fleet ->
       Map.update!(fleet, ship_symbol, update_fun)
+    end)
+  end
+
+  def update_ledger(%__MODULE__{} = game, update_fun) do
+    Map.update!(game, :ledger, fn ledger ->
+      %Ledger{} = update_fun.(ledger)
     end)
   end
 
@@ -232,9 +307,99 @@ defmodule SpacetradersClient.Game do
     |> Enum.reject(fn {_, price} -> price == 0 end)
   end
 
+  def selling_markets(game, trade_symbol) do
+    game.markets
+    |> Enum.flat_map(fn {_, markets} -> Map.values(markets) end)
+    |> Enum.map(fn market ->
+      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+
+      if trade_good do
+        {market, trade_good["sellPrice"]}
+      else
+        {market, nil}
+      end
+    end)
+    |> Enum.reject(fn {_, price} -> is_nil(price) end)
+    |> Enum.reject(fn {_, price} -> price == 0 end)
+  end
+
+  def average_selling_price(game, system_symbol, trade_symbol) do
+    selling_markets(game, system_symbol, trade_symbol)
+    |> Enum.map(fn {_, price} -> price end)
+    |> then(fn prices ->
+      Enum.sum(prices) / Enum.count(prices)
+    end)
+  end
+
   def best_selling_market_price(game, system_symbol, trade_symbol) do
     selling_markets(game, system_symbol, trade_symbol)
     |> Enum.sort_by(fn {_, price} -> price end, :desc)
+    |> List.first()
+  end
+
+  def best_selling_market_price(game, trade_symbol) do
+    selling_markets(game, trade_symbol)
+    |> Enum.sort_by(fn {_, price} -> price end, :desc)
+    |> List.first()
+  end
+
+  def purchase_markets(game, system_symbol, trade_symbol) do
+    game.markets
+    |> Map.get(system_symbol, %{})
+    |> Enum.map(fn {_symbol, market} ->
+      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+
+      if trade_good do
+        {market, trade_good["purchasePrice"]}
+      else
+        {market, 0}
+      end
+    end)
+    |> Enum.reject(fn {_, price} -> is_nil(price) end)
+    |> Enum.reject(fn {_, price} -> price == 0 end)
+  end
+
+  def purchase_markets(game, trade_symbol) do
+    game.markets
+    |> Enum.flat_map(fn {_, markets} -> Map.values(markets) end)
+    |> Enum.map(fn market ->
+      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+
+      if trade_good do
+        {market, trade_good["purchasePrice"]}
+      else
+        {market, 0}
+      end
+    end)
+    |> Enum.reject(fn {_, price} -> is_nil(price) end)
+    |> Enum.reject(fn {_, price} -> price == 0 end)
+  end
+
+  def average_purchase_price(game, system_symbol, trade_symbol) do
+    purchase_markets(game, system_symbol, trade_symbol)
+    |> Enum.map(fn {_, price} -> price end)
+    |> then(fn prices ->
+      Enum.sum(prices) / Enum.count(prices)
+    end)
+  end
+
+  def average_purchase_price(game, trade_symbol) do
+    purchase_markets(game, trade_symbol)
+    |> Enum.map(fn {_, price} -> price end)
+    |> then(fn prices ->
+      Enum.sum(prices) / Enum.count(prices)
+    end)
+  end
+
+  def best_purchase_market_price(game, system_symbol, trade_symbol) do
+    purchase_markets(game, system_symbol, trade_symbol)
+    |> Enum.sort_by(fn {_, price} -> price end, :asc)
+    |> List.first()
+  end
+
+  def best_purchase_market_price(game, trade_symbol) do
+    purchase_markets(game, trade_symbol)
+    |> Enum.sort_by(fn {_, price} -> price end, :asc)
     |> List.first()
   end
 
@@ -287,6 +452,7 @@ defmodule SpacetradersClient.Game do
       end)
     end)
   end
+
 
   def distance_between(game, wp_a, wp_b) when is_binary(wp_a) and is_binary(wp_b) do
     wp_a = waypoint(game, wp_a)

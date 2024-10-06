@@ -15,21 +15,31 @@ defmodule SpacetradersClient.Automatons do
   @mining_wp "X1-BU22-DA5F"
   @market_wp "X1-BU22-H54"
 
-  @average_fuel_price 1.5 # per fuel unit, not market unit!!
+  @average_fuel_price 2 # per fuel unit, not market unit!!
 
   def mining_ship(game, ship_symbol) do
-    ShipAutomaton.new(game, ship_symbol, &mining_phase/2, &Behaviors.for_task/1)
+    ShipAutomaton.new(game, ship_symbol, &mining_phase/2)
   end
 
   defp mining_phase(%Game{} = game, ship_symbol) do
     ship = Game.ship(game, ship_symbol)
     waypoint = Game.waypoint(game, ship["nav"]["waypointSymbol"])
+    mounts = Enum.map(ship["mounts"], fn m -> m["symbol"] end)
 
     cond do
       waypoint["type"] in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) &&
+        Enum.any?(mounts, fn mount -> mount in ~w(MOUNT_MINING_LASER_I MOUNT_MINING_LASER_II MOUNT_MINING_LASER_III) end) &&
         ship["cargo"]["units"] < ship["cargo"]["capacity"] - 3 ->
 
         ShipTask.new(:mine, %{
+          waypoint_symbol: ship["nav"]["waypointSymbol"]
+        })
+
+      waypoint["type"] in ~w(GAS_GIANT) &&
+        Enum.any?(mounts, fn mount -> mount in ~w(MOUNT_GAS_SIPHON_I MOUNT_GAS_SIPHON_II MOUNT_GAS_SIPHON_III) end) &&
+        ship["cargo"]["units"] < ship["cargo"]["capacity"] - 3 ->
+
+        ShipTask.new(:siphon_resources, %{
           waypoint_symbol: ship["nav"]["waypointSymbol"]
         })
       true ->
@@ -38,7 +48,7 @@ defmodule SpacetradersClient.Automatons do
   end
 
   def hauling_ship(game, ship_symbol) do
-    ShipAutomaton.new(game, ship_symbol, &hauling_phase/2, &hauling_behavior/1)
+    ShipAutomaton.new(game, ship_symbol, &hauling_phase/2)
   end
 
   defp hauling_phase(%Game{} = game, ship_symbol) do
@@ -57,32 +67,8 @@ defmodule SpacetradersClient.Automatons do
     end
   end
 
-  defp hauling_behavior(:loading) do
-    Node.sequence([
-      Behaviors.travel_to_waypoint(@mining_wp),
-      Behaviors.wait_for_transit(),
-      Behaviors.enter_orbit()
-    ])
-  end
-
-  defp hauling_behavior(:selling) do
-    Node.sequence([
-      Behaviors.travel_to_waypoint(@market_wp),
-      Behaviors.wait_for_transit(),
-      Behaviors.dock_ship()
-      # Behaviors.sell_cargo_item()
-    ])
-  end
-
-  defp hauling_behavior(:jettison) do
-    Node.sequence([
-      Behaviors.enter_orbit(),
-      Behaviors.jettison_cargo()
-    ])
-  end
-
   def surveyor_ship(game, ship_symbol) do
-    ShipAutomaton.new(game, ship_symbol, &surveyor_phase/2, &surveyor_behavior/1)
+    ShipAutomaton.new(game, ship_symbol, &surveyor_phase/2)
   end
 
   def surveyor_phase(%Game{}, _ship_symbol) do
@@ -100,7 +86,7 @@ defmodule SpacetradersClient.Automatons do
   end
 
   def trading_ship(game, ship_symbol) do
-    ShipAutomaton.new(game, ship_symbol, &trading_phase/2, &Behaviors.for_task/1)
+    ShipAutomaton.new(game, ship_symbol, &trading_phase/2)
   end
 
   def trading_phase(%Game{} = game, ship_symbol) do
@@ -169,24 +155,26 @@ defmodule SpacetradersClient.Automatons do
 
           {_remaining_cargo_space, ship_pickups} =
             Enum.reduce_while(pickup_task.args.ship_pickups, {available_capacity, %{}}, fn {ship_symbol, ship_units}, {cargo_space, pickups} ->
-              units_to_take = min(cargo_space, ship_units)
-              remaining_cargo_space = cargo_space - units_to_take
+              if cargo_space > 0 do
+                units_to_take = min(cargo_space, ship_units)
+                remaining_cargo_space = cargo_space - units_to_take
 
-              continue =
-                if remaining_cargo_space > 0 do
-                  :cont
-                else
-                  :halt
-                end
-
-              {continue, {remaining_cargo_space, Map.put(pickups, ship_symbol, units_to_take)}}
+                {:cont, {remaining_cargo_space, Map.put(pickups, ship_symbol, units_to_take)}}
+              else
+                {:halt, {cargo_space, pickups}}
+              end
             end)
 
           units = Enum.map(ship_pickups, fn {_symbol, units} -> units end) |> Enum.sum()
           total_profit = price * units
 
+          unless available_capacity >= units do
+            raise "Made a task for more units than we have capacity for.... oops"
+          end
+
           args =
             Map.merge(pickup_task.args, %{
+              units: units,
               ship_pickups: ship_pickups,
               price: price,
               end_wp: market["symbol"],
@@ -196,6 +184,9 @@ defmodule SpacetradersClient.Automatons do
           %{pickup_task | args: args}
         end)
       end)
+      |> Enum.reject(fn pickup_task ->
+        pickup_task.args.units == 0
+      end)
 
       # Multiply each task by the different flight modes the ship can take to the pickup site.
       # adding fuel & time costs, and updating total profit accordingly to the task args.
@@ -203,60 +194,75 @@ defmodule SpacetradersClient.Automatons do
       |> Enum.flat_map(fn pickup_task ->
         proximity = Game.distance_between(game, ship["nav"]["waypointSymbol"], pickup_task.args.start_wp)
 
-        Ship.possible_travel_modes(ship, proximity)
-        |> Enum.map(fn start_flight_mode ->
-
-          start_fuel_consumption = Ship.fuel_cost(proximity) |> Map.fetch!(start_flight_mode)
-          start_leg_time = Ship.travel_time(ship, proximity) |> Map.fetch!(start_flight_mode)
-
-          fuel_cost = @average_fuel_price * start_fuel_consumption
-          time_required = start_leg_time
-          total_profit = pickup_task.args.total_profit - fuel_cost
-
+        if ship["nav"]["waypointSymbol"] == pickup_task.args.start_wp do
           args =
             Map.merge(pickup_task.args, %{
-              start_flight_mode: start_flight_mode,
-              time_required: time_required,
-              total_profit: total_profit,
+              time_required: 0.5,
+              start_flight_mode: "CRUISE",
+              fuel_consumed: 0
             })
 
-          %{pickup_task | args: args}
-        end)
+          [%{pickup_task | args: args}]
+        else
+          Ship.possible_travel_modes(ship, proximity)
+          |> Enum.map(fn start_flight_mode ->
+
+            start_fuel_consumption = Ship.fuel_cost(proximity) |> Map.fetch!(start_flight_mode)
+            start_leg_time = Ship.travel_time(ship, proximity) |> Map.fetch!(start_flight_mode)
+
+            fuel_cost = @average_fuel_price * start_fuel_consumption
+            time_required = start_leg_time
+            total_profit = pickup_task.args.total_profit - fuel_cost
+
+            args =
+              Map.merge(pickup_task.args, %{
+                fuel_consumed: start_fuel_consumption,
+                start_flight_mode: start_flight_mode,
+                time_required: time_required,
+                total_profit: total_profit,
+              })
+
+            %{pickup_task | args: args}
+          end)
+        end
       end)
 
       # Multiply each task by the different flight modes the ship can take to the selling site,
       # adding fuel & time costs, and updating total profit accordingly to the task args.
 
-      |> Enum.flat_map(fn pickup_task ->
-        distance = Game.distance_between(game, pickup_task.args.start_wp, pickup_task.args.end_wp)
-
-        Ship.possible_travel_modes(ship, distance)
-        |> Enum.map(fn transport_flight_mode ->
-
-          transport_fuel_consumption = Ship.fuel_cost(distance) |> Map.fetch!(transport_flight_mode)
-          transport_leg_time = Ship.travel_time(ship, distance) |> Map.fetch!(transport_flight_mode)
-
-          fuel_cost = @average_fuel_price * transport_fuel_consumption
-          time_required = pickup_task.args.time_required + transport_leg_time
-          total_profit = pickup_task.args.total_profit - fuel_cost
-
-          args =
-            Map.merge(pickup_task.args, %{
-              transport_flight_mode: transport_flight_mode,
-              time_required: time_required,
-              total_profit: total_profit,
-            })
-
-          %{pickup_task | args: args}
-        end)
-      end)
+      # |> Enum.flat_map(fn pickup_task ->
+      #   distance = Game.distance_between(game, pickup_task.args.start_wp, pickup_task.args.end_wp)
+      #
+      #   Ship.possible_travel_modes(ship, distance)
+      #   |> Enum.map(fn transport_flight_mode ->
+      #
+      #     transport_fuel_consumption = Ship.fuel_cost(distance) |> Map.fetch!(transport_flight_mode)
+      #     transport_leg_time = Ship.travel_time(ship, distance) |> Map.fetch!(transport_flight_mode)
+      #
+      #     fuel_cost = @average_fuel_price * transport_fuel_consumption
+      #     time_required = pickup_task.args.time_required + transport_leg_time
+      #     total_profit = pickup_task.args.total_profit - fuel_cost
+      #
+      #     args =
+      #       Map.merge(pickup_task.args, %{
+      #         transport_flight_mode: transport_flight_mode,
+      #         time_required: time_required,
+      #         total_profit: total_profit,
+      #       })
+      #
+      #     %{pickup_task | args: args}
+      #   end)
+      # end)
 
       # Calculate profit over time for every task, adding it to the task args.
 
       |> Enum.map(fn pickup_task ->
+          avg_price = Game.average_purchase_price(game, ship["nav"]["systemSymbol"], pickup_task.args.trade_symbol)
+
           args =
             Map.merge(pickup_task.args, %{
-              profit_over_time: pickup_task.args.total_profit / pickup_task.args.time_required
+              profit_over_time: pickup_task.args.total_profit / pickup_task.args.time_required,
+              expense: avg_price * pickup_task.args.units
             })
 
           %{pickup_task | args: args}
@@ -285,16 +291,20 @@ defmodule SpacetradersClient.Automatons do
             total_profit = (units * price) - fuel_cost
             profit_over_time = total_profit / travel_time
 
+            avg_price = Game.average_selling_price(game, ship["nav"]["systemSymbol"], item["symbol"])
+
             ShipTask.new(
               :selling,
               %{
+                fuel_consumed: fuel_used,
                 waypoint_symbol: market["symbol"],
                 trade_symbol: item["symbol"],
                 price: price,
                 units: units,
                 total_profit: total_profit,
                 flight_mode: flight_mode,
-                profit_over_time: profit_over_time
+                profit_over_time: profit_over_time,
+                expense: avg_price * units
               }
             )
           end)
@@ -303,46 +313,80 @@ defmodule SpacetradersClient.Automatons do
 
     trade_tasks =
       Game.trading_pairs(game, ship["nav"]["systemSymbol"])
+      |> Enum.map(fn trade_task ->
+        cargo_space = ship["cargo"]["capacity"] - ship["cargo"]["units"]
+
+        units =
+          (max(game.agent["credits"] - 5_000, 0) / trade_task.args.credits_required)
+          |> min(cargo_space)
+          |> min(trade_task.args.volume)
+          |> trunc()
+
+        total_profit = units * trade_task.args.profit
+
+        args =
+          Map.merge(trade_task.args, %{
+            units: units,
+            total_profit: total_profit,
+            expense: units * trade_task.args.credits_required
+          })
+
+        %{trade_task | args: args}
+      end)
       |> Enum.flat_map(fn trade_task ->
         proximity = Game.distance_between(game, ship["nav"]["waypointSymbol"], trade_task.args.start_wp)
 
         Ship.possible_travel_modes(ship, proximity)
-        |> Enum.flat_map(fn start_flight_mode ->
-          Ship.possible_travel_modes(ship, trade_task.args.distance)
-          |> Enum.map(fn transport_flight_mode ->
-
-            cargo_space = ship["cargo"]["capacity"] - ship["cargo"]["units"]
-
-            units =
-              (max(game.agent["credits"] - 5_000, 0) / trade_task.args.credits_required)
-              |> min(cargo_space)
-              |> min(trade_task.args.volume)
-              |> trunc()
-
+        |> Enum.map(fn start_flight_mode ->
             start_fuel_consumption = Ship.fuel_cost(proximity) |> Map.fetch!(start_flight_mode)
             start_leg_time = Ship.travel_time(ship, proximity) |> Map.fetch!(start_flight_mode)
 
-            transport_fuel_consumption = Ship.fuel_cost(trade_task.args.distance) |> Map.fetch!(transport_flight_mode)
-            transport_leg_time = Ship.travel_time(ship, trade_task.args.distance) |> Map.fetch!(transport_flight_mode)
-
-            fuel_cost = @average_fuel_price * (start_fuel_consumption + transport_fuel_consumption)
-            time_required = start_leg_time + transport_leg_time
-            total_profit = (units * trade_task.args.profit) - fuel_cost
+            fuel_cost = @average_fuel_price * start_fuel_consumption
+            time_required = start_leg_time
 
             args =
               Map.merge(trade_task.args, %{
-                units: units,
-                total_profit: total_profit,
-                profit_over_time: total_profit / time_required,
+                start_fuel_consumed: start_fuel_consumption,
+                fuel_consumed: start_fuel_consumption,
+                total_profit: trade_task.args.total_profit - fuel_cost,
                 start_flight_mode: start_flight_mode,
-                transport_flight_mode: transport_flight_mode
+                time_required: time_required
               })
 
             %{trade_task | args: args}
           end)
+      end)
+      |> Enum.flat_map(fn trade_task ->
+        distance = Game.distance_between(game, trade_task.args.start_wp, trade_task.args.end_wp)
+
+        Ship.possible_travel_modes(ship, distance)
+        |> Enum.map(fn end_flight_mode ->
+          end_fuel_consumption = Ship.fuel_cost(distance) |> Map.fetch!(end_flight_mode)
+          end_leg_time = Ship.travel_time(ship, distance) |> Map.fetch!(end_flight_mode)
+
+          fuel_cost = @average_fuel_price * end_fuel_consumption
+
+          args =
+            Map.merge(trade_task.args, %{
+              end_fuel_consumed: end_fuel_consumption,
+              fuel_consumed: trade_task.args.fuel_consumed + end_fuel_consumption,
+              total_profit: trade_task.args.total_profit - fuel_cost,
+              end_flight_mode: end_flight_mode,
+              time_required: trade_task.args.time_required + end_leg_time
+            })
+
+          %{trade_task | args: args}
         end)
       end)
       |> Enum.reject(fn task -> task.args.units == 0 end)
+      |> Enum.map(fn task ->
+          args =
+            Map.merge(task.args, %{
+              profit_over_time: task.args.total_profit / task.args.time_required
+            })
+
+          %{task | args: args}
+      end)
 
     best_task_score =
       (sell_tasks ++ trade_tasks ++ mining_pickup_tasks)
@@ -352,7 +396,7 @@ defmodule SpacetradersClient.Automatons do
       |> Enum.map(fn task ->
         {task, Utility.score(game, ship_symbol, task)}
       end)
-      |> Enum.reject(fn {_task, score} -> score < 0.05 end)
+      |> Enum.reject(fn {_task, score} -> score < 0.01 end)
       |> Enum.sort_by(&elem(&1, 1), :desc)
       |> Enum.max_by(fn {_task, score} -> score end, fn -> nil end)
 

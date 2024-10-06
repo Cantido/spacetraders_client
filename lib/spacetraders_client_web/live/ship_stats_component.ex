@@ -27,10 +27,21 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
       <% "IN_TRANSIT" -> %>
         <div class="stat-figure">
           <div class="radial-progress" style={"--value:#{transit_complete_percentage(@ship, @cooldown_remaining)};"} role="progressbar">
-            <div class="countdown font-mono ">
-              <span style={"--value:#{trunc(@cooldown_remaining / 60)};"}></span>
+            <%
+              cooldown_hours = trunc(@cooldown_remaining / 3600)
+              cooldown_minutes = trunc((@cooldown_remaining - (cooldown_hours * 3600)) / 60)
+              cooldown_seconds = rem(@cooldown_remaining, 60)
+            %>
+            <div class="countdown font-mono text-xs">
+
+
+              <%= if cooldown_hours > 0 do %>
+              <span style={"--value:#{cooldown_hours};"}></span>
               :
-              <span style={"--value:#{Integer.mod(@cooldown_remaining, 60)};"}></span>
+              <% end %>
+              <span style={"--value:#{cooldown_minutes};"}></span>
+              :
+              <span style={"--value:#{cooldown_seconds};"}></span>
             </div>
           </div>
         </div>

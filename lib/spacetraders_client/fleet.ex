@@ -1,4 +1,8 @@
 defmodule SpacetradersClient.Fleet do
+  use Nebulex.Caching
+
+  alias SpacetradersClient.Cache
+
   def list_ships(client, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
     page = Keyword.get(opts, :page, 1)
@@ -37,8 +41,12 @@ defmodule SpacetradersClient.Fleet do
     Tesla.post(client, "/v2/my/ships/#{ship_symbol}/orbit", "")
   end
 
-  def refuel_ship(client, ship_symbol) do
-    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/refuel", "")
+  def refuel_ship(client, ship_symbol, opts \\ []) do
+    if units = Keyword.get(opts, :units) do
+      Tesla.post(client, "/v2/my/ships/#{ship_symbol}/refuel", %{units: units})
+    else
+      Tesla.post(client, "/v2/my/ships/#{ship_symbol}/refuel", "")
+    end
   end
 
   def navigate_ship(client, ship_symbol, waypoint_symbol) do
@@ -59,6 +67,10 @@ defmodule SpacetradersClient.Fleet do
     else
       Tesla.post(client, "/v2/my/ships/#{ship_symbol}/extract", "")
     end
+  end
+
+  def siphon_resources(client, ship_symbol) do
+    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/siphon", "")
   end
 
   def jettison_cargo(client, ship_symbol, item_symbol, units) do

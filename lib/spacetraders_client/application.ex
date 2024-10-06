@@ -11,6 +11,7 @@ defmodule SpacetradersClient.Application do
       SpacetradersClientWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:spacetraders_client, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SpacetradersClient.PubSub},
+      {SpacetradersClient.Cache, []},
       # Start the Finch HTTP client for sending emails
       {Finch, name: SpacetradersClient.Finch},
       # Start a worker by calling: SpacetradersClient.Worker.start_link(arg)

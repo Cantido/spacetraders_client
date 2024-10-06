@@ -26,7 +26,51 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
+import { CountUp } from 'countup.js';
+
+import Chart from 'chart.js/auto'
+import 'chartjs-adapter-moment';
+
 let Hooks = {};
+
+// A Chart.js chart
+
+Hooks.Chart = {
+  chart: null,
+
+  config() { return JSON.parse(this.el.dataset.config); },
+
+  mounted() {
+    this.chart = new Chart(this.el, this.config());
+  },
+
+  updated() {
+    this.chart.destroy();
+    this.chart = new Chart(this.el, this.config());
+    //while (this.chart.data.datasets[0].data.length > 0) {
+    //  this.chart.data.datasets[0].data.pop()
+    //}
+    //this.chart.data.datasets[0].data.concat(this.config().data.datasets[0].data)
+    //this.chart.update();
+  }
+}
+
+// cute lil scrolling number animation
+
+Hooks.CountUp = {
+  countUp: null,
+
+  count() { return this.el.dataset.count; },
+
+  mounted() {
+    this.countUp = new CountUp(this.el, this.count());
+    this.countUp.start();
+  },
+
+  updated() {
+    this.countUp.update(this.count());
+  }
+}
 
 // LiveView hook into localstorage
 

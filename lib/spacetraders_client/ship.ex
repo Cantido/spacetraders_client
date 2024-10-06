@@ -2,7 +2,7 @@ defmodule SpacetradersClient.Ship do
   alias SpacetradersClient.Game
 
   def possible_travel_modes(ship, distance) do
-    ~w(CRUISE DRIFT BURN STEALTH)
+    ~w(CRUISE DRIFT)
     |> Enum.filter(fn mode ->
       fuel_cost(distance)[mode] <= ship["fuel"]["capacity"]
     end)
