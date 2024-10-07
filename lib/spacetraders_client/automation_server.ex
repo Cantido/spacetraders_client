@@ -1,10 +1,11 @@
 defmodule SpacetradersClient.AutomationServer do
   use GenServer
 
+  alias SpacetradersClient.AgentAutomaton
   alias SpacetradersClient.Client
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Game
-  alias SpacetradersClient.Automatons
+  alias SpacetradersClient.Automata
   alias SpacetradersClient.ShipAutomaton
 
   require Logger
@@ -66,7 +67,7 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def handle_call({:get_task, ship_symbol}, _from, state) do
-    if automaton = Map.get(state.automatons, ship_symbol) do
+    if automaton = Map.get(state.automaton.ship_automata, ship_symbol) do
       {:reply, {:ok, automaton.current_action}, state}
     else
       {:reply, {:error, :ship_not_found}, state}
@@ -118,19 +119,15 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def handle_info(:tick_behaviors, state) do
+    {automaton, game_state} = AgentAutomaton.tick(state.automaton, state.game_state)
+
     state =
-      Enum.reduce(state.automatons, state, fn {ship_symbol, automaton}, state ->
-        {automaton, game_state} = ShipAutomaton.tick(automaton, state.game_state)
+      state
+      |> Map.put(:automaton, automaton)
+      |> Map.put(:game_state, game_state)
 
-        record = {state.game_state.agent["symbol"], game_state.ledger}
-        :ets.insert(:ledgers, record)
-
-        state
-        |> Map.update!(:automatons, fn automatons ->
-          Map.put(automatons, ship_symbol, automaton)
-        end)
-        |> Map.put(:game_state, game_state)
-      end)
+    record = {state.game_state.agent["symbol"], game_state.ledger}
+    :ets.insert(:ledgers, record)
 
     {:noreply, state, {:continue, :schedule_tick}}
   end
@@ -144,16 +141,7 @@ defmodule SpacetradersClient.AutomationServer do
     {:noreply, state, {:continue, :schedule_reload}}
   end
 
-  def handle_info(msg, state) do
-    automatons =
-      Map.new(state.automatons, fn {ship_symbol, automaton} ->
-        new_automaton = ShipAutomaton.handle_message(automaton, msg)
-
-        {ship_symbol, new_automaton}
-      end)
-
-    state = Map.put(state, :automatons, automatons)
-
+  def handle_info(_msg, state) do
     {:noreply, state}
   end
 
@@ -189,28 +177,8 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   defp assign_automatons(state) do
-    automatons =
-      state.game_state.fleet
-      |> Enum.map(fn {ship_symbol, ship} ->
-        automaton =
-          case ship["registration"]["role"] do
-            "EXCAVATOR" ->
-              Automatons.mining_ship(state.game_state, ship_symbol)
-            "COMMAND" ->
-              Automatons.trading_ship(state.game_state, ship_symbol)
-            "TRANSPORT" ->
-              Automatons.trading_ship(state.game_state, ship_symbol)
-            # "SURVEYOR" ->
-            #   Automatons.surveyor_ship(state.game_state, ship_symbol)
-            _ ->
-              nil
-          end
+    automaton = AgentAutomaton.new(state.game_state)
 
-        {ship_symbol, automaton}
-      end)
-      |> Enum.reject(fn {_symbol, automaton} -> is_nil(automaton) end)
-      |> Map.new()
-
-    Map.put(state, :automatons, automatons)
+    Map.put(state, :automaton, automaton)
   end
 end

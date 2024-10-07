@@ -1,4 +1,5 @@
 defmodule SpacetradersClientWeb.AgentComponent do
+  alias Motocho.Statements
   alias Motocho.Account
   alias Motocho.Ledger
   use SpacetradersClientWeb, :live_component
@@ -25,6 +26,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
                   datasets: account_type_datasets(@ledger, :assets)
                 },
                 options: %{
+                  responsive: true,
                   scales: %{
                     x: %{ type: "time", time: %{unit: "minute"} },
                     y: %{ stacked: true, suggestedMin: 0 }
@@ -33,7 +35,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
               }
             %>
 
-            <canvas id="credits-history" phx-hook="Chart" data-config={Jason.encode!(chart_cfg)}></canvas>
+            <canvas id="credits-history" phx-hook="Chart" data-config={Jason.encode!(chart_cfg)} height="400" width="600"></canvas>
 
           <% end %>
 
@@ -42,25 +44,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
           <%= if @ledger do %>
             <h4 class="text-xl font-bold mb-4">Balances</h4>
 
-            <table class="table table-sm">
-              <thead>
-                <tr>
-                  <td>Account</td>
-                  <td class="text-right">Debit</td>
-                  <td class="text-right">Credit</td>
-                </tr>
-              </thead>
-              <tbody>
-                <.ledger_account_row ledger={@ledger} account_name="Cash" />
-                <.ledger_account_row ledger={@ledger} account_name="Merchandise" />
-                <.ledger_account_row ledger={@ledger} account_name="Sales" />
-                <.ledger_account_row ledger={@ledger} account_name="Natural Resources" />
-                <.ledger_account_row ledger={@ledger} account_name="Starting Balances" />
-                <.ledger_account_row ledger={@ledger} account_name="Cost of Merchandise Sold" />
-                <.ledger_account_row ledger={@ledger} account_name="Fuel" />
-              </tbody>
-
-            </table>
+            <.trial_balance_table ledger={@ledger} />
           <% end %>
         </div>
       </div>
@@ -87,6 +71,50 @@ defmodule SpacetradersClientWeb.AgentComponent do
       <% end %>
 
     </section>
+    """
+  end
+
+  def balance_sheet(assigns) do
+    ~H"""
+    <div>
+      <% balance_sheet = Statements.balance_sheet(@ledger) %>
+      <table>
+        <tbody>
+          <%= for {acct, bal} <- balance_sheet.assets.current do %>
+            <tr>
+              <td><%= acct.name %></td>
+              <td><%= bal %></td>
+            </tr>
+          <% end %>
+          <tr>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  def trial_balance_table(assigns) do
+    ~H"""
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <td>Account</td>
+          <td class="text-right">Debit</td>
+          <td class="text-right">Credit</td>
+        </tr>
+      </thead>
+      <tbody>
+        <.ledger_account_row ledger={@ledger} account_name="Cash" />
+        <.ledger_account_row ledger={@ledger} account_name="Merchandise" />
+        <.ledger_account_row ledger={@ledger} account_name="Sales" />
+        <.ledger_account_row ledger={@ledger} account_name="Natural Resources" />
+        <.ledger_account_row ledger={@ledger} account_name="Starting Balances" />
+        <.ledger_account_row ledger={@ledger} account_name="Cost of Merchandise Sold" />
+        <.ledger_account_row ledger={@ledger} account_name="Fuel" />
+      </tbody>
+
+    </table>
     """
   end
 
@@ -218,33 +246,6 @@ defmodule SpacetradersClientWeb.AgentComponent do
     )
   end
 
-  defp account_dataset(ledger, account_name) do
-    account = Ledger.account(ledger, account_name)
-
-    Ledger.account_entries(ledger, account_name)
-    |> Enum.sort_by(fn txn -> txn.date end, {:asc, DateTime})
-    |> Enum.map(fn txn ->
-      if txn.debit_account_id == account.id do
-        {txn.date, txn.amount}
-      else
-        {txn.date, -txn.amount}
-      end
-    end)
-    |> Enum.scan(fn {date, amount}, {_, acc} ->
-      {date, amount + acc}
-    end)
-    |> Enum.map(fn {date, amount} ->
-      %{x: date, y: amount}
-    end)
-    |> Enum.sort_by(&(&1.x), {:asc, DateTime})
-    |> then(fn data ->
-      %{
-        label: account_name,
-        data: data
-      }
-    end)
-  end
-
   defp account_txns(ledger, account_id) do
     ledger.transactions
     |> Enum.filter(fn txn ->
@@ -276,11 +277,6 @@ defmodule SpacetradersClientWeb.AgentComponent do
         }}
       end)
       |> Enum.sort_by(fn {txn, _deltas} -> txn.date end, {:asc, DateTime})
-      |> tap(fn js ->
-        five = Enum.take(js, 5)
-
-        dbg(five)
-      end)
       |> Enum.scan({nil, %{}}, fn {txn, amounts}, {_last_date, total_amounts} ->
         total_amounts =
           Enum.reduce(amounts, total_amounts, fn {acct_id, delta}, total_amounts ->
@@ -292,10 +288,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
         {txn, total_amounts}
       end)
       |> Enum.map(fn {txn, amounts} ->
-        %{
-          x: txn.date,
-          description: txn.description
-        }
+        %{x: txn.date}
         |> Map.merge(amounts)
       end)
 
@@ -308,15 +301,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
       }
     end)
     |> Enum.sort_by(fn dataset ->
-      {debit_balance, _credit_balance} = Ledger.balance(ledger, dataset.label)
-
-      debit_balance
-    end, :desc)
-    |> tap(fn datasets ->
-      first_ds = List.first(datasets)
-      first_tx = Enum.take(first_ds.data, 10)
-
-      dbg(first_tx)
+      Enum.find_index(["Cash", "Merchandise"], fn name -> dataset.label == name end)
     end)
   end
 

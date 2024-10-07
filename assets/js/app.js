@@ -45,13 +45,8 @@ Hooks.Chart = {
   },
 
   updated() {
-    this.chart.destroy();
-    this.chart = new Chart(this.el, this.config());
-    //while (this.chart.data.datasets[0].data.length > 0) {
-    //  this.chart.data.datasets[0].data.pop()
-    //}
-    //this.chart.data.datasets[0].data.concat(this.config().data.datasets[0].data)
-    //this.chart.update();
+    this.chart.data.datasets = this.config().data.datasets;
+    this.chart.update();
   }
 }
 
@@ -63,6 +58,7 @@ Hooks.CountUp = {
   count() { return this.el.dataset.count; },
 
   mounted() {
+    this.el.innerHTML = this.count();
     this.countUp = new CountUp(this.el, this.count());
     this.countUp.start();
   },

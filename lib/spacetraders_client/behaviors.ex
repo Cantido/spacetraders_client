@@ -179,7 +179,7 @@ defmodule SpacetradersClient.Behaviors do
         ship = Game.ship(state.game, state.ship_symbol)
 
         if min_fuel == :maximum do
-          ship["fuel"]["current"] < ship["fuel"]["current"]
+          ship["fuel"]["current"] == ship["fuel"]["capacity"]
         else
           ship["fuel"]["current"] >= min_fuel
         end
@@ -260,7 +260,7 @@ defmodule SpacetradersClient.Behaviors do
           Game.purchase_markets(state.game, ship["nav"]["systemSymbol"], "FUEL")
           |> Enum.sort_by(fn {market, _price} -> Game.distance_between(state.game, ship["nav"]["waypointSymbol"], market["symbol"]) end)
 
-        if _same_wp = Enum.find(fuel_markets, fn {market, _price} -> market["symbol"] == ship["nav"]["waypointSymbol"] end) do
+        if Enum.any?(fuel_markets, fn {market, _price} -> market["symbol"] == ship["nav"]["waypointSymbol"] end) do
           :success
         else
           {fuel_wp, _price} = List.first(fuel_markets)

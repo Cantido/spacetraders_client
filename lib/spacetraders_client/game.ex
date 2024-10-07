@@ -1,4 +1,5 @@
 defmodule SpacetradersClient.Game do
+  alias SpacetradersClient.Ship
   alias SpacetradersClient.ShipTask
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Fleet
@@ -146,7 +147,7 @@ defmodule SpacetradersClient.Game do
       |> Ledger.open_account("Fuel", :expenses)
       |> Ledger.post(
         DateTime.utc_now(),
-        "Starting Balance",
+        "Starting Credits Balance",
         "Cash",
         "Starting Balances",
         game.agent["credits"]
@@ -250,6 +251,10 @@ defmodule SpacetradersClient.Game do
     game.systems
     |> Map.get(system_symbol, %{})
     |> Enum.map(&elem(&1, 1))
+  end
+
+  def waypoints(game) do
+    Enum.flat_map(game.systems, fn {_, waypoints} -> Map.values(waypoints) end)
   end
 
   def market(game, market_symbol) do
@@ -413,11 +418,10 @@ defmodule SpacetradersClient.Game do
     end)
   end
 
-  def trading_pairs(game, system_symbol) do
+  def market_actions(game) do
     markets =
-      Map.get(game.markets, system_symbol, %{})
-      |> Enum.map(fn {_waypoint_symbol, market} ->
-        market
+      Enum.flat_map(game.markets, fn {_system_symbol, markets} ->
+        Map.values(markets)
       end)
 
     Enum.flat_map(markets, fn start_market ->
@@ -431,8 +435,8 @@ defmodule SpacetradersClient.Game do
               end_trade_good["sellPrice"] > start_trade_good["purchasePrice"]
           end)
           |> Enum.map(fn end_trade_good ->
-            start_wp = waypoint(game, system_symbol, Map.fetch!(start_market, "symbol"))
-            end_wp = waypoint(game, system_symbol, Map.fetch!(end_market, "symbol"))
+            start_wp = waypoint(game, Map.fetch!(start_market, "symbol"))
+            end_wp = waypoint(game, Map.fetch!(end_market, "symbol"))
 
             %ShipTask{
               name: :trade,
@@ -460,5 +464,125 @@ defmodule SpacetradersClient.Game do
 
 
     :math.sqrt(:math.pow(wp_a["x"] - wp_b["x"], 2) + :math.pow(wp_a["y"] - wp_b["y"], 2))
+  end
+
+  def actions(%__MODULE__{} = game) do
+    resource_extractions =
+      waypoints(game)
+      |> Enum.flat_map(fn waypoint ->
+        resource_actions(waypoint)
+      end)
+
+    resource_pickups = resource_pickup_actions(game)
+
+    market_actions = market_actions(game)
+
+    resource_extractions ++ resource_pickups ++ market_actions
+  end
+
+  defp resource_actions(waypoint) do
+    cond do
+      waypoint["type"] in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) ->
+        task =
+          ShipTask.new(
+            :mine,
+            %{waypoint_symbol: waypoint["symbol"]},
+            [&Ship.has_mining_laser?/1, &Ship.has_cargo_capacity?/1]
+          )
+
+        [task]
+
+      waypoint["type"] in ~w(GAS_GIANT) ->
+        task =
+          ShipTask.new(
+            :siphon_resources,
+            %{waypoint_symbol: waypoint["symbol"]},
+            [&Ship.has_gas_siphon?/1, &Ship.has_cargo_capacity?/1]
+          )
+
+        [task]
+      true ->
+        []
+    end
+  end
+
+  defp resource_pickup_actions(game) do
+    # First phase of this pipeline: collecting all excavators and their contents
+    # into maps by waypoint, so we can pick up all of one item at once.
+    # This will make it easier to find buyers.
+
+    Enum.filter(game.fleet, fn {_, mining_ship} ->
+      mining_ship["registration"]["role"] == "EXCAVATOR" &&
+        mining_ship["nav"]["status"] == "IN_ORBIT"
+    end)
+    |> Enum.map(fn {_symbol, ship} -> ship end)
+    |> Enum.group_by(fn ship -> ship["nav"]["waypointSymbol"] end)
+    |> Enum.map(fn {waypoint_symbol, ships} ->
+      # Example of the data structure I'm trying to build, one for each waypoint:
+      #
+      # %{
+      #   "IRON_ORE" => %{
+      #     "COSMIC-ROSE-5" => 5
+      #   }
+      # }
+      resources_available =
+        Enum.reduce(ships, %{}, fn ship, resources ->
+          Enum.reduce(ship["cargo"]["inventory"], resources, fn item, resources ->
+            resources
+            |> Map.put_new(item["symbol"], %{})
+            |> Map.update!(item["symbol"], fn resource ->
+              Map.put(resource, ship["symbol"], item["units"])
+            end)
+          end)
+        end)
+
+      {waypoint_symbol, resources_available}
+    end)
+
+    # Second phase: Turning excavator content groups into pickup tasks
+
+    |> Enum.flat_map(fn {waypoint_symbol, resources_available} ->
+      Enum.map(resources_available, fn {trade_symbol, ships_carrying} ->
+        ShipTask.new(
+          :pickup,
+          %{
+            start_wp: waypoint_symbol,
+            trade_symbol: trade_symbol,
+            ship_pickups: ships_carrying
+          }
+        )
+      end)
+    end)
+
+    # Multiply the pickup tasks by the material buyers available in the system,
+    # adding the buyer market and total profit to the task args.
+
+    |> Enum.flat_map(fn pickup_task ->
+      selling_markets(game, system_symbol(pickup_task.args.start_wp), pickup_task.args.trade_symbol)
+      |> Enum.map(fn {market, price} ->
+        volume = Enum.find(market["tradeGoods"], fn t -> t["symbol"] end)["tradeVolume"]
+
+        args =
+          Map.merge(pickup_task.args, %{
+            volume: volume,
+            price: price,
+            end_wp: market["symbol"],
+          })
+
+        %{pickup_task | args: args}
+      end)
+    end)
+
+    # Disallow the mining ships themselves from picking up their own materials
+
+    |> Enum.map(fn pickup_task ->
+      Enum.reduce(pickup_task.args.ship_pickups, pickup_task, fn {ship_symbol, _units}, pickup_task ->
+        condition = fn ship -> ship["symbol"] != ship_symbol end
+
+        conditions = [condition | pickup_task.conditions]
+
+        %{pickup_task | conditions: conditions}
+      end)
+    end)
   end
 end

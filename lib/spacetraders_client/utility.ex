@@ -62,6 +62,14 @@ defmodule SpacetradersClient.Utility do
     ])
   end
 
+  def score(_game, _ship_symbol, %ShipTask{name: :mine}) do
+    0.5
+  end
+
+  def score(_game, _ship_symbol, %ShipTask{name: :siphon_resources}) do
+    0.5
+  end
+
   def score(_, _, _) do
     0.0
   end

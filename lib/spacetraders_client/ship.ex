@@ -98,4 +98,22 @@ defmodule SpacetradersClient.Ship do
       false
     end
   end
+
+  def has_mining_laser?(ship) do
+    Enum.map(ship["mounts"], fn m -> m["symbol"] end)
+    |> Enum.any?(fn mount ->
+      mount in ~w(MOUNT_MINING_LASER_I MOUNT_MINING_LASER_II MOUNT_MINING_LASER_III)
+    end)
+  end
+
+  def has_gas_siphon?(ship) do
+    Enum.map(ship["mounts"], fn m -> m["symbol"] end)
+    |> Enum.any?(fn mount ->
+      mount in ~w(MOUNT_GAS_SIPHON_I MOUNT_GAS_SIPHON_II MOUNT_GAS_SIPHON_III)
+    end)
+  end
+
+  def has_cargo_capacity?(ship) do
+    ship["cargo"]["units"] < ship["cargo"]["capacity"]
+  end
 end
