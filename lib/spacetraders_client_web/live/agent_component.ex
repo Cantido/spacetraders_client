@@ -1,4 +1,6 @@
 defmodule SpacetradersClientWeb.AgentComponent do
+  alias SpacetradersClient.Cldr.Number
+  alias SpacetradersClientWeb.CreditBalanceComponent
   alias Motocho.Statements
   alias Motocho.Account
   alias Motocho.Ledger
@@ -12,24 +14,23 @@ defmodule SpacetradersClientWeb.AgentComponent do
         <h1 class="text-2xl"><%= @agent["symbol"] %></h1>
       </header>
 
-      <div class="flex flex-row gap-8 w-full">
+      <div class="flex flex-row gap-8 w-full mb-8">
 
         <div class="h-96 mb-8 basis-2/3">
+          <h4 class="text-xl font-bold mb-4">Assets (Past Hour)</h4>
           <%= if @ledger do %>
             <%
               chart_cfg = %{
                 type: "line",
                 data: %{
-                  # datasets: [
-                  #  account_dataset(@ledger, "Cash")
-                  #]
                   datasets: account_type_datasets(@ledger, :assets)
                 },
                 options: %{
                   responsive: true,
+                  elements: %{ point: %{ pointStyle: false } },
                   scales: %{
-                    x: %{ type: "time", time: %{unit: "minute"} },
-                    y: %{ stacked: true, suggestedMin: 0 }
+                    x: %{ type: "time", time: %{unit: "minute"}, suggestedMin: DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), -1, :hour)) },
+                    y: %{ stacked: true, suggestedMin: ((Ledger.balance(@ledger, "Fleet") |> elem(0)) * 0.75) }
                   }
                 }
               }
@@ -39,6 +40,13 @@ defmodule SpacetradersClientWeb.AgentComponent do
 
           <% end %>
 
+        </div>
+        <div class="basis-1/3">
+          <%= if @ledger do %>
+            <h4 class="text-xl font-bold mb-4">Income (Past Hour)</h4>
+
+            <.income_statement ledger={@ledger} />
+          <% end %>
         </div>
         <div class="basis-1/3">
           <%= if @ledger do %>
@@ -57,6 +65,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
             "Cash",
             "Merchandise",
             "Sales",
+            "Fleet",
             "Natural Resources",
             "Starting Balances",
             "Cost of Merchandise Sold",
@@ -74,6 +83,72 @@ defmodule SpacetradersClientWeb.AgentComponent do
     """
   end
 
+  def income_statement(assigns) do
+    ~H"""
+    <div>
+      <% income = Statements.income_statement(@ledger, DateTime.add(DateTime.utc_now(), -1, :hour), DateTime.utc_now()) %>
+
+
+      <table class="table table-sm">
+        <tbody>
+          <tr>
+            <th>Revenue</th>
+            <td></td>
+          </tr>
+          <%= for %{account: %{name: name}, balance: amount} <- income.revenues do %>
+            <tr>
+              <td>
+                <%= name %>
+              </td>
+              <td class="text-right">
+                <%= Number.to_string! amount, format: :accounting, fractional_digits: 0 %>
+              </td>
+            </tr>
+          <% end %>
+          <tr class="border-t-2">
+            <th>Total Revenue</th>
+            <td class="text-right font-bold">
+              <%= Number.to_string! income.total_revenue, format: :accounting, fractional_digits: 0 %>
+            </td>
+          </tr>
+          <%= for %{account: %{name: name}, balance: amount} <- income.direct_costs do %>
+            <tr>
+              <td>
+                <%= name %>
+              </td>
+              <td class="text-right">
+                <%= Number.to_string! amount, format: :accounting, fractional_digits: 0 %>
+              </td>
+            </tr>
+          <% end %>
+          <tr class="border-t-2">
+            <th>Gross Profit</th>
+            <td class="text-right font-bold">
+              <%= Number.to_string! income.gross_profit, format: :accounting, fractional_digits: 0 %>
+            </td>
+          </tr>
+          <%= for %{account: %{name: name}, balance: amount} <- income.expenses do %>
+            <tr>
+              <td>
+                <%= name %>
+              </td>
+              <td class="text-right">
+                <%= Number.to_string! amount, format: :accounting, fractional_digits: 0 %>
+              </td>
+            </tr>
+          <% end %>
+          <tr class="border-t-2">
+            <th>Net Earnings</th>
+            <td class="text-right font-bold">
+              <%= Number.to_string! income.net_earnings, format: :accounting, fractional_digits: 0 %>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
   def balance_sheet(assigns) do
     ~H"""
     <div>
@@ -83,7 +158,9 @@ defmodule SpacetradersClientWeb.AgentComponent do
           <%= for {acct, bal} <- balance_sheet.assets.current do %>
             <tr>
               <td><%= acct.name %></td>
-              <td><%= bal %></td>
+              <td>
+                <%= Number.to_string! bal, format: :accounting, fractional_digits: 0 %>
+              </td>
             </tr>
           <% end %>
           <tr>
@@ -127,8 +204,16 @@ defmodule SpacetradersClientWeb.AgentComponent do
       <% account = Ledger.account(@ledger, @account_name) %>
       <% {dr, cr} = Account.value(account, Ledger.balance(@ledger, @account_name)) %>
       <td><%= @account_name %></td>
-      <td class="text-right"><%= if trunc(dr) > 0, do: trunc(dr) %></td>
-      <td class="text-right"><%= if trunc(cr) > 0, do: trunc(cr) %></td>
+      <td class="text-right">
+        <%= if trunc(dr) != 0 do %>
+          <%= Number.to_string!(dr, format: :accounting, fractional_digits: 0) %>
+        <% end %>
+      </td>
+      <td class="text-right">
+        <%= if trunc(cr) != 0 do %>
+          <%= Number.to_string!(cr, format: :accounting, fractional_digits: 0) %>
+        <% end %>
+      </td>
     </tr>
     """
   end
@@ -162,11 +247,15 @@ defmodule SpacetradersClientWeb.AgentComponent do
               <%= txn.description %>
             </td>
             <%= if txn.debit_account_id == account.id do %>
-              <td class="text-right"><%= trunc(txn.amount) %></td>
+              <td class="text-right">
+                <%= Number.to_string!(txn.amount, format: :accounting, fractional_digits: 0) %>
+              </td>
               <td></td>
             <% else %>
               <td></td>
-              <td class="text-right"><%= trunc(txn.amount) %></td>
+              <td class="text-right">
+                <%= Number.to_string!(txn.amount, format: :accounting, fractional_digits: 0) %>
+              </td>
             <% end %>
           </tr>
         <% end %>
@@ -176,74 +265,11 @@ defmodule SpacetradersClientWeb.AgentComponent do
     """
   end
 
-  def transactions(assigns) do
-    ~H"""
-    <table class="table table-zebra table-sm">
-      <thead>
-        <tr>
-          <th class="w-32">Timestamp</th>
-          <th>Description</th>
-          <th class="w-28">Ship</th>
-          <th class="w-32">Waypoint</th>
-          <th class="text-right w-28">Debit</th>
-          <th class="text-right w-28">Credit</th>
-
-        </tr>
-      </thead>
-      <tbody>
-        <%= for txn <- sort_transactions(@transactions) do %>
-          <tr>
-            <td><%= txn["timestamp"] %></td>
-            <td>
-              <%= if txn["type"] == "PURCHASE" do %>
-                BUY
-              <% else %>
-                SELL
-              <% end %>
-              <%= txn["tradeSymbol"] %>
-              &times;
-              <%= txn["units"] %>
-              @
-              <%= txn["pricePerUnit"] %>/u
-            </td>
-            <td>
-              <%= txn["shipSymbol"] %>
-            </td>
-            <td>
-              <.link
-                patch={~p"/game/systems/#{SpacetradersClient.Game.system_symbol(txn["waypointSymbol"])}/waypoints/#{txn["waypointSymbol"]}"}
-                class="link-hover"
-              >
-                <%= txn["waypointSymbol"] %>
-              </.link>
-            </td>
-            <%= if txn["type"] == "PURCHASE" do %>
-              <td></td>
-              <td class="text-right"><%= txn["totalPrice"] %></td>
-            <% else %>
-              <td class="text-right"><%= txn["totalPrice"] %></td>
-              <td></td>
-            <% end %>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-    """
-  end
+  attr :id, :string, required: true
+  attr :amount, :integer, required: true
 
   def mount(socket) do
     {:ok, assign(socket, :tab, "Cash")}
-  end
-
-  defp sort_transactions(txns) do
-    Enum.sort_by(
-      txns,
-      fn tx ->
-        {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
-        ts
-      end,
-      {:desc, DateTime}
-    )
   end
 
   defp account_txns(ledger, account_id) do
@@ -301,7 +327,7 @@ defmodule SpacetradersClientWeb.AgentComponent do
       }
     end)
     |> Enum.sort_by(fn dataset ->
-      Enum.find_index(["Cash", "Merchandise"], fn name -> dataset.label == name end)
+      Enum.find_index(["Fleet", "Cash", "Merchandise"], fn name -> dataset.label == name end)
     end)
   end
 

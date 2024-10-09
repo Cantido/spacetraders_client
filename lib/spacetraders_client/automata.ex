@@ -7,13 +7,13 @@ defmodule SpacetradersClient.Automata do
   def for_ship(ship) do
     case ship["registration"]["role"] do
       "EXCAVATOR" ->
-        ShipAutomaton.new(ship["symbol"], fn _, _ -> [] end)
+        ShipAutomaton.new(ship["symbol"])
       "COMMAND" ->
-        ShipAutomaton.new(ship["symbol"], fn _, _ -> [] end)
+        ShipAutomaton.new(ship["symbol"])
       "TRANSPORT" ->
-        ShipAutomaton.new(ship["symbol"], fn _, _ -> [] end)
+        ShipAutomaton.new(ship["symbol"])
       "HAULER" ->
-        ShipAutomaton.new(ship["symbol"], fn _, _ -> [] end)
+        ShipAutomaton.new(ship["symbol"])
       _ ->
         nil
     end

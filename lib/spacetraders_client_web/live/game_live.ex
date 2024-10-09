@@ -1,4 +1,8 @@
 defmodule SpacetradersClientWeb.GameLive do
+  alias SpacetradersClient.Cldr.Number
+  alias SpacetradersClientWeb.CreditBalanceComponent
+  alias SpacetradersClient.LedgerServer
+  alias Phoenix.LiveView.Socket
   alias SpacetradersClient.AutomationServer
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Fleet
@@ -38,7 +42,7 @@ defmodule SpacetradersClientWeb.GameLive do
               </span>
               <span class="badge">
                 <.icon name="hero-circle-stack" class="w-4 h-4" />
-                <span id="credits" phx-hook="CountUp" data-count={agent["credits"]}><%= number_commas(agent["credits"]) %></span>
+                <%= Number.to_string! agent["credits"], format: :accounting, fractional_digits: 0 %>
               </span>
             </div>
           </.link>
@@ -105,11 +109,14 @@ defmodule SpacetradersClientWeb.GameLive do
                         <%= ship["registration"]["name"] %>
                       </span>
                       <span class="w-4">
-                        <%= if automated?(agent["symbol"], ship) do %>
-                          <span class="tooltip tooltip-left tooltip-info" data-tip="This ship is currently controlled by automation">
-                            <.icon name="hero-cog" />
-                          </span>
-                        <% end %>
+
+                        <.async_result :let={automaton} assign={@agent_automaton}>
+                          <%= if automaton && automaton.ship_automata[ship["symbol"]] do %>
+                            <span class="tooltip tooltip-left tooltip-info" data-tip="This ship is currently controlled by automation">
+                              <.icon name="hero-cog" />
+                            </span>
+                          <% end %>
+                        </.async_result>
                       </span>
 
 
@@ -156,12 +163,8 @@ defmodule SpacetradersClientWeb.GameLive do
           <.async_result :let={agent} assign={@agent}>
             <:loading><span class="loading loading-ring loading-lg"></span></:loading>
             <:failed :let={_failure}>There was an error loading your agent.</:failed>
-            <.async_result :let={transactions} assign={@transactions}>
-              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-              <:failed :let={_failure}>There was an error loading your transactions.</:failed>
 
-              <.live_component module={SpacetradersClientWeb.AgentComponent} id="my-agent" client={@client} ledger={@ledger} agent={agent} transactions={transactions} />
-            </.async_result>
+            <.live_component module={SpacetradersClientWeb.AgentComponent} id="my-agent" client={@client} ledger={@ledger} agent={agent} />
           </.async_result>
 
         <% :contract -> %>
@@ -378,15 +381,22 @@ defmodule SpacetradersClientWeb.GameLive do
                   </ul>
                 </div>
 
-                <div class="overflow-y-auto">
-                  <.live_component
-                    module={SpacetradersClientWeb.ShipComponent}
-                    id={"ship-#{@selected_ship_symbol}"}
-                    client={@client}
-                    system={system}
-                    ship={Enum.find(fleet, &(&1["symbol"] == @selected_ship_symbol))}
-                  />
-                </div>
+                <.async_result :let={agent_automaton} assign={@agent_automaton}>
+                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                  <:failed :let={_failure}>There was an error loading automation.</:failed>
+
+                  <div class="overflow-y-auto">
+                    <.live_component
+                      module={SpacetradersClientWeb.ShipComponent}
+                      id={"ship-#{@selected_ship_symbol}"}
+                      client={@client}
+                      automaton={if agent_automaton, do: agent_automaton.ship_automata[@selected_ship_symbol], else: nil}
+                      agent={agent}
+                      system={system}
+                      ship={Enum.find(fleet, &(&1["symbol"] == @selected_ship_symbol))}
+                    />
+                  </div>
+                </.async_result>
               </div>
             </.async_result>
           </.async_result>
@@ -418,23 +428,22 @@ defmodule SpacetradersClientWeb.GameLive do
         selected_survey_id: nil,
         system: AsyncResult.loading(),
         waypoints: %{},
-        agent: AsyncResult.ok(agent_body["data"])
+        agent: AsyncResult.ok(agent_body["data"]),
       })
+      |> assign_async(:agent_automaton, fn ->
+        case SpacetradersClient.AutomationServer.automaton(agent_body["data"]["symbol"]) do
+          {:ok, agent_automaton} ->
+            {:ok, %{agent_automaton: agent_automaton}}
+          _ ->
+            {:ok, %{agent_automaton: nil}}
+        end
+      end)
       |> then(fn socket ->
-        case SpacetradersClient.AutomationServer.ledger(agent_body["data"]["symbol"]) do
+        case SpacetradersClient.LedgerServer.ledger(agent_body["data"]["symbol"]) do
           {:ok, ledger} ->
             assign(socket, %{ledger: ledger})
           _ ->
             assign(socket, %{ledger: nil})
-        end
-      end)
-      |> assign_async(:transactions, fn ->
-        case AutomationServer.transactions(agent_body["data"]["symbol"]) do
-        {:ok, txns} ->
-          {:ok, %{transactions: txns}}
-
-        {:error, :agent_not_found} ->
-          {:ok, %{transactions: []}}
         end
       end)
       |> assign(:token, token)
@@ -537,6 +546,24 @@ defmodule SpacetradersClientWeb.GameLive do
 
         socket = assign(socket, :fleet, fleet)
 
+        waypoint_symbol = Enum.find(socket.assigns.fleet.result, fn ship -> ship["symbol"] == ship_symbol end) |> get_in(~w(nav waypointSymbol))
+
+
+        tx = body["data"]["transaction"]
+        {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
+
+        if tx["units"] > 0 do
+          {:ok, _ledger} =
+            LedgerServer.post_journal(
+              body["data"]["agent"]["symbol"],
+              ts,
+              "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{waypoint_symbol}",
+              "Fuel",
+              "Cash",
+              tx["totalPrice"]
+            )
+        end
+
         {:noreply, socket}
       {:ok, %{body: %{"error" => %{"message" => message}}}} ->
         socket = put_flash(socket, :error, message)
@@ -623,12 +650,29 @@ defmodule SpacetradersClientWeb.GameLive do
     ship = body["data"]["ship"]
     agent = body["data"]["agent"]
 
+    new_fleet =
+      [ship | socket.assigns.fleet.result]
+      |> Enum.sort_by(fn s -> s["symbol"] end)
+
     socket =
       socket
-      |> assign(:fleet, AsyncResult.ok([ship | socket.assigns.fleet.result]))
+      |> assign(:fleet, AsyncResult.ok(new_fleet))
       |> assign(:agent, AsyncResult.ok(agent))
+      |> put_flash(:success, "Ship #{ship["symbol"]} has been purchased")
 
-    |> put_flash(:success, "Ship #{ship["symbol"]} has been purchased")
+    tx = body["data"]["transaction"]
+
+    {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
+
+    {:ok, _ledger} =
+      LedgerServer.post_journal(
+        tx["agentSymbol"],
+        ts,
+        "BUY #{tx["shipType"]} × 1 @ #{tx["price"]}/u @ #{tx["waypointSymbol"]}",
+        "Fleet",
+        "Cash",
+        tx["price"]
+      )
 
     {:noreply, socket}
   end
@@ -904,7 +948,7 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, socket}
   end
 
-  def handle_info({:ship_updated, ship_symbol, updated_ship}, socket) do
+  def handle_info({:ship_updated, ship_symbol, updated_ship}, %Socket{} = socket) do
     socket =
       update_ship(socket, ship_symbol, fn _ship ->
         updated_ship
@@ -949,19 +993,6 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, socket}
   end
 
-  def handle_info({:transaction, txn}, socket) do
-    socket =
-      update(socket, :transactions, fn transactions ->
-        if is_list(transactions.result) do
-          AsyncResult.ok([txn | transactions.result])
-        else
-          AsyncResult.ok([txn])
-        end
-      end)
-
-    {:noreply, socket}
-  end
-
   def handle_info({:travel_cooldown_expired, ship_symbol}, socket) do
     client = socket.assigns.client
 
@@ -972,6 +1003,14 @@ defmodule SpacetradersClientWeb.GameLive do
         %{data: result.body["data"]}
       end)
 
+    {:noreply, socket}
+  end
+
+  def handle_info({:automaton_updated, automaton}, socket) do
+    {:noreply, assign(socket, :agent_automaton, AsyncResult.ok(automaton))}
+  end
+
+  def handle_info(_, socket) do
     {:noreply, socket}
   end
 
@@ -1085,30 +1124,4 @@ defmodule SpacetradersClientWeb.GameLive do
 
     socket
   end
-
-  defp automated?(callsign, ship) do
-    case AutomationServer.current_task(callsign, ship["symbol"]) do
-      {:ok, _task} ->
-        true
-
-      _ ->
-        false
-    end
-  end
-
-  defp number_commas(n) do
-    Integer.digits(n)
-    |> Enum.reverse()
-    |> Enum.chunk_every(3)
-    |> Enum.reverse()
-    |> Enum.map(&Enum.reverse/1)
-    |> Enum.map(fn chunk -> Integer.undigits(chunk) |> Integer.to_string() end)
-    |> then(fn [first | rest] ->
-      rest = Enum.map(rest, fn chunk -> String.pad_leading(chunk, 3, "0") end)
-
-      [first | rest]
-    end)
-    |> Enum.join(",")
-  end
-
 end

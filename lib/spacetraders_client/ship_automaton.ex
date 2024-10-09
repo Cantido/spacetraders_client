@@ -4,25 +4,24 @@ defmodule SpacetradersClient.ShipAutomaton do
   alias SpacetradersClient.Utility
   alias SpacetradersClient.Behaviors
   alias SpacetradersClient.Game
-  require Logger
 
   @enforce_keys [
-    :ship_symbol,
-    :task_fun
+    :ship_symbol
   ]
   defstruct [
     :ship_symbol,
     :tree,
     :current_action,
-    :task_fun
+    alternative_actions: [],
+    action_history: []
   ]
 
   @average_fuel_price 2 # per fuel unit, not market unit!!
+  @mining_cooldown 70
 
-  def new(ship_symbol, task_fun) when is_binary(ship_symbol) and is_function(task_fun, 2) do
+  def new(ship_symbol) when is_binary(ship_symbol) do
     %__MODULE__{
-      ship_symbol: ship_symbol,
-      task_fun: task_fun
+      ship_symbol: ship_symbol
     }
   end
 
@@ -31,28 +30,28 @@ defmodule SpacetradersClient.ShipAutomaton do
       if struct.tree do
         struct
       else
+        ship = Game.ship(game, struct.ship_symbol)
+
         game_actions =
           Game.actions(game)
 
-        more_ship_actions = ship_actions(struct, game)
-        ship_actions = struct.task_fun.(game, struct.ship_symbol)
+        ship_actions = ship_actions(struct, game)
 
         actions =
-          (game_actions ++ ship_actions ++ more_ship_actions)
+          (game_actions ++ ship_actions)
           |> Enum.map(&customize_action(struct, game, &1))
           |> Enum.flat_map(&action_variations(struct, game, &1))
           |> Enum.map(&estimate_costs(struct, game, &1))
+          |> Enum.filter(&ShipTask.meets_conditions?(&1, ship))
 
-        task = select_action(struct, game, actions)
+        struct = select_action(struct, game, actions)
 
-        tree = Behaviors.for_task(task)
+        tree = Behaviors.for_task(struct.current_action)
 
-        %{struct | current_action: task, tree: tree}
+        %{struct | tree: tree}
       end
 
     {result, tree, %{game: game}} = Taido.BehaviorTree.tick(struct.tree, %{ship_symbol: struct.ship_symbol, game: game})
-
-    Logger.debug("Automaton for #{struct.ship_symbol} returned #{result} for task #{struct.current_action.name}")
 
     case result do
       :running ->
@@ -63,7 +62,15 @@ defmodule SpacetradersClient.ShipAutomaton do
           _ = Taido.BehaviorTree.terminate(struct.tree)
         end
 
-        {%{struct | tree: nil, current_action: nil}, game}
+        struct =
+          struct
+          |> Map.update!(:action_history, fn history ->
+            Enum.take([struct.current_action | history], 10)
+          end)
+          |> Map.put(:tree, nil)
+          |> Map.put(:current_action, nil)
+
+        {struct, game}
     end
   end
 
@@ -80,14 +87,11 @@ defmodule SpacetradersClient.ShipAutomaton do
 
     total_profit = units * trade_task.args.profit
 
-    args =
-      Map.merge(trade_task.args, %{
-        units: units,
-        total_profit: total_profit,
-        expense: units * trade_task.args.credits_required
-      })
-
-    %ShipTask{trade_task | args: args}
+    ShipTask.assign(trade_task, %{
+      units: units,
+      total_profit: total_profit,
+      expense: units * trade_task.args.credits_required
+    })
   end
 
   defp customize_action(struct, game, %ShipTask{name: :pickup} = pickup_task) do
@@ -116,16 +120,12 @@ defmodule SpacetradersClient.ShipAutomaton do
       raise "Made a task for more units than we have capacity for.... oops"
     end
 
-    args =
-      Map.merge(pickup_task.args, %{
-        units: units,
-        ship_pickups: ship_pickups,
-        total_profit: total_profit
-      })
-
-    %ShipTask{pickup_task | args: args}
+    ShipTask.assign(pickup_task, %{
+      units: units,
+      ship_pickups: ship_pickups,
+      total_profit: total_profit
+    })
   end
-
 
   defp customize_action(_struct, _game, action) do
     action
@@ -137,14 +137,14 @@ defmodule SpacetradersClient.ShipAutomaton do
     proximity = Game.distance_between(game, ship["nav"]["waypointSymbol"], pickup_task.args.start_wp)
 
     if ship["nav"]["waypointSymbol"] == pickup_task.args.start_wp do
-      args =
-        Map.merge(pickup_task.args, %{
-          time_required: 0.5,
-          start_flight_mode: "CRUISE",
-          fuel_consumed: 0
-        })
+      args = %{
+        time_required: 0.5,
+        start_flight_mode: "CRUISE",
+        fuel_consumed: 0,
+        distance: proximity
+      }
 
-      [%ShipTask{pickup_task | args: args}]
+      [ShipTask.assign(pickup_task, args)]
     else
       Ship.possible_travel_modes(ship, proximity)
       |> Enum.map(fn start_flight_mode ->
@@ -156,15 +156,15 @@ defmodule SpacetradersClient.ShipAutomaton do
         time_required = start_leg_time
         total_profit = pickup_task.args.total_profit - fuel_cost
 
-        args =
-          Map.merge(pickup_task.args, %{
-            fuel_consumed: start_fuel_consumption,
-            start_flight_mode: start_flight_mode,
-            time_required: time_required,
-            total_profit: total_profit,
-          })
-
-        %ShipTask{pickup_task | args: args}
+        pickup_task
+        |> ShipTask.variation(%{
+          fuel_consumed: start_fuel_consumption,
+          start_flight_mode: start_flight_mode,
+          time_required: time_required,
+          total_profit: total_profit,
+          distance: proximity
+        })
+        |> ShipTask.add_condition(fn ship -> start_fuel_consumption < ship["fuel"]["capacity"] end)
       end)
     end
   end
@@ -182,16 +182,13 @@ defmodule SpacetradersClient.ShipAutomaton do
         fuel_cost = @average_fuel_price * start_fuel_consumption
         time_required = start_leg_time
 
-        args =
-          Map.merge(trade_task.args, %{
-            start_fuel_consumed: start_fuel_consumption,
-            fuel_consumed: start_fuel_consumption,
-            total_profit: trade_task.args.total_profit - fuel_cost,
-            start_flight_mode: start_flight_mode,
-            time_required: time_required
-          })
-
-        %{trade_task | args: args}
+        ShipTask.variation(trade_task, %{
+          start_fuel_consumed: start_fuel_consumption,
+          fuel_consumed: start_fuel_consumption,
+          total_profit: trade_task.args.total_profit - fuel_cost,
+          start_flight_mode: start_flight_mode,
+          time_required: time_required
+        })
       end)
     |> Enum.flat_map(fn trade_task ->
       distance = Game.distance_between(game, trade_task.args.start_wp, trade_task.args.end_wp)
@@ -203,17 +200,26 @@ defmodule SpacetradersClient.ShipAutomaton do
 
         fuel_cost = @average_fuel_price * end_fuel_consumption
 
-        args =
-          Map.merge(trade_task.args, %{
-            end_fuel_consumed: end_fuel_consumption,
-            fuel_consumed: trade_task.args.fuel_consumed + end_fuel_consumption,
-            total_profit: trade_task.args.total_profit - fuel_cost,
-            end_flight_mode: end_flight_mode,
-            time_required: trade_task.args.time_required + end_leg_time
-          })
-
-        %ShipTask{trade_task | args: args}
+        ShipTask.variation(trade_task, %{
+          end_fuel_consumed: end_fuel_consumption,
+          fuel_consumed: trade_task.args.fuel_consumed + end_fuel_consumption,
+          total_profit: trade_task.args.total_profit - fuel_cost,
+          end_flight_mode: end_flight_mode,
+          time_required: trade_task.args.time_required + end_leg_time
+        })
       end)
+    end)
+    |> Enum.map(fn task ->
+      task
+      |> ShipTask.add_condition(fn ship -> task.args.start_fuel_consumed < ship["fuel"]["capacity"] end)
+      |> ShipTask.add_condition(fn ship -> task.args.end_fuel_consumed < ship["fuel"]["capacity"] end)
+    end)
+  end
+
+  defp action_variations(_struct, _game, %ShipTask{name: :mine} = task) do
+    ~w(CRUISE DRIFT)
+    |> Enum.map(fn flight_mode ->
+      ShipTask.variation(task, :flight_mode, flight_mode)
     end)
   end
 
@@ -226,22 +232,33 @@ defmodule SpacetradersClient.ShipAutomaton do
 
     avg_price = Game.average_purchase_price(game, ship["nav"]["systemSymbol"], pickup_task.args.trade_symbol)
 
-    args =
-      Map.merge(pickup_task.args, %{
-        profit_over_time: pickup_task.args.total_profit / pickup_task.args.time_required,
-        expense: avg_price * pickup_task.args.units
-      })
-
-    %ShipTask{pickup_task | args: args}
+    pickup_task
+    |> ShipTask.assign(:profit_over_time, pickup_task.args.total_profit / pickup_task.args.time_required)
+    |> ShipTask.assign(:expense, avg_price * pickup_task.args.units)
   end
 
   defp estimate_costs(_struct, _game, %ShipTask{name: :trade} = task) do
-    args =
-      Map.merge(task.args, %{
-        profit_over_time: task.args.total_profit / task.args.time_required
-      })
+    ShipTask.assign(task, :profit_over_time, task.args.total_profit / task.args.time_required)
+  end
 
-    %{task | args: args}
+  defp estimate_costs(struct, game, %ShipTask{name: :mine} = task) do
+    ship = Game.ship(game, struct.ship_symbol)
+
+    distance = Game.distance_between(game, ship["nav"]["waypointSymbol"], task.args.waypoint_symbol)
+
+    fuel_consumed = Ship.fuel_cost(distance) |> Map.fetch!(task.args.flight_mode)
+    travel_time = Ship.travel_time(ship, distance) |> Map.fetch!(task.args.flight_mode)
+
+    fuel_cost = @average_fuel_price * fuel_consumed
+
+    task
+    |> ShipTask.assign(%{
+      distance: distance,
+      fuel_consumed: fuel_consumed,
+      fuel_cost: fuel_cost,
+      time_required: travel_time + @mining_cooldown
+    })
+    |> ShipTask.add_condition(fn ship -> fuel_consumed < ship["fuel"]["capacity"] end)
   end
 
   defp estimate_costs(_struct, _game, action) do
@@ -249,29 +266,23 @@ defmodule SpacetradersClient.ShipAutomaton do
   end
 
   defp select_action(%__MODULE__{} = struct, %Game{} = game, actions) when is_list(actions) do
-    Logger.debug("Ship #{struct.ship_symbol} has #{Enum.count(actions)} tasks to choose from.")
-
-    ship = Game.ship(game, struct.ship_symbol)
-
-    best_task_score =
+    best_actions =
       actions
-      |> Enum.filter(fn %ShipTask{} = task ->
-        ShipTask.meets_conditions?(task, ship)
-      end)
       |> Enum.map(fn task ->
-        {task, Utility.score(game, struct.ship_symbol, task)}
+        task = ShipTask.put_utility(task, Utility.score(game, struct.ship_symbol, task))
+        score = ShipTask.utility_score(task)
+
+        {task, score}
       end)
       |> Enum.reject(fn {_task, score} -> score < 0.01 end)
       |> Enum.sort_by(&elem(&1, 1), :desc)
-      |> Enum.max_by(fn {_task, score} -> score end, fn -> nil end)
+      |> Enum.take(10)
 
-    if best_task_score do
-      {best_task, utility_score} = best_task_score
-      Logger.debug("Ship #{struct.ship_symbol} chose task #{inspect best_task.name} with score #{utility_score} and this defintion:\n#{inspect best_task, pretty: true}")
-      best_task
-    else
-      ShipTask.new(:idle)
-    end
+    {best_task, utility_score} =
+      best_actions
+      |> Enum.max_by(fn {_task, score} -> score end, fn -> {ShipTask.new(:idle), 0} end)
+
+    %{struct | current_action: best_task, alternative_actions: Enum.map(best_actions, &elem(&1, 0))}
   end
 
   defp ship_actions(%__MODULE__{} = struct, %Game{} = game) do
@@ -312,6 +323,7 @@ defmodule SpacetradersClient.ShipAutomaton do
               total_profit: total_profit,
               flight_mode: flight_mode,
               profit_over_time: profit_over_time,
+              time_required: travel_time,
               expense: avg_price * units
             }
           )

@@ -1,8 +1,13 @@
 defmodule SpacetradersClientWeb.ShipComponent do
+  alias SpacetradersClient.ShipAutomaton
+  alias SpacetradersClient.AutomationServer
   alias SpacetradersClientWeb.ShipStatsComponent
   use SpacetradersClientWeb, :live_component
 
   alias SpacetradersClient.Systems
+
+  attr :ship, :map, required: true
+  attr :automaton, ShipAutomaton, default: nil
 
   def render(assigns) do
     ~H"""
@@ -27,6 +32,15 @@ defmodule SpacetradersClientWeb.ShipComponent do
         </ShipStatsComponent.fuel>
         <ShipStatsComponent.cargo ship={@ship} />
       </section>
+
+
+      <%= if @automaton do %>
+        <.live_component
+          module={SpacetradersClientWeb.AutomatonComponent}
+          id="automaton-#{@automaton.ship_symbol}"
+          automaton={@automaton}
+        />
+      <% end %>
 
       <.tablist
         active_tab_id={@tab}
@@ -155,6 +169,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
     </section>
     """
   end
+
 
   def mount(socket) do
     {:ok, assign(socket, %{

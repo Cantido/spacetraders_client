@@ -15,6 +15,10 @@ defmodule SpacetradersClient.Curves do
     1.0 - x
   end
 
+  def linear(x, max) do
+    clamp(x / max, 0, 1)
+  end
+
   @doc """
   Makes a smooth output in [0, 1] for any value,
   with min and max edges provided.

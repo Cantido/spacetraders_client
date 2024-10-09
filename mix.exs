@@ -50,6 +50,8 @@ defmodule SpacetradersClient.MixProject do
        depth: 1},
       {:swoosh, "~> 1.5"},
       {:finch, "~> 0.13"},
+      {:ex_cldr, "~> 2.37"},
+      {:ex_cldr_numbers, "~> 2.33"},
       {:taido, path: "../taido"},
       {:motocho, path: "../motocho"},
       {:tesla, "~> 1.12"},
@@ -61,7 +63,8 @@ defmodule SpacetradersClient.MixProject do
       {:gettext, "~> 0.20"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:uniq, "~> 0.6.1"}
     ]
   end
 

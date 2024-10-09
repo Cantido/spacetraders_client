@@ -1,4 +1,6 @@
 defmodule SpacetradersClient.Game do
+  alias SpacetradersClient.LedgerServer
+  alias Motocho.Journal
   alias SpacetradersClient.Ship
   alias SpacetradersClient.ShipTask
   alias SpacetradersClient.Agents
@@ -15,11 +17,11 @@ defmodule SpacetradersClient.Game do
     agent: %{},
     fleet: %{},
     systems: %{},
+    waypoints: %{},
     markets: %{},
     shipyards: %{},
     surveys: %{},
-    transactions: [],
-    ledger: nil
+    extractions: %{}
   ]
 
   def new(client) do
@@ -73,7 +75,8 @@ defmodule SpacetradersClient.Game do
   end
 
   def load_waypoint!(game, system_symbol, waypoint_symbol) do
-    {:ok, %{status: 200, body: body}} = Systems.get_waypoint(game.client, system_symbol, waypoint_symbol)
+    {:ok, %{status: 200, body: body}} =
+      Systems.get_waypoint(game.client, system_symbol, waypoint_symbol)
 
     game
     |> Map.update!(:systems, fn systems ->
@@ -84,74 +87,113 @@ defmodule SpacetradersClient.Game do
   end
 
   def load_market!(game, system_symbol, waypoint_symbol) do
-    {:ok, %{status: 200, body: body}} = Systems.get_market(game.client, system_symbol, waypoint_symbol)
+    {:ok, %{status: 200, body: body}} =
+      Systems.get_market(game.client, system_symbol, waypoint_symbol)
 
-    game
-    |> Map.update!(:markets, fn markets ->
-      markets
-      |> Map.put_new(system_symbol, %{})
-      |> Map.update!(system_symbol, &Map.put(&1, waypoint_symbol, body["data"]))
+    put_in(
+      game,
+      [
+        Access.key(:markets),
+        Access.key(system_symbol, %{}),
+        waypoint_symbol
+      ],
+      body["data"]
+    )
+  end
+
+  def load_all_waypoints!(game) do
+    game.fleet
+    |> Enum.map(fn {_ship_symbol, ship} ->
+      ship["nav"]["systemSymbol"]
+    end)
+    |> Enum.uniq()
+    |> Enum.flat_map(&fetch_waypoints(game.client, &1))
+    |> Enum.reduce(game, fn waypoint, game ->
+      put_in(game, [Access.key(:waypoints), waypoint["symbol"]], waypoint)
     end)
   end
 
-  def load_fleet_waypoints!(game) do
-    game.fleet
-    |> Enum.map(fn {_ship_symbol, ship} ->
-      {ship["nav"]["systemSymbol"], ship["nav"]["waypointSymbol"]}
+  def load_shipyards!(game) do
+    game.waypoints
+    |> Enum.map(fn {_wp_symbol, wp} ->
+      wp
     end)
-    |> Enum.uniq()
-    |> Enum.reduce(game, fn {system_symbol, waypoint_symbol}, game ->
-      if waypoint(game, system_symbol, waypoint_symbol) do
-        game
-      else
-        load_waypoint!(game, system_symbol, waypoint_symbol)
-      end
+    |> Enum.filter(fn waypoint ->
+      traits = Enum.map(waypoint["traits"], fn t -> t["symbol"] end)
+
+      "SHIPYARD" in traits
     end)
+    |> Enum.reduce(game, fn waypoint, game ->
+      load_shipyard!(game, waypoint["systemSymbol"], waypoint["symbol"])
+    end)
+  end
+
+  def load_shipyard!(game, system_symbol, waypoint_symbol) do
+    {:ok, %{status: 200, body: body}} =
+      Systems.get_shipyard(game.client, system_symbol, waypoint_symbol)
+
+    put_in(
+      game,
+      [
+        Access.key(:shipyards),
+        Access.key(system_symbol, %{}),
+        waypoint_symbol
+      ],
+      body["data"]
+    )
+  end
+
+  defp fetch_waypoints(client, system_symbol, page \\ 1, waypoints \\ []) do
+    case Systems.list_waypoints(client, system_symbol, page: page) do
+      {:ok, %{status: 200, body: body}} ->
+        waypoints = body["data"] ++ waypoints
+
+        if body["meta"]["total"] > Enum.count(waypoints) do
+          fetch_waypoints(client, system_symbol, page + 1, waypoints)
+        else
+          waypoints
+        end
+
+      err ->
+        Logger.error("Failed to fetch waypoint list: #{inspect(err)}")
+        []
+    end
   end
 
   def load_markets!(game) do
-    game.systems
-    |> Enum.flat_map(fn {_system_symbol, waypoints} ->
-      Enum.map(waypoints, fn {_wp_symbol, wp} ->
-        wp
-      end)
+    game.waypoints
+    |> Enum.map(fn {_wp_symbol, wp} ->
+      wp
     end)
-    |> Enum.reduce(game, fn waypoint, game ->
+    |> Enum.filter(fn waypoint ->
       traits = Enum.map(waypoint["traits"], fn t -> t["symbol"] end)
 
-      if "MARKETPLACE" in traits do
-        load_market!(game, waypoint["systemSymbol"], waypoint["symbol"])
-      else
-        game
-      end
+      "MARKETPLACE" in traits
     end)
-    |> then(fn game ->
-      if game.ledger do
-        game
-      else
-        reset_ledger(game)
-      end
+    |> Enum.reduce(game, fn waypoint, game ->
+      load_market!(game, waypoint["systemSymbol"], waypoint["symbol"])
     end)
-
   end
 
-  def reset_ledger(game) do
-    ledger =
-      Ledger.new()
-      |> Ledger.open_account("Cash", :assets)
-      |> Ledger.open_account("Merchandise", :assets)
-      |> Ledger.open_account("Sales", :revenue)
-      |> Ledger.open_account("Natural Resources", :revenue)
-      |> Ledger.open_account("Starting Balances", :revenue)
-      |> Ledger.open_account("Cost of Merchandise Sold", :expenses)
-      |> Ledger.open_account("Fuel", :expenses)
-      |> Ledger.post(
-        DateTime.utc_now(),
-        "Starting Credits Balance",
-        "Cash",
-        "Starting Balances",
-        game.agent["credits"]
-      )
+  def start_ledger(game) do
+    starting_fleet_value =
+      Enum.map(game.fleet, fn {_id, ship} ->
+        case ship["registration"]["role"] do
+          "EXCAVATOR" -> "SHIP_MINING_DRONE"
+          "TRANSPORT" -> "SHIP_LIGHT_SHUTTLE"
+          "SATELLITE" -> "SHIP_PROBE"
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.frequencies()
+      |> Enum.map(fn {ship_type, count} ->
+        price = average_ship_price(game, ship_type)
+        {price, count}
+      end)
+      |> Enum.reject(&is_nil(elem(&1, 0)))
+      |> Enum.map(fn {price, count} -> price * count end)
+      |> Enum.sum()
 
     starting_merchandise_balance =
       Enum.flat_map(game.fleet, fn {_id, ship} ->
@@ -164,21 +206,50 @@ defmodule SpacetradersClient.Game do
       end)
       |> Enum.sum()
 
-    ledger =
-      Ledger.post(
-        ledger,
-        DateTime.utc_now(),
-        "Starting Merchandise Balance",
-        "Merchandise",
-        "Starting Balances",
-        starting_merchandise_balance
-      )
+    LedgerServer.start_ledger(game.agent["symbol"], game.agent["credits"], starting_fleet_value, starting_merchandise_balance)
 
-    %{game | ledger: ledger}
+    game
   end
 
-  def add_transaction(game, transaction) do
-    Map.update!(game, :transactions, fn txs -> [transaction | txs] end)
+  def add_extraction(game, waypoint_symbol, extraction) do
+    update_in(
+      game,
+      [Access.key(:extractions), Access.key(waypoint_symbol, [])],
+      &[extraction | &1]
+    )
+  end
+
+  def average_extraction_yield(game, waypoint_symbol) do
+    # TODO: Factor in laser/siphon strength
+
+    waypoint_extractions =
+      game.extractions
+      |> Map.get(waypoint_symbol, [])
+
+    extraction_count = Enum.count(waypoint_extractions)
+
+    waypoint_extractions
+    |> Enum.map(&Map.get(&1, "yield"))
+    |> Enum.reduce(%{}, fn yield, total_yield ->
+      total_yield
+      |> Map.put_new(yield["symbol"], 0)
+      |> Map.update!(yield["symbol"], &(&1 + yield["units"]))
+    end)
+    |> Map.new(fn {symbol, units} ->
+      avg_units = units / extraction_count
+
+      {symbol, avg_units}
+    end)
+  end
+
+  def average_extraction_value(game, waypoint_symbol) do
+    average_extraction_yield(game, waypoint_symbol)
+    |> Enum.map(fn {trade_symbol, units} ->
+      value = average_selling_price(game, system_symbol(waypoint_symbol), trade_symbol)
+
+      value * units
+    end)
+    |> Enum.sum()
   end
 
   def add_survey(game, survey) do
@@ -225,12 +296,6 @@ defmodule SpacetradersClient.Game do
     end)
   end
 
-  def update_ledger(%__MODULE__{} = game, update_fun) do
-    Map.update!(game, :ledger, fn ledger ->
-      %Ledger{} = update_fun.(ledger)
-    end)
-  end
-
   def system_symbol(waypoint_symbol) when is_binary(waypoint_symbol) do
     [sector, system, _waypoint] = String.split(waypoint_symbol, "-", parts: 3)
 
@@ -241,20 +306,20 @@ defmodule SpacetradersClient.Game do
     waypoint(game, system_symbol(waypoint_symbol), waypoint_symbol)
   end
 
-  def waypoint(game, system_symbol, waypoint_symbol) do
-    game.systems
-    |> Map.get(system_symbol, %{})
+  def waypoint(game, _system_symbol, waypoint_symbol) do
+    game.waypoints
     |> Map.get(waypoint_symbol)
   end
 
   def waypoints(game, system_symbol) do
-    game.systems
-    |> Map.get(system_symbol, %{})
-    |> Enum.map(&elem(&1, 1))
+    game.waypoints
+    |> Enum.filter(fn {_symbol, wp} ->
+      wp["systemSymbol"] == system_symbol
+    end)
   end
 
   def waypoints(game) do
-    Enum.flat_map(game.systems, fn {_, waypoints} -> Map.values(waypoints) end)
+    Map.values(game.waypoints)
   end
 
   def market(game, market_symbol) do
@@ -300,7 +365,8 @@ defmodule SpacetradersClient.Game do
     game.markets
     |> Map.get(system_symbol, %{})
     |> Enum.map(fn {_symbol, market} ->
-      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+      trade_good =
+        Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
 
       if trade_good do
         {market, trade_good["sellPrice"]}
@@ -316,7 +382,8 @@ defmodule SpacetradersClient.Game do
     game.markets
     |> Enum.flat_map(fn {_, markets} -> Map.values(markets) end)
     |> Enum.map(fn market ->
-      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+      trade_good =
+        Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
 
       if trade_good do
         {market, trade_good["sellPrice"]}
@@ -348,11 +415,43 @@ defmodule SpacetradersClient.Game do
     |> List.first()
   end
 
+  def ships_for_purchase(game, ship_type) do
+    game.shipyards
+    |> Map.values()
+    |> Enum.flat_map(&Map.values/1)
+    |> Enum.map(fn shipyard ->
+      ship =
+        Enum.find(Map.get(shipyard, "ships", []), fn s -> s["type"] == ship_type end)
+
+      {shipyard, ship}
+    end)
+    |> Enum.reject(fn {_, ship} -> is_nil(ship) end)
+    |> Enum.reject(fn {_, ship} -> ship["purchasePrice"] == 0 end)
+  end
+
+  def average_ship_price(game, ship_type) do
+    available =
+      ships_for_purchase(game, ship_type)
+
+    price_sum =
+      Enum.map(available, fn {_shipyard, ship} ->
+        ship["purchasePrice"]
+      end)
+      |> Enum.sum()
+
+    if Enum.count(available) > 0 do
+      price_sum / Enum.count(available)
+    else
+      nil
+    end
+  end
+
   def purchase_markets(game, system_symbol, trade_symbol) do
     game.markets
     |> Map.get(system_symbol, %{})
     |> Enum.map(fn {_symbol, market} ->
-      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+      trade_good =
+        Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
 
       if trade_good do
         {market, trade_good["purchasePrice"]}
@@ -368,7 +467,8 @@ defmodule SpacetradersClient.Game do
     game.markets
     |> Enum.flat_map(fn {_, markets} -> Map.values(markets) end)
     |> Enum.map(fn market ->
-      trade_good = Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
+      trade_good =
+        Enum.find(Map.get(market, "tradeGoods", []), fn t -> t["symbol"] == trade_symbol end)
 
       if trade_good do
         {market, trade_good["purchasePrice"]}
@@ -438,9 +538,9 @@ defmodule SpacetradersClient.Game do
             start_wp = waypoint(game, Map.fetch!(start_market, "symbol"))
             end_wp = waypoint(game, Map.fetch!(end_market, "symbol"))
 
-            %ShipTask{
-              name: :trade,
-              args: %{
+            ShipTask.new(
+              :trade,
+              %{
                 trade_symbol: start_trade_good["symbol"],
                 start_wp: start_wp["symbol"],
                 end_wp: end_wp["symbol"],
@@ -448,20 +548,22 @@ defmodule SpacetradersClient.Game do
                 profit: end_trade_good["sellPrice"] - start_trade_good["purchasePrice"],
                 credits_required: start_trade_good["purchasePrice"],
                 roi: end_trade_good["sellPrice"] / start_trade_good["purchasePrice"],
-                distance: :math.sqrt(:math.pow(start_wp["x"] - end_wp["x"], 2) + :math.pow(start_wp["y"] - end_wp["y"], 2))
+                distance:
+                  :math.sqrt(
+                    :math.pow(start_wp["x"] - end_wp["x"], 2) +
+                      :math.pow(start_wp["y"] - end_wp["y"], 2)
+                  )
               }
-            }
+            )
           end)
         end)
       end)
     end)
   end
 
-
   def distance_between(game, wp_a, wp_b) when is_binary(wp_a) and is_binary(wp_b) do
     wp_a = waypoint(game, wp_a)
     wp_b = waypoint(game, wp_b)
-
 
     :math.sqrt(:math.pow(wp_a["x"] - wp_b["x"], 2) + :math.pow(wp_a["y"] - wp_b["y"], 2))
   end
@@ -501,6 +603,7 @@ defmodule SpacetradersClient.Game do
           )
 
         [task]
+
       true ->
         []
     end
@@ -558,30 +661,30 @@ defmodule SpacetradersClient.Game do
     # adding the buyer market and total profit to the task args.
 
     |> Enum.flat_map(fn pickup_task ->
-      selling_markets(game, system_symbol(pickup_task.args.start_wp), pickup_task.args.trade_symbol)
+      selling_markets(
+        game,
+        system_symbol(pickup_task.args.start_wp),
+        pickup_task.args.trade_symbol
+      )
       |> Enum.map(fn {market, price} ->
         volume = Enum.find(market["tradeGoods"], fn t -> t["symbol"] end)["tradeVolume"]
 
-        args =
-          Map.merge(pickup_task.args, %{
-            volume: volume,
-            price: price,
-            end_wp: market["symbol"],
-          })
-
-        %{pickup_task | args: args}
+        ShipTask.variation(pickup_task, %{
+          volume: volume,
+          price: price,
+          end_wp: market["symbol"]
+        })
       end)
     end)
 
-    # Disallow the mining ships themselves from picking up their own materials
+    # Disallow the mining ships themselves from picking up anything
 
     |> Enum.map(fn pickup_task ->
-      Enum.reduce(pickup_task.args.ship_pickups, pickup_task, fn {ship_symbol, _units}, pickup_task ->
-        condition = fn ship -> ship["symbol"] != ship_symbol end
-
-        conditions = [condition | pickup_task.conditions]
-
-        %{pickup_task | conditions: conditions}
+      Enum.reduce(pickup_task.args.ship_pickups, pickup_task, fn {ship_symbol, _units},
+                                                                 pickup_task ->
+        pickup_task
+        |> ShipTask.add_condition(fn ship -> ship["symbol"] != ship_symbol end)
+        |> ShipTask.add_condition(fn ship -> ship["registration"]["role"] != "EXCAVATOR" end)
       end)
     end)
   end

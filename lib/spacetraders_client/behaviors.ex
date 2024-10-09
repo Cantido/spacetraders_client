@@ -1,5 +1,5 @@
 defmodule SpacetradersClient.Behaviors do
-  alias Motocho.Ledger
+  alias SpacetradersClient.LedgerServer
   alias SpacetradersClient.ShipTask
   alias SpacetradersClient.Survey
   alias SpacetradersClient.Game
@@ -12,11 +12,10 @@ defmodule SpacetradersClient.Behaviors do
 
   @pubsub SpacetradersClient.PubSub
 
-
   def for_task(%ShipTask{name: :selling} = task) do
     Node.sequence([
       wait_for_transit(),
-      refuel(),
+      refuel(min_fuel: task.args.fuel_consumed),
       travel_to_waypoint(task.args.waypoint_symbol, flight_mode: task.args.flight_mode),
       wait_for_transit(),
       dock_ship(),
@@ -24,37 +23,32 @@ defmodule SpacetradersClient.Behaviors do
     ])
   end
 
-  def for_task(%ShipTask{name: :buying} = task) do
-    Node.sequence([
-      wait_for_transit(),
-      refuel(),
-      travel_to_waypoint(task.args.start_wp),
-      wait_for_transit(),
-      dock_ship(),
-      buy_cargo(task.args.trade_symbol, task.args.units)
-    ])
-  end
-
   def for_task(%ShipTask{name: :trade} = task) do
     Node.sequence([
       wait_for_transit(),
-      refuel(),
-      travel_to_waypoint(task.args.start_wp, flight_mode: task.args.start_flight_mode, fuel_min: task.args.start_fuel_consumed),
+      refuel(min_fuel: task.args.start_fuel_consumed),
+      travel_to_waypoint(task.args.start_wp,
+        flight_mode: task.args.start_flight_mode,
+        fuel_min: task.args.start_fuel_consumed
+      ),
       wait_for_transit(),
       dock_ship(),
       buy_cargo(task.args.trade_symbol, task.args.units),
-      refuel(),
-      travel_to_waypoint(task.args.end_wp, flight_mode: task.args.end_flight_mode, fuel_min: task.args.end_fuel_consumed),
+      refuel(min_fuel: task.args.end_fuel_consumed),
+      travel_to_waypoint(task.args.end_wp,
+        flight_mode: task.args.end_flight_mode,
+        fuel_min: task.args.end_fuel_consumed
+      ),
       wait_for_transit(),
       dock_ship(),
-      sell_cargo_item(task.args.trade_symbol, task.args.expense, task.args.units),
+      sell_cargo_item(task.args.trade_symbol, task.args.expense, task.args.units)
     ])
   end
 
   def for_task(%ShipTask{name: :pickup} = task) do
     Node.sequence([
       wait_for_transit(),
-      refuel(),
+      refuel(min_fuel: task.args.fuel_consumed),
       travel_to_waypoint(task.args.start_wp, flight_mode: task.args.start_flight_mode),
       wait_for_transit(),
       Node.sequence(
@@ -67,7 +61,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def for_task(%ShipTask{name: :mine} = task) do
     Node.sequence([
-      refuel(),
+      refuel(min_fuel: task.args.fuel_consumed),
       travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE"),
       wait_for_transit(),
       wait_for_ship_cooldown(),
@@ -104,18 +98,21 @@ defmodule SpacetradersClient.Behaviors do
                 Map.put(ship, "nav", body["data"]["nav"])
               end)
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, ship_symbol, body["data"]["nav"]})
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_nav_updated, ship_symbol, body["data"]["nav"]}
+            )
 
             {:success, %{state | game: game}}
 
           err ->
-            Logger.error("Failed to orbit ship: #{inspect err}")
+            Logger.error("Failed to orbit ship: #{inspect(err)}")
             {:failure, state}
         end
       end)
     ])
   end
-
 
   def enter_orbit do
     Node.select([
@@ -132,12 +129,16 @@ defmodule SpacetradersClient.Behaviors do
                 Map.put(ship, "nav", body["data"]["nav"])
               end)
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]})
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]}
+            )
 
             {:success, %{state | game: game}}
 
           err ->
-            Logger.error("Failed to orbit ship: #{inspect err}")
+            Logger.error("Failed to orbit ship: #{inspect(err)}")
             {:failure, state}
         end
       end)
@@ -159,136 +160,231 @@ defmodule SpacetradersClient.Behaviors do
                 Map.put(ship, "nav", body["data"]["nav"])
               end)
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]})
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]}
+            )
 
             {:success, %{state | game: game}}
 
           err ->
-            Logger.error("Failed to dock ship: #{inspect err}")
+            Logger.error("Failed to dock ship: #{inspect(err)}")
             {:failure, state}
         end
       end)
     ])
   end
 
-  def refuel(opts \\ []) do
-    min_fuel = Keyword.get(opts, :min_fuel, :maximum)
+  def set_flight_mode(flight_mode) do
+    Node.action(fn state ->
+      case Fleet.set_flight_mode(state.game.client, state.ship_symbol, flight_mode) do
+        {:ok, %{status: 200, body: body}} ->
+          game =
+            Game.update_ship!(state.game, state.ship_symbol, fn ship ->
+              ship
+              |> Map.put("nav", body["data"])
+            end)
 
-    Node.select([
-      Node.condition(fn state ->
+          PubSub.broadcast(
+            @pubsub,
+            "agent:#{game.agent["symbol"]}",
+            {:ship_nav_updated, state.ship_symbol, body["data"]}
+          )
+
+          {:success, %{state | game: game}}
+
+        err ->
+          Logger.error("Failed to set flight mode: #{inspect(err)}")
+          {:failure, state}
+      end
+    end)
+  end
+
+  def refuel(opts \\ []) do
+
+    Node.sequence([
+      Node.action(fn state ->
         ship = Game.ship(state.game, state.ship_symbol)
 
-        if min_fuel == :maximum do
-          ship["fuel"]["current"] == ship["fuel"]["capacity"]
-        else
-          ship["fuel"]["current"] >= min_fuel
-        end
+        min_fuel_opt = Keyword.get(opts, :min_fuel, :maximum)
+
+        min_fuel =
+          if min_fuel_opt == :maximum do
+            ship["fuel"]["capacity"]
+          else
+            max(min_fuel_opt, ship["fuel"]["capacity"] - 100)
+          end
+
+        {:success, Map.put(state, :min_fuel, min_fuel)}
       end),
 
-      Node.sequence([
-        travel_to_nearest_fuel(),
-
-        wait_for_transit(),
-
-        dock_ship(),
-
-        Node.action(fn state ->
+      Node.select([
+        Node.condition(fn state ->
           ship = Game.ship(state.game, state.ship_symbol)
+          ship["fuel"]["current"] >= state.min_fuel
+        end),
 
-          fuel_units_needed =
-            if min_fuel == :maximum do
-              ship["fuel"]["capacity"] - ship["fuel"]["current"]
+        Node.sequence([
+          travel_to_nearest_fuel(),
+          wait_for_transit(),
+          dock_ship(),
+          Node.action(fn state ->
+            ship = Game.ship(state.game, state.ship_symbol)
+
+            fallback_min_fuel = ship["fuel"]["capacity"] - 100
+            fuel_units_needed = max(0, Map.get(state, :min_fuel, fallback_min_fuel) - ship["fuel"]["current"])
+
+            market_units_to_buy =
+              Float.ceil(fuel_units_needed / 100)
+
+            fuel_units_to_buy = trunc(market_units_to_buy * 100)
+
+            if fuel_units_to_buy > 0 do
+              case Fleet.refuel_ship(state.game.client, state.ship_symbol, units: fuel_units_to_buy) do
+                {:ok, %{status: 200, body: body}} ->
+                  game =
+                    Game.update_ship!(state.game, state.ship_symbol, fn ship ->
+                      Map.put(ship, "nav", body["data"]["fuel"])
+                    end)
+                    |> Map.put(:agent, body["data"]["agent"])
+
+                  tx = body["data"]["transaction"]
+                  {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
+
+                  if tx["units"] > 0 do
+                    {:ok, _ledger} =
+                      LedgerServer.post_journal(
+                        body["data"]["agent"]["symbol"],
+                        ts,
+                        "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
+                        "Fuel",
+                        "Cash",
+                        tx["totalPrice"]
+                      )
+                  end
+
+                  PubSub.broadcast(
+                    @pubsub,
+                    "agent:#{game.agent["symbol"]}",
+                    {:transaction, body["data"]["transaction"]}
+                  )
+
+                  PubSub.broadcast(
+                    @pubsub,
+                    "agent:#{game.agent["symbol"]}",
+                    {:agent_updated, body["data"]["agent"]}
+                  )
+
+                  PubSub.broadcast(
+                    @pubsub,
+                    "agent:#{game.agent["symbol"]}",
+                    {:ship_fuel_updated, state.ship_symbol, body["data"]["fuel"]}
+                  )
+
+                  {:success, %{state | game: game}}
+
+                err ->
+                  Logger.error("Failed to refuel ship: #{inspect(err)}")
+                  {:failure, state}
+              end
             else
-              min(ship["fuel"]["current"], min_fuel)
+              :success
             end
-
-          market_units_to_buy = trunc(fuel_units_needed / 100)
-          fuel_units_to_buy = market_units_to_buy * 100
-
-          if fuel_units_to_buy > 0 do
-            case Fleet.refuel_ship(state.game.client, state.ship_symbol, units: fuel_units_to_buy) do
-              {:ok, %{status: 200, body: body}} ->
-                game =
-                  Game.update_ship!(state.game, state.ship_symbol, fn ship ->
-                    Map.put(ship, "nav", body["data"]["fuel"])
-                  end)
-                  |> Map.put(:agent, body["data"]["agent"])
-                  |> Game.add_transaction(body["data"]["transaction"])
-                  |> Game.update_ledger(fn ledger ->
-                    tx = body["data"]["transaction"]
-                    {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
-
-                    Ledger.post(
-                      ledger,
-                      ts,
-                      "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
-                      "Fuel",
-                      "Cash",
-                      tx["totalPrice"]
-                    )
-                  end)
-
-                PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ledger_updated, game.ledger})
-                PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:transaction, body["data"]["transaction"]})
-                PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:agent_updated, body["data"]["agent"]})
-                PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_fuel_updated, state.ship_symbol, body["data"]["fuel"]})
-
-                {:success, %{state | game: game}}
-
-              err ->
-                Logger.error("Failed to refuel ship: #{inspect err}")
-                {:failure, state}
-            end
-          else
-            :success
-          end
-        end)
+          end)
+        ])
       ])
     ])
   end
 
   def travel_to_nearest_fuel do
     Node.sequence([
-      wait_for_transit(),
-
-      enter_orbit(),
-
-      Node.action(fn state ->
-        ship = Game.ship(state.game, state.ship_symbol)
-
-        fuel_markets =
-          Game.purchase_markets(state.game, ship["nav"]["systemSymbol"], "FUEL")
-          |> Enum.sort_by(fn {market, _price} -> Game.distance_between(state.game, ship["nav"]["waypointSymbol"], market["symbol"]) end)
-
-        if Enum.any?(fuel_markets, fn {market, _price} -> market["symbol"] == ship["nav"]["waypointSymbol"] end) do
-          :success
-        else
-          {fuel_wp, _price} = List.first(fuel_markets)
-
-          case Fleet.navigate_ship(state.game.client, state.ship_symbol, fuel_wp["symbol"]) do
-            {:ok, %{status: 200, body: body}} ->
-              game =
-                Game.update_ship!(state.game, state.ship_symbol, fn ship ->
-                  ship
-                  |> Map.put("nav", body["data"]["nav"])
-                  |> Map.put("fuel", body["data"]["fuel"])
-                end)
-
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]})
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_fuel_updated, state.ship_symbol, body["data"]["fuel"]})
-
-              {:success, %{state | game: game}}
-
-            {:ok, %{status: 400, body: %{"error" => %{"code" => 4204}}}} ->
-              :success
-
-            err ->
-              Logger.error("Failed to navigate ship: #{inspect err}")
-              {:failure, state}
-          end
-        end
-      end)
+      fetch_fuel_markets(),
+      Node.select([
+        at_fuel_market?(),
+        Node.sequence([
+          wait_for_transit(),
+          enter_orbit(),
+          navigate_ship_to_fuel_market()
+        ]),
+        Node.sequence([
+          wait_for_transit(),
+          enter_orbit(),
+          set_flight_mode("DRIFT"),
+          navigate_ship_to_fuel_market()
+        ])
+      ])
     ])
+  end
+
+  def fetch_fuel_markets do
+    Node.action(fn state ->
+      ship = Game.ship(state.game, state.ship_symbol)
+
+      fuel_markets =
+        Game.purchase_markets(state.game, ship["nav"]["systemSymbol"], "FUEL")
+        |> Enum.sort_by(fn {market, _price} ->
+          Game.distance_between(state.game, ship["nav"]["waypointSymbol"], market["symbol"])
+        end)
+
+      {:success, Map.put(state, :fuel_markets, fuel_markets)}
+    end)
+  end
+
+  def at_fuel_market? do
+    Node.condition(fn state ->
+      ship = Game.ship(state.game, state.ship_symbol)
+
+      result =
+        Enum.any?(state.fuel_markets, fn {market, _price} ->
+          market["symbol"] == ship["nav"]["waypointSymbol"]
+        end)
+
+      if result do
+        Logger.debug("Ship is at a fuel market, travel_to_nearest_fuel successful")
+      else
+        Logger.debug("Ship is not at a fuel market, traveling to nearest fuel")
+      end
+
+      result
+    end)
+  end
+
+  def navigate_ship_to_fuel_market do
+    Node.action(fn state ->
+      {fuel_wp, _price} = List.first(state.fuel_markets)
+
+      case Fleet.navigate_ship(state.game.client, state.ship_symbol, fuel_wp["symbol"]) do
+        {:ok, %{status: 200, body: body}} ->
+          game =
+            Game.update_ship!(state.game, state.ship_symbol, fn ship ->
+              ship
+              |> Map.put("nav", body["data"]["nav"])
+              |> Map.put("fuel", body["data"]["fuel"])
+            end)
+
+          PubSub.broadcast(
+            @pubsub,
+            "agent:#{game.agent["symbol"]}",
+            {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]}
+          )
+
+          PubSub.broadcast(
+            @pubsub,
+            "agent:#{game.agent["symbol"]}",
+            {:ship_fuel_updated, state.ship_symbol, body["data"]["fuel"]}
+          )
+
+          {:success, %{state | game: game}}
+
+        {:ok, %{status: 400, body: %{"error" => %{"code" => 4204}}}} ->
+          :success
+
+        err ->
+          Logger.error("Failed to navigate ship: #{inspect(err)}")
+          {:failure, state}
+      end
+    end)
   end
 
   def wait_for_transit do
@@ -302,7 +398,8 @@ defmodule SpacetradersClient.Behaviors do
         if DateTime.before?(DateTime.utc_now(), arrival_time) do
           :running
         else
-          {:ok, %{status: 200, body: body}} = Fleet.get_ship_nav(state.game.client, state.ship_symbol)
+          {:ok, %{status: 200, body: body}} =
+            Fleet.get_ship_nav(state.game.client, state.ship_symbol)
 
           game =
             Game.update_ship!(state.game, state.ship_symbol, fn ship ->
@@ -310,8 +407,11 @@ defmodule SpacetradersClient.Behaviors do
               |> Map.put("nav", body["data"])
             end)
 
-          PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, state.ship_symbol, body["data"]})
-
+          PubSub.broadcast(
+            @pubsub,
+            "agent:#{game.agent["symbol"]}",
+            {:ship_nav_updated, state.ship_symbol, body["data"]}
+          )
 
           {:success, Map.put(state, :game, game)}
         end
@@ -342,9 +442,7 @@ defmodule SpacetradersClient.Behaviors do
   def siphon_resources do
     Node.sequence([
       enter_orbit(),
-
       wait_for_ship_cooldown(),
-
       Node.action(fn state ->
         ship = Game.ship(state.game, state.ship_symbol)
 
@@ -356,32 +454,42 @@ defmodule SpacetradersClient.Behaviors do
                 |> Map.put("cargo", body["data"]["cargo"])
                 |> Map.put("cooldown", body["data"]["cooldown"])
               end)
-              |> Game.update_ledger(fn ledger ->
-                yield_symbol = get_in(body, ~w(data siphon yield symbol))
-                yield_units = get_in(body, ~w(data siphon yield units))
-                avg_purchase_price =
-                  Game.average_purchase_price(state.game, ship["nav"]["systemSymbol"], yield_symbol)
+              |> Game.add_extraction(ship["nav"]["waypointSymbol"], body["data"]["siphon"])
 
-                value_of_material = avg_purchase_price * yield_units
+            yield_symbol = get_in(body, ~w(data siphon yield symbol))
+            yield_units = get_in(body, ~w(data siphon yield units))
 
-                Ledger.post(
-                  ledger,
-                  DateTime.utc_now(),
-                  "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
-                  "Merchandise",
-                  "Natural Resources",
-                  value_of_material
-                )
-              end)
+            {_market, price} =
+              Game.best_selling_market_price(state.game, ship["nav"]["systemSymbol"], yield_symbol)
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ledger_updated, game.ledger})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cooldown_updated, state.ship_symbol, body["data"]["cooldown"]})
+            value_of_material = price * yield_units
+
+            {:ok, _ledger} =
+              LedgerServer.post_journal(
+                state.game.agent["symbol"],
+                DateTime.utc_now(),
+                "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
+                "Merchandise",
+                "Natural Resources",
+                value_of_material
+              )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]}
+            )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_cooldown_updated, state.ship_symbol, body["data"]["cooldown"]}
+            )
 
             {:success, Map.put(state, :game, game)}
 
           err ->
-            Logger.error("Failed to extract resources: #{inspect err}")
+            Logger.error("Failed to extract resources: #{inspect(err)}")
             {:failure, state}
         end
       end)
@@ -391,22 +499,27 @@ defmodule SpacetradersClient.Behaviors do
   def extract_resources do
     Node.sequence([
       enter_orbit(),
-
       wait_for_ship_cooldown(),
-
       Node.action(fn state ->
         ship = Game.ship(state.game, state.ship_symbol)
 
         best_survey =
           Game.surveys(state.game, ship["nav"]["waypointSymbol"])
-          |> Enum.sort_by(fn survey ->
-            Survey.profitability(survey, fn trade_symbol ->
-              case Game.best_selling_market_price(state.game, ship["nav"]["systemSymbol"], trade_symbol) do
-                nil -> 0
-                {_mkt, price} -> price
-              end
-            end)
-          end, :desc)
+          |> Enum.sort_by(
+            fn survey ->
+              Survey.profitability(survey, fn trade_symbol ->
+                case Game.best_selling_market_price(
+                       state.game,
+                       ship["nav"]["systemSymbol"],
+                       trade_symbol
+                     ) do
+                  nil -> 0
+                  {_mkt, price} -> price
+                end
+              end)
+            end,
+            :desc
+          )
           |> List.first()
 
         case Fleet.extract_resources(state.game.client, state.ship_symbol, best_survey) do
@@ -417,39 +530,52 @@ defmodule SpacetradersClient.Behaviors do
                 |> Map.put("cargo", body["data"]["cargo"])
                 |> Map.put("cooldown", body["data"]["cooldown"])
               end)
-              |> Game.update_ledger(fn ledger ->
-                yield_symbol = get_in(body, ~w(data extraction yield symbol))
-                yield_units = get_in(body, ~w(data extraction yield units))
-                avg_purchase_price =
-                  Game.average_purchase_price(state.game, ship["nav"]["systemSymbol"], yield_symbol)
+              |> Game.add_extraction(ship["nav"]["waypointSymbol"], body["data"]["extraction"])
 
-                value_of_material = avg_purchase_price * yield_units
+            yield_symbol = get_in(body, ~w(data extraction yield symbol))
+            yield_units = get_in(body, ~w(data extraction yield units))
 
-                Ledger.post(
-                  ledger,
-                  DateTime.utc_now(),
-                  "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
-                  "Merchandise",
-                  "Natural Resources",
-                  value_of_material
-                )
-              end)
+            avg_purchase_price =
+              Game.average_purchase_price(state.game, ship["nav"]["systemSymbol"], yield_symbol)
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ledger_updated, game.ledger})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cooldown_updated, state.ship_symbol, body["data"]["cooldown"]})
+            value_of_material = avg_purchase_price * yield_units
+
+            {:ok, _ledger} =
+              LedgerServer.post_journal(
+                state.game.agent["symbol"],
+                DateTime.utc_now(),
+                "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
+                "Merchandise",
+                "Natural Resources",
+                value_of_material
+              )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]}
+            )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_cooldown_updated, state.ship_symbol, body["data"]["cooldown"]}
+            )
 
             {:success, Map.put(state, :game, game)}
 
-
           {:ok, %{status: 409, body: %{"error" => %{"code" => 4224}}}} ->
             game =
-              Game.delete_survey(state.game, ship["nav"]["waypointSymbol"], best_survey["signature"])
+              Game.delete_survey(
+                state.game,
+                ship["nav"]["waypointSymbol"],
+                best_survey["signature"]
+              )
 
             {:failure, Map.put(state, :game, game)}
 
           err ->
-            Logger.error("Failed to extract resources: #{inspect err}")
+            Logger.error("Failed to extract resources: #{inspect(err)}")
             {:failure, state}
         end
       end)
@@ -475,18 +601,21 @@ defmodule SpacetradersClient.Behaviors do
   def jettison_cargo do
     Node.select([
       cargo_empty(),
-
       Node.sequence([
         enter_orbit(),
-
         Node.action(fn state ->
           ship = Game.ship(state.game, state.ship_symbol)
 
           cargo_to_jettison =
             Enum.filter(ship["cargo"]["inventory"], fn cargo_item ->
-              case Game.best_selling_market_price(state.game, ship["nav"]["systemSymbol"], cargo_item["symbol"]) do
+              case Game.best_selling_market_price(
+                     state.game,
+                     ship["nav"]["systemSymbol"],
+                     cargo_item["symbol"]
+                   ) do
                 nil ->
                   true
+
                 {_mkt, price} ->
                   price == 0
               end
@@ -494,7 +623,12 @@ defmodule SpacetradersClient.Behaviors do
             |> List.first()
 
           if cargo_to_jettison do
-            case Fleet.jettison_cargo(state.game.client, state.ship_symbol, cargo_to_jettison["symbol"], cargo_to_jettison["units"]) do
+            case Fleet.jettison_cargo(
+                   state.game.client,
+                   state.ship_symbol,
+                   cargo_to_jettison["symbol"],
+                   cargo_to_jettison["units"]
+                 ) do
               {:ok, %{status: 200, body: body}} ->
                 game =
                   Game.update_ship!(state.game, state.ship_symbol, fn ship ->
@@ -505,14 +639,13 @@ defmodule SpacetradersClient.Behaviors do
                 {:success, %{state | game: game}}
 
               err ->
-                Logger.error("Failed to jettison cargo: #{inspect err}")
+                Logger.error("Failed to jettison cargo: #{inspect(err)}")
                 {:failure, state}
             end
           else
             :success
           end
         end),
-
         Node.invert(cargo_empty())
       ])
     ])
@@ -527,38 +660,30 @@ defmodule SpacetradersClient.Behaviors do
 
         ship["nav"]["waypointSymbol"] == waypoint_symbol
       end),
-
       Node.sequence([
-
         enter_orbit(),
+        Node.action(fn state ->
+          case Fleet.set_flight_mode(state.game.client, state.ship_symbol, flight_mode) do
+            {:ok, %{status: 200, body: body}} ->
+              game =
+                Game.update_ship!(state.game, state.ship_symbol, fn ship ->
+                  ship
+                  |> Map.put("nav", body["data"])
+                end)
 
-        Node.select([
-          Node.condition(fn state ->
-            ship = Game.ship(state.game, state.ship_symbol)
+              PubSub.broadcast(
+                @pubsub,
+                "agent:#{game.agent["symbol"]}",
+                {:ship_nav_updated, state.ship_symbol, body["data"]}
+              )
 
-            ship["nav"]["flightMode"] == flight_mode
-          end),
+              {:success, %{state | game: game}}
 
-          Node.action(fn state ->
-            case Fleet.set_flight_mode(state.game.client, state.ship_symbol, flight_mode) do
-              {:ok, %{status: 200, body: body}} ->
-                game =
-                  Game.update_ship!(state.game, state.ship_symbol, fn ship ->
-                    ship
-                    |> Map.put("nav", body["data"])
-                  end)
-
-                PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, state.ship_symbol, body["data"]})
-
-                {:success, %{state | game: game}}
-
-              err ->
-                Logger.error("Failed to set flight mode: #{inspect err}")
-                {:failure, state}
-            end
-          end)
-        ]),
-
+            err ->
+              Logger.error("Failed to set flight mode: #{inspect(err)}")
+              {:failure, state}
+          end
+        end),
         Node.action(fn state ->
           case Fleet.navigate_ship(state.game.client, state.ship_symbol, waypoint_symbol) do
             {:ok, %{status: 200, body: body}} ->
@@ -569,8 +694,17 @@ defmodule SpacetradersClient.Behaviors do
                   |> Map.put("fuel", body["data"]["fuel"])
                 end)
 
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]})
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_fuel_updated, state.ship_symbol, body["data"]["fuel"]})
+              PubSub.broadcast(
+                @pubsub,
+                "agent:#{game.agent["symbol"]}",
+                {:ship_nav_updated, state.ship_symbol, body["data"]["nav"]}
+              )
+
+              PubSub.broadcast(
+                @pubsub,
+                "agent:#{game.agent["symbol"]}",
+                {:ship_fuel_updated, state.ship_symbol, body["data"]["fuel"]}
+              )
 
               {:success, %{state | game: game}}
 
@@ -578,7 +712,7 @@ defmodule SpacetradersClient.Behaviors do
               :success
 
             err ->
-              Logger.error("Failed to navigate ship: #{inspect err}")
+              Logger.error("Failed to navigate ship: #{inspect(err)}")
               {:failure, state}
           end
         end)
@@ -605,37 +739,52 @@ defmodule SpacetradersClient.Behaviors do
                   |> Map.put("cargo", body["data"]["cargo"])
                 end)
                 |> Map.put(:agent, body["data"]["agent"])
-                |> Game.add_transaction(body["data"]["transaction"])
-                |> Game.update_ledger(fn ledger ->
-                  tx = body["data"]["transaction"]
-                  {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
-                  ledger
-                  |> Ledger.post(
-                    ts,
-                    "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
-                    "Cash",
-                    "Sales",
-                    tx["totalPrice"]
-                  )
-                  |> Ledger.post(
-                    ts,
-                    "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
-                    "Cost of Merchandise Sold",
-                    "Merchandise",
-                    buying_price
-                  )
-                end)
+              tx = body["data"]["transaction"]
+              {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ledger_updated, game.ledger})
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:transaction, body["data"]["transaction"]})
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:agent_updated, body["data"]["agent"]})
-              PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]})
+              {:ok, _ledger} =
+                LedgerServer.post_journal(
+                  state.game.agent["symbol"],
+                  ts,
+                  "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
+                  "Cash",
+                  "Sales",
+                  tx["totalPrice"]
+                )
+
+              {:ok, _ledger} =
+                LedgerServer.post_journal(
+                  state.game.agent["symbol"],
+                  ts,
+                  "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
+                  "Cost of Merchandise Sold",
+                  "Merchandise",
+                  buying_price
+                )
+
+              PubSub.broadcast(
+                @pubsub,
+                "agent:#{game.agent["symbol"]}",
+                {:transaction, body["data"]["transaction"]}
+              )
+
+              PubSub.broadcast(
+                @pubsub,
+                "agent:#{game.agent["symbol"]}",
+                {:agent_updated, body["data"]["agent"]}
+              )
+
+              PubSub.broadcast(
+                @pubsub,
+                "agent:#{game.agent["symbol"]}",
+                {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]}
+              )
 
               {:success, %{state | game: game}}
 
             err ->
-              Logger.error("Failed to sell cargo: #{inspect err}")
+              Logger.error("Failed to sell cargo: #{inspect(err)}")
               {:failure, state}
           end
         else
@@ -644,7 +793,13 @@ defmodule SpacetradersClient.Behaviors do
       end),
       Node.action(fn state ->
         ship = Game.ship(state.game, state.ship_symbol)
-        game = Game.load_market!(state.game, ship["nav"]["systemSymbol"], ship["nav"]["waypointSymbol"])
+
+        game =
+          Game.load_market!(
+            state.game,
+            ship["nav"]["systemSymbol"],
+            ship["nav"]["waypointSymbol"]
+          )
 
         {:success, %{state | game: game}}
       end)
@@ -655,9 +810,14 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       enter_orbit(source_ship_symbol),
       enter_orbit(),
-
       Node.action(fn state ->
-        case Fleet.transfer_cargo(state.game.client, source_ship_symbol, state.ship_symbol, trade_symbol, units) do
+        case Fleet.transfer_cargo(
+               state.game.client,
+               source_ship_symbol,
+               state.ship_symbol,
+               trade_symbol,
+               units
+             ) do
           {:ok, %{status: 200, body: body}} ->
             game =
               Game.update_ship!(state.game, source_ship_symbol, fn ship ->
@@ -668,13 +828,22 @@ defmodule SpacetradersClient.Behaviors do
 
             receiving_ship = Game.ship(game, state.ship_symbol)
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_updated, state.ship_symbol, receiving_ship})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cargo_updated, source_ship_symbol, body["data"]["cargo"]})
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_updated, state.ship_symbol, receiving_ship}
+            )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_cargo_updated, source_ship_symbol, body["data"]["cargo"]}
+            )
 
             {:success, Map.put(state, :game, game)}
 
           err ->
-            Logger.error("Failed to transfer cargo: #{inspect err}")
+            Logger.error("Failed to transfer cargo: #{inspect(err)}")
             {:failure, state}
         end
       end)
@@ -686,7 +855,13 @@ defmodule SpacetradersClient.Behaviors do
       ship = Game.ship(state.game, state.ship_symbol)
 
       if cargo_to_transfer = List.first(ship["cargo"]["inventory"]) do
-        case Fleet.transfer_cargo(state.game.client, state.ship_symbol, destination_ship_symbol, cargo_to_transfer["symbol"], cargo_to_transfer["units"]) do
+        case Fleet.transfer_cargo(
+               state.game.client,
+               state.ship_symbol,
+               destination_ship_symbol,
+               cargo_to_transfer["symbol"],
+               cargo_to_transfer["units"]
+             ) do
           {:ok, %{status: 200, body: body}} ->
             game =
               Game.update_ship!(state.game, state.ship_symbol, fn ship ->
@@ -698,7 +873,7 @@ defmodule SpacetradersClient.Behaviors do
             {:success, Map.put(state, :game, game)}
 
           err ->
-            Logger.error("Failed to transfer cargo: #{inspect err}")
+            Logger.error("Failed to transfer cargo: #{inspect(err)}")
             {:failure, state}
         end
       else
@@ -723,8 +898,7 @@ defmodule SpacetradersClient.Behaviors do
 
             {:success, %{state | game: game}}
 
-          {:ok, %{status: 409, body: body}}->
-
+          {:ok, %{status: 409, body: body}} ->
             game =
               Game.update_ship!(state.game, state.ship_symbol, fn ship ->
                 Map.put(ship, "cooldown", body["error"]["data"]["cooldown"])
@@ -733,7 +907,7 @@ defmodule SpacetradersClient.Behaviors do
             {:failure, %{state | game: game}}
 
           err ->
-            Logger.error("Failed to create survey: #{inspect err}")
+            Logger.error("Failed to create survey: #{inspect(err)}")
 
             :failure
         end
@@ -745,6 +919,7 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       Node.action(fn state ->
         ship = Game.ship(state.game, state.ship_symbol)
+
         case Fleet.purchase_cargo(state.game.client, state.ship_symbol, trade_symbol, units) do
           {:ok, %{status: 201, body: body}} ->
             game =
@@ -753,36 +928,54 @@ defmodule SpacetradersClient.Behaviors do
                 |> Map.put("cargo", body["data"]["cargo"])
               end)
               |> Map.put(:agent, body["data"]["agent"])
-              |> Game.add_transaction(body["data"]["transaction"])
-              |> Game.update_ledger(fn ledger ->
-                tx = body["data"]["transaction"]
-                {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
-                Ledger.post(
-                  ledger,
-                  ts,
-                  "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
-                  "Merchandise",
-                  "Cash",
-                  tx["totalPrice"]
-                )
-              end)
+            tx = body["data"]["transaction"]
+            {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ledger_updated, game.ledger})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:transaction, body["data"]["transaction"]})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:agent_updated, body["data"]["agent"]})
-            PubSub.broadcast(@pubsub, "agent:#{game.agent["symbol"]}", {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]})
+            {:ok, _ledger} =
+              LedgerServer.post_journal(
+                state.game.agent["symbol"],
+                ts,
+                "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship["nav"]["waypointSymbol"]}",
+                "Merchandise",
+                "Cash",
+                tx["totalPrice"]
+              )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:transaction, body["data"]["transaction"]}
+            )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:agent_updated, body["data"]["agent"]}
+            )
+
+            PubSub.broadcast(
+              @pubsub,
+              "agent:#{game.agent["symbol"]}",
+              {:ship_cargo_updated, state.ship_symbol, body["data"]["cargo"]}
+            )
 
             {:success, %{state | game: game}}
 
           err ->
-            Logger.error("Failed to sell cargo: #{inspect err}")
+            Logger.error("Failed to sell cargo: #{inspect(err)}")
             {:failure, state}
         end
       end),
       Node.action(fn state ->
         ship = Game.ship(state.game, state.ship_symbol)
-        game = Game.load_market!(state.game, ship["nav"]["systemSymbol"], ship["nav"]["waypointSymbol"])
+
+        game =
+          Game.load_market!(
+            state.game,
+            ship["nav"]["systemSymbol"],
+            ship["nav"]["waypointSymbol"]
+          )
 
         {:success, %{state | game: game}}
       end)

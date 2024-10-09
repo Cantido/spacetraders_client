@@ -46,7 +46,7 @@ Hooks.Chart = {
 
   updated() {
     this.chart.data.datasets = this.config().data.datasets;
-    this.chart.update();
+    this.chart.update("none");
   }
 }
 
