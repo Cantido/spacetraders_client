@@ -22,7 +22,7 @@ defmodule SpacetradersClient.Client do
           {:error, _} -> true
         end
       },
-      Tesla.Middleware.Logger,
+      # Tesla.Middleware.Logger,
       ],
       {Tesla.Adapter.Finch, name: SpacetradersClient.Finch}
     )

@@ -21,7 +21,8 @@ defmodule SpacetradersClient.Game do
     markets: %{},
     shipyards: %{},
     surveys: %{},
-    extractions: %{}
+    extractions: %{},
+    construction_sites: %{}
   ]
 
   def new(client) do
@@ -175,6 +176,35 @@ defmodule SpacetradersClient.Game do
     end)
   end
 
+  def load_construction_sites!(game) do
+    game.waypoints
+    |> Enum.map(fn {_wp_symbol, wp} ->
+      wp
+    end)
+    |> Enum.filter(fn waypoint ->
+      waypoint["isUnderConstruction"]
+    end)
+    |> Enum.reduce(game, fn waypoint, game ->
+      load_construction_site!(game, waypoint["symbol"])
+    end)
+  end
+
+  def load_construction_site!(game, waypoint_symbol) do
+    system_symbol = system_symbol(waypoint_symbol)
+
+    {:ok, %{status: 200, body: body}} =
+      Systems.get_construction_site(game.client, system_symbol, waypoint_symbol)
+
+    put_in(
+      game,
+      [
+        Access.key(:construction_sites),
+        waypoint_symbol
+      ],
+      body["data"]
+    )
+  end
+
   def start_ledger(game) do
     starting_fleet_value =
       Enum.map(game.fleet, fn {_id, ship} ->
@@ -195,18 +225,22 @@ defmodule SpacetradersClient.Game do
       |> Enum.map(fn {price, count} -> price * count end)
       |> Enum.sum()
 
-    starting_merchandise_balance =
+    starting_merchandise =
       Enum.flat_map(game.fleet, fn {_id, ship} ->
         ship["cargo"]["inventory"]
       end)
       |> Enum.map(fn item ->
-        price = average_purchase_price(game, item["symbol"])
+        price_per_unit =
+          average_selling_price(game, item["symbol"])
 
-        price * item["units"]
+        %{
+          trade_symbol: item["symbol"],
+          units: item["units"],
+          total_cost: price_per_unit * item["units"]
+        }
       end)
-      |> Enum.sum()
 
-    LedgerServer.start_ledger(game.agent["symbol"], game.agent["credits"], starting_fleet_value, starting_merchandise_balance)
+    LedgerServer.start_ledger(game.agent["symbol"], game.agent["credits"], starting_fleet_value, starting_merchandise)
 
     game
   end
@@ -217,6 +251,9 @@ defmodule SpacetradersClient.Game do
       [Access.key(:extractions), Access.key(waypoint_symbol, [])],
       &[extraction | &1]
     )
+    |> tap(fn game ->
+      average_extraction_yield(game)
+    end)
   end
 
   def average_extraction_yield(game, waypoint_symbol) do
@@ -229,6 +266,29 @@ defmodule SpacetradersClient.Game do
     extraction_count = Enum.count(waypoint_extractions)
 
     waypoint_extractions
+    |> Enum.map(&Map.get(&1, "yield"))
+    |> Enum.reduce(%{}, fn yield, total_yield ->
+      total_yield
+      |> Map.put_new(yield["symbol"], 0)
+      |> Map.update!(yield["symbol"], &(&1 + yield["units"]))
+    end)
+    |> Map.new(fn {symbol, units} ->
+      avg_units = units / extraction_count
+
+      {symbol, avg_units}
+    end)
+  end
+
+  def average_extraction_yield(game) do
+    # TODO: Factor in laser/siphon strength
+
+    extractions =
+      Map.values(game.extractions)
+      |> List.flatten()
+
+    extraction_count = Enum.count(extractions)
+
+    extractions
     |> Enum.map(&Map.get(&1, "yield"))
     |> Enum.reduce(%{}, fn yield, total_yield ->
       total_yield
@@ -322,6 +382,18 @@ defmodule SpacetradersClient.Game do
     Map.values(game.waypoints)
   end
 
+  def markets(game, system_symbol) do
+    game.markets
+    |> Map.get(system_symbol, %{})
+    |> Map.values()
+  end
+
+  def markets(game) do
+    game.markets
+    |> Map.values()
+    |> Enum.flat_map(&Map.values/1)
+  end
+
   def market(game, market_symbol) do
     market(game, system_symbol(market_symbol), market_symbol)
   end
@@ -400,6 +472,18 @@ defmodule SpacetradersClient.Game do
     |> Enum.map(fn {_, price} -> price end)
     |> then(fn prices ->
       Enum.sum(prices) / Enum.count(prices)
+    end)
+  end
+
+  def average_selling_price(game, trade_symbol) do
+    selling_markets(game, trade_symbol)
+    |> Enum.map(fn {_, price} -> price end)
+    |> then(fn prices ->
+      if Enum.empty?(prices) do
+        0
+      else
+        Enum.sum(prices) / Enum.count(prices)
+      end
     end)
   end
 
@@ -547,6 +631,7 @@ defmodule SpacetradersClient.Game do
                 volume: min(end_trade_good["tradeVolume"], start_trade_good["tradeVolume"]),
                 profit: end_trade_good["sellPrice"] - start_trade_good["purchasePrice"],
                 credits_required: start_trade_good["purchasePrice"],
+                revenue: end_trade_good["sellPrice"],
                 roi: end_trade_good["sellPrice"] / start_trade_good["purchasePrice"],
                 distance:
                   :math.sqrt(
@@ -576,10 +661,11 @@ defmodule SpacetradersClient.Game do
       end)
 
     resource_pickups = resource_pickup_actions(game)
-
     market_actions = market_actions(game)
+    market_vis = market_visibility_actions(game)
+    construction_actions = construction_actions(game)
 
-    resource_extractions ++ resource_pickups ++ market_actions
+    resource_extractions ++ resource_pickups ++ market_actions ++ market_vis ++ construction_actions
   end
 
   defp resource_actions(waypoint) do
@@ -589,7 +675,10 @@ defmodule SpacetradersClient.Game do
           ShipTask.new(
             :mine,
             %{waypoint_symbol: waypoint["symbol"]},
-            [&Ship.has_mining_laser?/1, &Ship.has_cargo_capacity?/1]
+            [
+              &Ship.has_mining_laser?/1,
+              &Ship.has_cargo_capacity?/1
+            ]
           )
 
         [task]
@@ -599,7 +688,10 @@ defmodule SpacetradersClient.Game do
           ShipTask.new(
             :siphon_resources,
             %{waypoint_symbol: waypoint["symbol"]},
-            [&Ship.has_gas_siphon?/1, &Ship.has_cargo_capacity?/1]
+            [
+              &Ship.has_gas_siphon?/1,
+              &Ship.has_cargo_capacity?/1
+            ]
           )
 
         [task]
@@ -687,5 +779,77 @@ defmodule SpacetradersClient.Game do
         |> ShipTask.add_condition(fn ship -> ship["registration"]["role"] != "EXCAVATOR" end)
       end)
     end)
+  end
+
+  defp market_visibility_actions(game) do
+    satellites_at_wp =
+      game
+      |> markets()
+      |> Enum.map(fn market ->
+        market["symbol"]
+      end)
+      |> Map.new(fn waypoint_symbol ->
+        satellites =
+          game.fleet
+          |> Enum.filter(fn {_symbol, ship} ->
+            ship["nav"]["waypointSymbol"] == waypoint_symbol &&
+              ship["registration"]["role"] == "SATELLITE"
+          end)
+          |> Enum.map(fn {_symbol, ship} ->
+            ship
+          end)
+
+        {waypoint_symbol, satellites}
+      end)
+
+
+    duplicate_sat_symbols =
+      satellites_at_wp
+      |> Enum.flat_map(fn {_waypoint, sats} ->
+        Enum.drop(sats, 1)
+      end)
+      |> Enum.map(fn sat ->
+        sat["symbol"]
+      end)
+
+    satellites_at_wp
+    |> Map.filter(fn {_wp, satellites} ->
+      Enum.count(satellites) == 0
+    end)
+    |> Enum.map(fn {waypoint_symbol, _sats} ->
+      ShipTask.new(
+        :goto,
+        %{waypoint_symbol: waypoint_symbol},
+        [
+          fn ship -> ship["symbol"] in duplicate_sat_symbols end,
+          fn ship -> ship["registration"]["role"] == "SATELLITE" end
+        ]
+      )
+    end)
+  end
+
+  defp construction_actions(game) do
+    game.construction_sites
+    |> Enum.map(fn {_symbol, site} -> site end)
+    |> Enum.reject(fn site -> site["isComplete"] end)
+    |> Enum.flat_map(fn site ->
+      Enum.map(site["materials"], fn material ->
+        ShipTask.new(
+          :deliver_construction_materials,
+          %{
+            waypoint_symbol: site["symbol"],
+            trade_symbol: material["tradeSymbol"],
+            remaining_units: material["required"] - material["fulfilled"],
+            required_units: material["required"],
+            fulfilled_units: material["fulfilled"]
+          }
+        )
+      end)
+      |> Enum.reject(fn task -> task.args.remaining_units == 0 end)
+    end)
+  end
+
+  def update_construction_site!(game, waypoint_symbol, update_fun) do
+    update_in(game, [Access.key(:construction_sites), Access.key(waypoint_symbol, nil)], update_fun)
   end
 end

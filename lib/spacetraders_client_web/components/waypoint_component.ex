@@ -660,7 +660,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
           <% "shipyard" -> %>
             <div>
               <.async_result :let={shipyard} assign={@shipyard}>
-                <%= if Enum.any?(@ships_at_waypoint) do %>
+                <%= if Enum.any?(@ships_at_waypoint) && shipyard do %>
                   <table class="table table-zebra">
                     <tbody>
                       <%= for ship <- shipyard["ships"] do %>

@@ -24,6 +24,14 @@ config :spacetraders_client, SpacetradersClient.Cache,
 config :spacetraders_client,
   generators: [timestamp_type: :utc_datetime]
 
+config :ex_cldr,
+  default_locale: "en",
+  default_backend: SpacetradersClient.Cldr
+
+config :ex_money,
+  exchange_rates_retrieve_every: :never,
+  log_failure: nil
+
 # Configures the endpoint
 config :spacetraders_client, SpacetradersClientWeb.Endpoint,
   url: [host: "localhost"],

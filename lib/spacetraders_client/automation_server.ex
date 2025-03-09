@@ -124,7 +124,7 @@ defmodule SpacetradersClient.AutomationServer do
   def handle_info(:fleet_updated, state) do
     state =
       state
-      |> load_game()
+      |> update_in([:game_state], &Game.load_fleet!/1)
       |> assign_automatons()
 
     {:noreply, state}
@@ -151,7 +151,10 @@ defmodule SpacetradersClient.AutomationServer do
       |> Game.load_all_waypoints!()
       |> Game.load_markets!()
       |> Game.load_shipyards!()
+      |> Game.load_construction_sites!()
       |> Game.start_ledger()
+
+    Phoenix.PubSub.subscribe(SpacetradersClient.PubSub, "agent:" <> game_state.agent["symbol"])
 
     Map.put(state, :game_state, game_state)
   end

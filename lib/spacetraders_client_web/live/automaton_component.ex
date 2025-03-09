@@ -72,30 +72,32 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
                   </table>
                 </div>
 
-                <div class="basis-1/2">
-                  <p class="mb-4 font-bold text-lg">Decision factors</p>
-                  <table class="table table-sm">
-                    <thead>
-                      <tr>
-                        <th class="w-1/3">Factor</th>
-                        <th class="w-1/6">Input</th>
-                        <th class="w-1/6">Output</th>
-                        <th class="w-1/6">Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <%= for factor <- @selected_action.utility.factors do %>
+                <%= if @selected_action.utility do %>
+                  <div class="basis-1/2">
+                    <p class="mb-4 font-bold text-lg">Decision factors</p>
+                    <table class="table table-sm">
+                      <thead>
                         <tr>
-                          <td class="font-mono"><%= factor.name %></td>
-                          <td class="font-mono"><.number value={factor.input} /></td>
-                          <td class="font-mono"><.number value={factor.output} /></td>
-                          <td class="font-mono"><.number value={Map.get(factor, :weight, 1)} /></td>
+                          <th class="w-1/3">Factor</th>
+                          <th class="w-1/6">Input</th>
+                          <th class="w-1/6">Output</th>
+                          <th class="w-1/6">Weight</th>
                         </tr>
-                      <% end %>
-                    </tbody>
+                      </thead>
+                      <tbody>
+                        <%= for factor <- @selected_action.utility.factors do %>
+                          <tr>
+                            <td class="font-mono"><%= factor.name %></td>
+                            <td class="font-mono"><.number value={factor.input} /></td>
+                            <td class="font-mono"><.number value={factor.output} /></td>
+                            <td class="font-mono"><.number value={Map.get(factor, :weight, 1)} /></td>
+                          </tr>
+                        <% end %>
+                      </tbody>
 
-                  </table>
-                </div>
+                    </table>
+                  </div>
+                <% end %>
               </div>
             <% end %>
           </div>

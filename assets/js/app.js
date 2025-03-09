@@ -33,6 +33,40 @@ import 'chartjs-adapter-moment';
 
 let Hooks = {};
 
+Hooks.Stopwatch = {
+  since() { return this.el.dataset.since; },
+  inverval: null,
+
+  mounted() {
+    this.updateStopwatch(this.el, this.since());
+    this.interval = setInterval(this.updateStopwatch, 100, this.el, this.since());
+  },
+
+  updated() {
+    this.updateStopwatch(this.el, this.since());
+  },
+
+  destroyed() {
+    if (interval != null) {
+      clearInterval(interval);
+    }
+  },
+
+  updateStopwatch(el, since) {
+    const elapsedMs = (new Date()) - (new Date(since));
+    const totalSeconds = elapsedMs / 1000;
+
+    const hours = Math.trunc(totalSeconds / 3600)
+    const minutes = Math.trunc(totalSeconds / 60) - (hours * 60)
+    const seconds = Math.trunc(totalSeconds % 60);
+
+
+    const clock = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+
+    el.innerHTML = clock;
+  }
+}
+
 // A Chart.js chart
 
 Hooks.Chart = {
@@ -72,6 +106,15 @@ Hooks.CountUp = {
 
 Hooks.SurveyStorage = {
   mounted() {
+    console.log("mounted time localizer");
+    const timeElements = Array.from(this.el.getElementsByTagName("time"));
+
+    timeElements.forEach((timeEl) => {
+      const d = new Date(timeEl.dateTime);
+      timeEl.innerHTML = d.toLocaleString("en-us");
+    });
+
+
     if (!localStorage.getItem("surveys")) {
       localStorage.setItem("surveys", "[]");
     }
@@ -96,6 +139,15 @@ Hooks.SurveyStorage = {
       let surveys = JSON.parse(localStorage.getItem("surveys"));
       surveys.push(survey);
       localStorage.setItem("surveys", JSON.stringify(surveys));
+    });
+  },
+
+  updated() {
+    const timeElements = Array.from(this.el.getElementsByTagName("time"));
+
+    timeElements.forEach((timeEl) => {
+      const d = new Date(timeEl.dateTime);
+      timeEl.innerHTML = d.toLocaleString();
     });
   }
 };

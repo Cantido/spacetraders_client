@@ -17,7 +17,7 @@ defmodule SpacetradersClientWeb.CoreComponents do
   use Phoenix.Component
 
   alias Phoenix.LiveView.JS
-  import SpacetradersClientWeb.Gettext
+  use Gettext, backend: SpacetradersClientWeb.Gettext
 
   @doc """
   Renders a modal.

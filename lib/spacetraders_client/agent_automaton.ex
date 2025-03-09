@@ -1,6 +1,5 @@
 defmodule SpacetradersClient.AgentAutomaton do
   alias SpacetradersClient.ShipAutomaton
-  alias SpacetradersClient.Automata
   alias SpacetradersClient.Game
 
   require Logger
@@ -13,7 +12,7 @@ defmodule SpacetradersClient.AgentAutomaton do
     automata =
       game.fleet
       |> Enum.map(fn {ship_symbol, ship} ->
-        automaton = Automata.for_ship(ship)
+        automaton = ShipAutomaton.new(ship)
 
         {ship_symbol, automaton}
       end)

@@ -1,4 +1,5 @@
 defprotocol SpacetradersClient.Action do
-  def apply(action, game, ship_symbol)
-  def cost(action, game, ship_symbol)
+  def customize(action, game, ship_symbol)
+  def variations(action, game, ship_symbol)
+  def decision_factors(action, game, ship_symbol)
 end

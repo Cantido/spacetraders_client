@@ -3,6 +3,7 @@
     "daisyui": "^4.12.10"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "^0.4.4",
     "chart.js": "^4.4.4",
     "chartjs-adapter-moment": "^1.0.1",
     "countup.js": "^2.8.0",

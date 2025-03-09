@@ -41,9 +41,9 @@ defmodule SpacetradersClientWeb do
       use Phoenix.Controller,
         formats: [:html, :json],
         layouts: [html: SpacetradersClientWeb.Layouts]
+      use Gettext, backend: SpacetradersClientWeb.Gettext
 
       import Plug.Conn
-      import SpacetradersClientWeb.Gettext
 
       unquote(verified_routes())
     end
@@ -82,12 +82,13 @@ defmodule SpacetradersClientWeb do
 
   defp html_helpers do
     quote do
+      use Gettext, backend: SpacetradersClientWeb.Gettext
+
       # HTML escaping functionality
       import Phoenix.HTML
       # Core UI components and translation
       import SpacetradersClientWeb.CoreComponents
       import SpacetradersClientWeb.SharedComponents
-      import SpacetradersClientWeb.Gettext
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS

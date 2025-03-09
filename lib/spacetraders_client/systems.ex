@@ -31,4 +31,19 @@ defmodule SpacetradersClient.Systems do
   def get_construction_site(client, system_symbol, waypoint_symbol) do
     Tesla.get(client, "/v2/systems/#{system_symbol}/waypoints/#{waypoint_symbol}/construction")
   end
+
+  def supply_construction_site(
+        client,
+        system_symbol,
+        waypoint_symbol,
+        ship_symbol,
+        trade_symbol,
+        units
+      ) do
+    Tesla.post(
+      client,
+      "/v2/systems/#{system_symbol}/waypoints/#{waypoint_symbol}/construction/supply",
+      %{shipSymbol: ship_symbol, tradeSymbol: trade_symbol, units: units}
+    )
+  end
 end

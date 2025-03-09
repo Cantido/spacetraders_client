@@ -2,6 +2,25 @@ defmodule SpacetradersClient.DecisionFactors do
   alias SpacetradersClient.Utility
   alias SpacetradersClient.Curves
 
+  def role_bonus(factors) do
+    put_factor(factors, %{name: :role_bonus, input: 1.0, output: 1.0})
+  end
+
+  def cooperation_bonus(factors) do
+    put_factor(factors, %{name: :cooperation_bonus, input: 1.0, output: 0.5})
+  end
+
+  def market_visibility_bonus(factors) do
+    put_factor(factors, %{name: :market_visibility, input: 1.0, output: 1.0})
+  end
+
+  def construction_supply(factors, units_supplied) do
+    y = Curves.linear(units_supplied, 80)
+    put_factor(factors, %{name: :construction_supply, input: units_supplied, output: y})
+    |> put_factor(%{name: :construction_bonus, input: 1.0, output: 1.0})
+
+  end
+
   def income_over_time(factors, x) do
     y = Curves.quadratic(x, 5_000, 0.333)
 
@@ -36,9 +55,9 @@ defmodule SpacetradersClient.DecisionFactors do
   end
 
   def profit(factors, x) do
-    y = Curves.quadratic(x, 10_000, 0.333)
+    y = Curves.quadratic(x, 100_000, 0.333)
 
-    put_factor(factors, %{name: :profit, input: x, output: y, weight: 2})
+    put_factor(factors, %{name: :profit, input: x, output: y})
   end
 
   def roi(factors, x) do

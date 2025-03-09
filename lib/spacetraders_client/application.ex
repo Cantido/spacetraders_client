@@ -12,6 +12,7 @@ defmodule SpacetradersClient.Application do
       {DNSCluster, query: Application.get_env(:spacetraders_client, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SpacetradersClient.PubSub},
       {SpacetradersClient.Cache, []},
+      Cldr.Currency,
       {SpacetradersClient.LedgerServer, []},
       # Start the Finch HTTP client for sending emails
       {Finch, name: SpacetradersClient.Finch},
@@ -24,7 +25,16 @@ defmodule SpacetradersClient.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: SpacetradersClient.Supervisor]
-    Supervisor.start_link(children, opts)
+    result = Supervisor.start_link(children, opts)
+
+    case result do
+      {:ok, _} ->
+        {:ok, _} = Cldr.Currency.new(:XST, name: "SpaceTraders credits", digits: 0)
+      _ ->
+        :noop
+    end
+
+    result
   end
 
   # Tell Phoenix to update the endpoint configuration

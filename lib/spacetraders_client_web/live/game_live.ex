@@ -1,9 +1,7 @@
 defmodule SpacetradersClientWeb.GameLive do
   alias SpacetradersClient.Cldr.Number
-  alias SpacetradersClientWeb.CreditBalanceComponent
   alias SpacetradersClient.LedgerServer
   alias Phoenix.LiveView.Socket
-  alias SpacetradersClient.AutomationServer
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Fleet
   use SpacetradersClientWeb, :live_view
@@ -28,13 +26,13 @@ defmodule SpacetradersClientWeb.GameLive do
     <.async_result :let={agent} assign={@agent}>
       <:loading><span class="loading loading-ring loading-lg"></span></:loading>
       <:failed :let={_failure}>Failed to fetch your agent</:failed>
-    <div class="flex flex-row min-h-screen max-h-screen h-screen" phx-hook="SurveyStorage" id="gamedata">
-      <div class="bg-base-300 w-1/6 flex-none overflow-y-auto">
-
-          <.link
-            class="hover:link"
-            patch={~p"/game/agent"}
-          >
+      <div
+        class="flex flex-row min-h-screen max-h-screen h-screen"
+        phx-hook="SurveyStorage"
+        id="gamedata"
+      >
+        <div class="bg-base-300 w-1/6 flex-none overflow-y-auto">
+          <.link class="hover:link" patch={~p"/game/agent"}>
             <div class="px-5 py-2 bg-neutral w-full flex justify-between items-center">
               <span>
                 <.icon name="hero-user" />
@@ -42,370 +40,379 @@ defmodule SpacetradersClientWeb.GameLive do
               </span>
               <span class="badge">
                 <.icon name="hero-circle-stack" class="w-4 h-4" />
-                <%= Number.to_string! agent["credits"], format: :accounting, fractional_digits: 0 %>
+                <%= Number.to_string!(agent["credits"], format: :accounting, fractional_digits: 0) %>
               </span>
             </div>
           </.link>
 
-
-      <ul class="menu menu bg-base-300 w-full">
-
-        <li>
-          <details>
-            <summary class="">
-              <.icon name="hero-book-open" />
-              <span>Contracts</span>
-            </summary>
-            <.async_result :let={contracts} assign={@contracts}>
-              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-              <:failed :let={_failure}>There was an error your contracts.</:failed>
-
-              <ul>
-              <%= for contract <- contracts do %>
-                <li>
-                  <.link
-                    patch={~p"/game/contracts/#{contract["id"]}"}
-                  >
-                    <%= contract["type"] %>
-                  </.link>
-                </li>
-              <% end %>
-              </ul>
-            </.async_result>
-          </details>
-        </li>
-
-        <li>
-          <details open={is_binary(@selected_ship_symbol)}>
-            <summary class="">
-              <.icon name="hero-rocket-launch" />
-              <span>Fleet</span>
-              <span>
-                <.async_result :let={agent} assign={@agent}>
+          <ul class="menu menu bg-base-300 w-full">
+            <li>
+              <details>
+                <summary class="">
+                  <.icon name="hero-book-open" />
+                  <span>Contracts</span>
+                </summary>
+                <.async_result :let={contracts} assign={@contracts}>
                   <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                  <:failed :let={_failure}>ERR</:failed>
+                  <:failed :let={_failure}>There was an error your contracts.</:failed>
 
-                  <%= agent["shipCount"] %>
+                  <ul>
+                    <%= for contract <- contracts do %>
+                      <li>
+                        <.link patch={~p"/game/contracts/#{contract["id"]}"}>
+                          <%= contract["type"] %>
+                        </.link>
+                      </li>
+                    <% end %>
+                  </ul>
                 </.async_result>
-              </span>
-            </summary>
-            <ul>
+              </details>
+            </li>
 
-              <.async_result :let={fleet} assign={@fleet}>
-                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                <:failed :let={_failure}>There was an error fetching your fleet</:failed>
+            <li>
+              <details open={is_binary(@selected_ship_symbol)}>
+                <summary class="">
+                  <.icon name="hero-rocket-launch" />
+                  <span>Fleet</span>
+                  <span>
+                    <.async_result :let={agent} assign={@agent}>
+                      <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                      <:failed :let={_failure}>ERR</:failed>
 
-                <%= for ship <- fleet do %>
-                  <li>
-                    <.link
-                      class={[
-                        @selected_ship_symbol == ship["symbol"] && "active",
-                        "flex flex-row justify-between items-center"
-                      ]}
-                      patch={~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}/ships/#{ship["symbol"]}"}
-                    >
+                      <%= agent["shipCount"] %>
+                    </.async_result>
+                  </span>
+                </summary>
+                <ul>
+                  <.async_result :let={fleet} assign={@fleet}>
+                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                    <:failed :let={_failure}>There was an error fetching your fleet</:failed>
 
-                      <span>
-                        <%= ship["registration"]["name"] %>
-                      </span>
-                      <span class="w-4">
+                    <%= for ship <- fleet do %>
+                      <li>
+                        <.link
+                          class={[
+                            @selected_ship_symbol == ship["symbol"] && "active",
+                            "flex flex-row justify-between items-center"
+                          ]}
+                          patch={
+                            ~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}/ships/#{ship["symbol"]}"
+                          }
+                        >
+                          <span>
+                            <%= ship["registration"]["name"] %>
+                          </span>
+                          <span class="ml-4 text-sm opacity-50"><%= ship["registration"]["role"] %></span>
+                          <span class="w-4">
+                            <.async_result :let={automaton} assign={@agent_automaton}>
+                              <%= if automaton && automaton.ship_automata[ship["symbol"]] do %>
+                                <span
+                                  class="tooltip tooltip-left tooltip-info"
+                                  data-tip="This ship is currently controlled by automation"
+                                >
+                                  <.icon name="hero-cog" />
+                                </span>
+                              <% end %>
+                            </.async_result>
+                          </span>
+                        </.link>
+                      </li>
+                    <% end %>
+                  </.async_result>
+                </ul>
+              </details>
+            </li>
+            <li>
+              <details>
+                <summary class="">
+                  <.icon name="hero-globe-alt" />
+                  <span>Systems</span>
+                </summary>
+                <ul>
+                  <.async_result :let={fleet} assign={@fleet}>
+                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                    <:failed :let={_failure}>There was an error loading your fleet</:failed>
 
-                        <.async_result :let={automaton} assign={@agent_automaton}>
-                          <%= if automaton && automaton.ship_automata[ship["symbol"]] do %>
-                            <span class="tooltip tooltip-left tooltip-info" data-tip="This ship is currently controlled by automation">
-                              <.icon name="hero-cog" />
-                            </span>
-                          <% end %>
-                        </.async_result>
-                      </span>
+                    <%= for {system_symbol, ship_count} <- Enum.frequencies(Enum.map(fleet, fn ship -> ship["nav"]["systemSymbol"] end)) do %>
+                      <li>
+                        <.link patch={~p"/game/systems/#{system_symbol}"}>
+                          <span></span>
+                          <span><%= system_symbol %></span>
+                          <span><%= ship_count %></span>
+                        </.link>
+                      </li>
+                    <% end %>
+                  </.async_result>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </div>
 
+        <%= case @live_action do %>
+          <% :agent -> %>
+            <.async_result :let={agent} assign={@agent}>
+              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+              <:failed :let={_failure}>There was an error loading your agent.</:failed>
 
-                    </.link>
-                  </li>
-                <% end %>
-              </.async_result>
-            </ul>
-          </details>
-        </li>
-        <li>
-          <details>
-            <summary class="">
-              <.icon name="hero-globe-alt" />
-              <span>Systems</span>
-            </summary>
-            <ul>
-              <.async_result :let={fleet} assign={@fleet}>
-                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                <:failed :let={_failure}>There was an error loading your fleet</:failed>
+              <.live_component
+                module={SpacetradersClientWeb.AgentComponent}
+                id="my-agent"
+                client={@client}
+                ledger={@ledger}
+                agent={agent}
+              />
+            </.async_result>
+          <% :contract -> %>
+            <div class="min-h-screen max-h-screen w-full">
+              <h3 class="px-5 py-2 bg-neutral">
+                <a class="font-bold text-xl">
+                  Contract
+                </a>
+              </h3>
 
-                <%= for {system_symbol, ship_count} <- Enum.frequencies(Enum.map(fleet, fn ship -> ship["nav"]["systemSymbol"] end)) do %>
-                  <li>
-                    <.link
-                      patch={~p"/game/systems/#{system_symbol}"}
-                    >
-                      <span></span>
-                      <span><%= system_symbol %></span>
-                      <span><%= ship_count %></span>
-                    </.link>
-                  </li>
-                <% end %>
-              </.async_result>
-            </ul>
-          </details>
-        </li>
-      </ul>
+              <div class="p-8">
+                <.async_result :let={contract} assign={@contract}>
+                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                  <:failed :let={_failure}>There was an error loading the contract.</:failed>
 
-      </div>
-
-
-      <%= case @live_action do %>
-        <% :agent -> %>
-          <.async_result :let={agent} assign={@agent}>
-            <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-            <:failed :let={_failure}>There was an error loading your agent.</:failed>
-
-            <.live_component module={SpacetradersClientWeb.AgentComponent} id="my-agent" client={@client} ledger={@ledger} agent={agent} />
-          </.async_result>
-
-        <% :contract -> %>
-          <div class="min-h-screen max-h-screen w-full">
-            <h3 class="px-5 py-2 bg-neutral">
-              <a class="font-bold text-xl">
-                Contract
-              </a>
-            </h3>
-
-            <div class="p-8">
-              <.async_result :let={contract} assign={@contract}>
-                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                <:failed :let={_failure}>There was an error loading the contract.</:failed>
-
-                <SpacetradersClientWeb.ContractComponent.view contract={contract} />
-              </.async_result>
+                  <SpacetradersClientWeb.ContractComponent.view contract={contract} />
+                </.async_result>
+              </div>
             </div>
-          </div>
 
-        <% :system -> %>
-
-          <.async_result :let={system} assign={@system}>
-            <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-            <:failed :let={_failure}>There was an error loading the system.</:failed>
+          <% :fleet -> %>
 
             <.async_result :let={fleet} assign={@fleet}>
               <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-              <:failed :let={_failure}>There was an error loading your fleet.</:failed>
+              <:failed :let={_failure}>There was an error loading your fleet</:failed>
 
-              <section class="flex flex-row min-h-screen max-h-screen w-1/6 flex-none">
-                <div class="h-screen bg-base-200">
-                  <div class="w-80 max-h-full h-full flex flex-col">
-                    <h3 class="px-5 py-2 bg-neutral">
-                      <.link
-                        class="font-bold text-xl hover:link"
-                        patch={~p"/game/systems/#{@system_symbol}"}
-                      >
-                        <%= @system_symbol %>
-                      </.link>
-                    </h3>
+              <.async_result :let={agent_automaton} assign={@agent_automaton}>
+                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                <:failed :let={_failure}>There was an error loading fleet automata</:failed>
+
+                <.live_component
+                  module={SpacetradersClientWeb.FleetComponent}
+                  id="fleet-screen"
+                  fleet={fleet},
+                  fleet_automata={if agent_automaton, do: agent_automaton.ship_automata}
+                />
+              </.async_result>
+            </.async_result>
 
 
-                    <div class="overflow-auto">
-                      <.live_component
-                        module={SpacetradersClientWeb.OrbitalsMenuComponent}
-                        id={"orbitals"}
-                        system={system}
-                        waypoints={@waypoints}
-                        fleet={fleet}
-                        active_waypoint={@selected_waypoint_symbol}
-                      />
+          <% :system -> %>
+            <.async_result :let={system} assign={@system}>
+              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+              <:failed :let={_failure}>There was an error loading the system.</:failed>
+
+              <.async_result :let={fleet} assign={@fleet}>
+                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                <:failed :let={_failure}>There was an error loading your fleet.</:failed>
+
+                <section class="flex flex-row min-h-screen max-h-screen w-1/6 flex-none">
+                  <div class="h-screen bg-base-200">
+                    <div class="w-80 max-h-full h-full flex flex-col">
+                      <h3 class="px-5 py-2 bg-neutral">
+                        <.link
+                          class="font-bold text-xl hover:link"
+                          patch={~p"/game/systems/#{@system_symbol}"}
+                        >
+                          <%= @system_symbol %>
+                        </.link>
+                      </h3>
+
+                      <div class="overflow-auto">
+                        <.live_component
+                          module={SpacetradersClientWeb.OrbitalsMenuComponent}
+                          id="orbitals"
+                          system={system}
+                          waypoints={@waypoints}
+                          fleet={fleet}
+                          active_waypoint={@selected_waypoint_symbol}
+                        />
+                      </div>
                     </div>
                   </div>
+                </section>
+
+                <div class="grow">
+                  <.live_component
+                    module={SpacetradersClientWeb.MapComponent}
+                    id="map"
+                    client={@client}
+                    system={system}
+                    fleet={fleet}
+                  />
                 </div>
-              </section>
-
-              <div class="grow">
-                <.live_component
-                  module={SpacetradersClientWeb.MapComponent}
-                  id={"map"}
-                  client={@client}
-                  system={system}
-                  fleet={fleet}
-                />
-              </div>
+              </.async_result>
             </.async_result>
-          </.async_result>
-
-        <% :waypoint -> %>
-
-
-          <section class="flex flex-row min-h-screen max-h-screen w-1/6 flex-none">
-            <div class="h-screen bg-base-200">
-              <div class="w-80 max-h-full h-full flex flex-col">
-                <h3 class="px-5 py-2 bg-neutral">
-                  <.link
-                    class="font-bold text-xl link-hover"
-                    patch={~p"/game/systems/#{@system_symbol}"}
-                  >
-                    <%= @system_symbol %>
-                  </.link>
-                </h3>
-
-                <.async_result :let={system} assign={@system}>
-                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                  <:failed :let={_failure}>There was an error loading the system.</:failed>
-
-                  <.async_result :let={fleet} assign={@fleet}>
-                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                    <:failed :let={_failure}>There was an error loading your fleet.</:failed>
-
-                    <div class="overflow-auto">
-                      <.live_component
-                        module={SpacetradersClientWeb.OrbitalsMenuComponent}
-                        id={"orbitals"}
-                        system={system}
-                        waypoints={@waypoints}
-                        fleet={fleet}
-                        active_waypoint={@selected_waypoint_symbol}
-                      />
-                    </div>
-                  </.async_result>
-                </.async_result>
-              </div>
-            </div>
-          </section>
-
-          <div class="grow h-screen flex flex-col">
-            <div class="px-5 py-2 bg-neutral font-bold text-xl">
-              <ul>
-                <li>
-                  <.link
-                    patch={~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}"}
-                  >
-                    <%= @waypoint_symbol %>
-                  </.link>
-                </li>
-              </ul>
-            </div>
-
-            <div class="overflow-y-auto">
-              <.async_result :let={agent} assign={@agent}>
-                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                <:failed :let={_failure}>There was an error loading your agent.</:failed>
-
-                <.async_result :let={fleet} assign={@fleet}>
-                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                  <:failed :let={_failure}>There was an error loading your fleet.</:failed>
-
-                  <.async_result :let={contracts} assign={@contracts}>
-                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                    <:failed :let={_failure}>There was an error loading your contracts.</:failed>
+          <% :waypoint -> %>
+            <section class="flex flex-row min-h-screen max-h-screen w-1/6 flex-none">
+              <div class="h-screen bg-base-200">
+                <div class="w-80 max-h-full h-full flex flex-col">
+                  <h3 class="px-5 py-2 bg-neutral">
+                    <.link
+                      class="font-bold text-xl link-hover"
+                      patch={~p"/game/systems/#{@system_symbol}"}
+                    >
+                      <%= @system_symbol %>
+                    </.link>
+                  </h3>
 
                   <.async_result :let={system} assign={@system}>
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading the system.</:failed>
 
-                      <.live_component
-                        module={SpacetradersClientWeb.WaypointComponent}
-                        id="waypoint"
-                        client={@client}
-                        agent={agent}
-                        fleet={fleet}
-                        system={system}
-                        selected_ship_symbol={@selected_ship_symbol}
-                        surveys={@surveys}
-                        contracts={contracts}
-                        system_symbol={@system_symbol}
-                        waypoint_symbol={@waypoint_symbol}
-                        selected_survey_id={@selected_survey_id}
-                      />
+                    <.async_result :let={fleet} assign={@fleet}>
+                      <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                      <:failed :let={_failure}>There was an error loading your fleet.</:failed>
+
+                      <div class="overflow-auto">
+                        <.live_component
+                          module={SpacetradersClientWeb.OrbitalsMenuComponent}
+                          id="orbitals"
+                          system={system}
+                          waypoints={@waypoints}
+                          fleet={fleet}
+                          active_waypoint={@selected_waypoint_symbol}
+                        />
+                      </div>
+                    </.async_result>
+                  </.async_result>
+                </div>
+              </div>
+            </section>
+
+            <div class="grow h-screen flex flex-col">
+              <div class="px-5 py-2 bg-neutral font-bold text-xl">
+                <ul>
+                  <li>
+                    <.link patch={~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}"}>
+                      <%= @waypoint_symbol %>
+                    </.link>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="overflow-y-auto">
+                <.async_result :let={agent} assign={@agent}>
+                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                  <:failed :let={_failure}>There was an error loading your agent.</:failed>
+
+                  <.async_result :let={fleet} assign={@fleet}>
+                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                    <:failed :let={_failure}>There was an error loading your fleet.</:failed>
+
+                    <.async_result :let={contracts} assign={@contracts}>
+                      <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                      <:failed :let={_failure}>There was an error loading your contracts.</:failed>
+
+                      <.async_result :let={system} assign={@system}>
+                        <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                        <:failed :let={_failure}>There was an error loading the system.</:failed>
+
+                        <.live_component
+                          module={SpacetradersClientWeb.WaypointComponent}
+                          id="waypoint"
+                          client={@client}
+                          agent={agent}
+                          fleet={fleet}
+                          system={system}
+                          selected_ship_symbol={@selected_ship_symbol}
+                          surveys={@surveys}
+                          contracts={contracts}
+                          system_symbol={@system_symbol}
+                          waypoint_symbol={@waypoint_symbol}
+                          selected_survey_id={@selected_survey_id}
+                        />
+                      </.async_result>
                     </.async_result>
                   </.async_result>
                 </.async_result>
-              </.async_result>
+              </div>
             </div>
-          </div>
-        <% :ship -> %>
-          <.async_result :let={fleet} assign={@fleet}>
-            <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-            <:failed :let={_failure}>There was an error loading your fleet.</:failed>
-
-            <.async_result :let={system} assign={@system}>
+          <% :ship -> %>
+            <.async_result :let={fleet} assign={@fleet}>
               <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-              <:failed :let={_failure}>There was an error loading the system.</:failed>
+              <:failed :let={_failure}>There was an error loading your fleet.</:failed>
 
+              <.async_result :let={system} assign={@system}>
+                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                <:failed :let={_failure}>There was an error loading the system.</:failed>
 
-              <section class="flex flex-row min-h-screen max-h-screen w-1/6 flex-none overflow-hidden">
-                <div class="h-screen bg-base-200">
-                  <div class="w-80 max-h-full h-full flex flex-col">
-                    <h3 class="px-5 py-2 bg-neutral">
-                      <.link
-                        class="font-bold text-xl link-hover"
-                        patch={~p"/game/systems/#{@system_symbol}"}
-                      >
-                        <%= @system_symbol %>
-                      </.link>
-                    </h3>
+                <section class="flex flex-row min-h-screen max-h-screen w-1/6 flex-none overflow-hidden">
+                  <div class="h-screen bg-base-200">
+                    <div class="w-80 max-h-full h-full flex flex-col">
+                      <h3 class="px-5 py-2 bg-neutral">
+                        <.link
+                          class="font-bold text-xl link-hover"
+                          patch={~p"/game/systems/#{@system_symbol}"}
+                        >
+                          <%= @system_symbol %>
+                        </.link>
+                      </h3>
 
-
-                    <div class="overflow-auto">
-                      <.live_component
-                        module={SpacetradersClientWeb.OrbitalsMenuComponent}
-                        id={"orbitals"}
-                        system={system}
-                        waypoints={@waypoints}
-                        fleet={fleet}
-                        active_waypoint={@selected_waypoint_symbol}
-                      />
+                      <div class="overflow-auto">
+                        <.live_component
+                          module={SpacetradersClientWeb.OrbitalsMenuComponent}
+                          id="orbitals"
+                          system={system}
+                          waypoints={@waypoints}
+                          fleet={fleet}
+                          active_waypoint={@selected_waypoint_symbol}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </section>
+                </section>
 
-
-              <div class="grow h-screen max-h-screen flex flex-col">
-                <div class="breadcrumbs px-5 py-2 bg-neutral font-bold text-xl flex-none">
-                  <ul>
-                    <li>
-                      <.link
-                        patch={~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}"}
-                      >
-                        <%= @waypoint_symbol %>
-                      </.link>
-                    </li>
-                    <li>
-                      <.link
-                        patch={~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}/ships/#{@selected_ship_symbol}"}
-                      >
-                        <%= @selected_ship_symbol %>
-                      </.link>
-                    </li>
-                  </ul>
-                </div>
-
-                <.async_result :let={agent_automaton} assign={@agent_automaton}>
-                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                  <:failed :let={_failure}>There was an error loading automation.</:failed>
-
-                  <div class="overflow-y-auto">
-                    <.live_component
-                      module={SpacetradersClientWeb.ShipComponent}
-                      id={"ship-#{@selected_ship_symbol}"}
-                      client={@client}
-                      automaton={if agent_automaton, do: agent_automaton.ship_automata[@selected_ship_symbol], else: nil}
-                      agent={agent}
-                      system={system}
-                      ship={Enum.find(fleet, &(&1["symbol"] == @selected_ship_symbol))}
-                    />
+                <div class="grow h-screen max-h-screen flex flex-col">
+                  <div class="breadcrumbs px-5 py-2 bg-neutral font-bold text-xl flex-none">
+                    <ul>
+                      <li>
+                        <.link patch={
+                          ~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}"
+                        }>
+                          <%= @waypoint_symbol %>
+                        </.link>
+                      </li>
+                      <li>
+                        <.link patch={
+                          ~p"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}/ships/#{@selected_ship_symbol}"
+                        }>
+                          <%= @selected_ship_symbol %>
+                        </.link>
+                      </li>
+                    </ul>
                   </div>
-                </.async_result>
-              </div>
+
+                  <.async_result :let={agent_automaton} assign={@agent_automaton}>
+                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                    <:failed :let={_failure}>There was an error loading automation.</:failed>
+
+                    <div class="overflow-y-auto">
+                      <.live_component
+                        module={SpacetradersClientWeb.ShipComponent}
+                        id={"ship-#{@selected_ship_symbol}"}
+                        client={@client}
+                        automaton={
+                          if agent_automaton,
+                            do: agent_automaton.ship_automata[@selected_ship_symbol],
+                            else: nil
+                        }
+                        agent={agent}
+                        system={system}
+                        ship={Enum.find(fleet, &(&1["symbol"] == @selected_ship_symbol))}
+                      />
+                    </div>
+                  </.async_result>
+                </div>
+              </.async_result>
             </.async_result>
-          </.async_result>
-      <% end %>
-
-    </div>
-
+        <% end %>
+      </div>
     </.async_result>
-
     """
   end
 
@@ -428,12 +435,13 @@ defmodule SpacetradersClientWeb.GameLive do
         selected_survey_id: nil,
         system: AsyncResult.loading(),
         waypoints: %{},
-        agent: AsyncResult.ok(agent_body["data"]),
+        agent: AsyncResult.ok(agent_body["data"])
       })
       |> assign_async(:agent_automaton, fn ->
         case SpacetradersClient.AutomationServer.automaton(agent_body["data"]["symbol"]) do
           {:ok, agent_automaton} ->
             {:ok, %{agent_automaton: agent_automaton}}
+
           _ ->
             {:ok, %{agent_automaton: nil}}
         end
@@ -442,6 +450,7 @@ defmodule SpacetradersClientWeb.GameLive do
         case SpacetradersClient.LedgerServer.ledger(agent_body["data"]["symbol"]) do
           {:ok, ledger} ->
             assign(socket, %{ledger: ledger})
+
           _ ->
             assign(socket, %{ledger: nil})
         end
@@ -458,7 +467,6 @@ defmodule SpacetradersClientWeb.GameLive do
     {:ok, socket}
   end
 
-
   def mount(_params, _token, socket) do
     {:ok, redirect(socket, to: ~p"/login")}
   end
@@ -469,18 +477,21 @@ defmodule SpacetradersClientWeb.GameLive do
         {:noreply, socket}
 
       :contract ->
-        socket = assign(socket, %{
-          contract_id: unsigned_params["contract_id"]
-        })
+        socket =
+          assign(socket, %{
+            contract_id: unsigned_params["contract_id"]
+          })
 
         {:noreply, socket}
 
       :system ->
-        socket = assign(socket, %{
-          system_symbol: unsigned_params["system_symbol"]
-        })
-        |> load_system()
-        |> load_waypoints()
+        socket =
+          assign(socket, %{
+            system_symbol: unsigned_params["system_symbol"]
+          })
+          |> load_system()
+          |> load_waypoints()
+
         {:noreply, socket}
 
       :waypoint ->
@@ -506,8 +517,12 @@ defmodule SpacetradersClientWeb.GameLive do
             system_symbol: unsigned_params["system_symbol"],
             waypoint_symbol: unsigned_params["waypoint_symbol"]
           })
-        |> load_system()
-        |> load_waypoints()
+          |> load_system()
+          |> load_waypoints()
+
+        {:noreply, socket}
+
+      :fleet ->
         {:noreply, socket}
     end
   end
@@ -531,7 +546,6 @@ defmodule SpacetradersClientWeb.GameLive do
   def handle_event("purchase-fuel", %{"ship-symbol" => ship_symbol}, socket) do
     case Fleet.refuel_ship(socket.assigns.client, ship_symbol) do
       {:ok, %{status: 200, body: body}} ->
-
         socket = put_flash(socket, :info, "Ship refueled")
 
         fleet =
@@ -546,8 +560,9 @@ defmodule SpacetradersClientWeb.GameLive do
 
         socket = assign(socket, :fleet, fleet)
 
-        waypoint_symbol = Enum.find(socket.assigns.fleet.result, fn ship -> ship["symbol"] == ship_symbol end) |> get_in(~w(nav waypointSymbol))
-
+        waypoint_symbol =
+          Enum.find(socket.assigns.fleet.result, fn ship -> ship["symbol"] == ship_symbol end)
+          |> get_in(~w(nav waypointSymbol))
 
         tx = body["data"]["transaction"]
         {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
@@ -565,6 +580,7 @@ defmodule SpacetradersClientWeb.GameLive do
         end
 
         {:noreply, socket}
+
       {:ok, %{body: %{"error" => %{"message" => message}}}} ->
         socket = put_flash(socket, :error, message)
         {:noreply, socket}
@@ -603,49 +619,69 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, socket}
   end
 
-  def handle_event("navigate-ship", %{"ship-symbol" => ship_symbol, "waypoint-symbol" => waypoint_symbol} = params, socket) do
-    ship = Enum.find(socket.assigns.fleet.result, fn ship -> ship["nav"]["waypointSymbol"] == waypoint_symbol end)
-
+  def handle_event(
+        "navigate-ship",
+        %{"ship-symbol" => ship_symbol, "waypoint-symbol" => waypoint_symbol} = params,
+        socket
+      ) do
     flight_mode = Map.get(params, "flight-mode", "CRUISE")
 
     socket =
-      if flight_mode != ship["nav"]["flightMode"] do
         case Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode) do
           {:ok, %{status: 200, body: body}} ->
-            socket = update_ship(socket, ship_symbol, fn ship ->
-              Map.put(ship, "nav", body["data"]["nav"])
-            end)
+            socket =
+              update_ship(socket, ship_symbol, fn ship ->
+                Map.put(ship, "nav", body["data"]["nav"])
+              end)
+
             socket
         end
-      else
-        socket
-      end
 
     case Fleet.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
       {:ok, %{status: 200, body: body}} ->
-        socket = update_ship(socket, ship_symbol, fn ship ->
-          Map.put(ship, "nav", body["data"]["nav"])
-        end)
+        socket =
+          update_ship(socket, ship_symbol, fn ship ->
+            Map.put(ship, "nav", body["data"]["nav"])
+          end)
+
         {:noreply, socket}
+
       {:ok, %{status: 400, body: %{"error" => %{"code" => 4203, "data" => data}}}} ->
-        socket = put_flash(socket, :error, "Not enough fuel, #{data["fuelRequired"]} fuel is required, but only #{data["fuelAvailable"]} is available")
+        socket =
+          put_flash(
+            socket,
+            :error,
+            "Not enough fuel, #{data["fuelRequired"]} fuel is required, but only #{data["fuelAvailable"]} is available"
+          )
+
         {:noreply, socket}
     end
   end
 
-  def handle_event("set-flight-mode", %{"ship-symbol" => ship_symbol, "flight-mode" => flight_mode}, socket) do
-    {:ok, %{status: 200, body: body}} = Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode)
+  def handle_event(
+        "set-flight-mode",
+        %{"ship-symbol" => ship_symbol, "flight-mode" => flight_mode},
+        socket
+      ) do
+    {:ok, %{status: 200, body: body}} =
+      Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode)
 
-    socket = update_ship(socket, ship_symbol, fn ship ->
-      Map.put(ship, "nav", body["data"])
-    end)
-    |> put_flash(:success, "Ship #{ship_symbol} now in #{flight_mode} mode")
+    socket =
+      update_ship(socket, ship_symbol, fn ship ->
+        Map.put(ship, "nav", body["data"])
+      end)
+      |> put_flash(:success, "Ship #{ship_symbol} now in #{flight_mode} mode")
 
     {:noreply, socket}
   end
 
-  def handle_event("purchase-ship", %{"waypoint-symbol" => waypoint_symbol, "ship-type" => ship_type}, socket) do
-    {:ok, %{status: 201, body: body}} = Fleet.purchase_ship(socket.assigns.client, waypoint_symbol, ship_type)
+  def handle_event(
+        "purchase-ship",
+        %{"waypoint-symbol" => waypoint_symbol, "ship-type" => ship_type},
+        socket
+      ) do
+    {:ok, %{status: 201, body: body}} =
+      Fleet.purchase_ship(socket.assigns.client, waypoint_symbol, ship_type)
 
     ship = body["data"]["ship"]
     agent = body["data"]["agent"]
@@ -674,28 +710,36 @@ defmodule SpacetradersClientWeb.GameLive do
         tx["price"]
       )
 
+    PubSub.broadcast(@pubsub, "agent:" <> body["data"]["agent"]["symbol"], :fleet_updated)
+
     {:noreply, socket}
   end
 
-  def handle_event("select-waypoint", %{"system-symbol" => system_symbol, "waypoint-symbol" => waypoint_symbol}, socket) do
-    {:noreply, push_patch(socket, to: "/game/systems/#{system_symbol}/waypoints/#{waypoint_symbol}")}
+  def handle_event(
+        "select-waypoint",
+        %{"system-symbol" => system_symbol, "waypoint-symbol" => waypoint_symbol},
+        socket
+      ) do
+    {:noreply,
+     push_patch(socket, to: "/game/systems/#{system_symbol}/waypoints/#{waypoint_symbol}")}
   end
 
   def handle_event(
-    "deliver-contract-cargo",
-    %{
-      "contract-id" => contract_id,
-      "ship-symbol" => ship_symbol,
-      "trade-symbol" => trade_symbol,
-      "units" => quantity
-    },
-    socket
-  ) do
+        "deliver-contract-cargo",
+        %{
+          "contract-id" => contract_id,
+          "ship-symbol" => ship_symbol,
+          "trade-symbol" => trade_symbol,
+          "units" => quantity
+        },
+        socket
+      ) do
     client = socket.assigns.client
 
     socket =
       start_async(socket, :deliver_contract, fn ->
-        {:ok, %{status: 200, body: body}} = Contracts.deliver_cargo(client, contract_id, ship_symbol, trade_symbol, quantity)
+        {:ok, %{status: 200, body: body}} =
+          Contracts.deliver_cargo(client, contract_id, ship_symbol, trade_symbol, quantity)
 
         %{
           data: body["data"],
@@ -710,7 +754,10 @@ defmodule SpacetradersClientWeb.GameLive do
   def handle_event("extract-resources", %{"ship-symbol" => ship_symbol}, socket) do
     client = socket.assigns.client
 
-    selected_survey = Enum.find(socket.assigns.surveys, fn s -> s["signature"] == socket.assigns[:selected_survey_id] end)
+    selected_survey =
+      Enum.find(socket.assigns.surveys, fn s ->
+        s["signature"] == socket.assigns[:selected_survey_id]
+      end)
 
     socket =
       start_async(socket, :extract_resources, fn ->
@@ -761,14 +808,14 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   def handle_event(
-    "sell-cargo",
-    %{
-      "ship-symbol" => ship_symbol,
-      "trade-symbol" => trade_symbol,
-      "units" => quantity
-    },
-    socket
-  ) do
+        "sell-cargo",
+        %{
+          "ship-symbol" => ship_symbol,
+          "trade-symbol" => trade_symbol,
+          "units" => quantity
+        },
+        socket
+      ) do
     client = socket.assigns.client
 
     socket =
@@ -777,23 +824,25 @@ defmodule SpacetradersClientWeb.GameLive do
 
         resp
       end)
+
     {:noreply, socket}
   end
 
   def handle_event(
-    "jettison-cargo",
-    %{
-      "ship-symbol" => ship_symbol,
-      "item-symbol" => trade_symbol,
-      "units" => quantity
-    },
-    socket
-  ) do
+        "jettison-cargo",
+        %{
+          "ship-symbol" => ship_symbol,
+          "item-symbol" => trade_symbol,
+          "units" => quantity
+        },
+        socket
+      ) do
     client = socket.assigns.client
 
     socket =
       start_async(socket, :jettison_cargo, fn ->
-        {:ok, %{status: 200, body: body}} = Fleet.jettison_cargo(client, ship_symbol, trade_symbol, quantity)
+        {:ok, %{status: 200, body: body}} =
+          Fleet.jettison_cargo(client, ship_symbol, trade_symbol, quantity)
 
         %{
           ship_symbol: ship_symbol,
@@ -814,8 +863,12 @@ defmodule SpacetradersClientWeb.GameLive do
         []
       end
 
+    new_fleet =
+      (result.data ++ prev_fleet)
+      |> Enum.sort_by(fn ship -> ship["symbol"] end)
+
     socket =
-      assign(socket, :fleet, AsyncResult.ok(result.data ++ prev_fleet))
+      assign(socket, :fleet, AsyncResult.ok(new_fleet))
 
     socket =
       if Enum.count(socket.assigns.fleet.result) < result.meta["total"] do
@@ -841,8 +894,8 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   def handle_async(:sell_cargo, {:ok, %{status: 201, body: body}}, socket) do
-    transaction = body["data"]["transaction"]
-    ship_symbol = transaction["shipSymbol"]
+    tx = body["data"]["transaction"]
+    ship_symbol = tx["shipSymbol"]
     cargo = body["data"]["cargo"]
     agent = body["data"]["agent"]
 
@@ -852,7 +905,29 @@ defmodule SpacetradersClientWeb.GameLive do
         Map.put(ship, "cargo", cargo)
       end)
       |> assign(:agent, AsyncResult.ok(agent))
-      |> put_flash(:success, "Sold items for #{transaction["totalPrice"]} credits")
+      |> put_flash(:success, "Sold items for #{tx["totalPrice"]} credits")
+
+    {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
+
+    {:ok, _ledger} =
+      LedgerServer.post_journal(
+        body["data"]["agent"]["symbol"],
+        ts,
+        "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{tx["waypointSymbol"]}",
+        "Cash",
+        "Merchandise",
+        tx["totalPrice"]
+      )
+
+    {:ok, _ledger} =
+      LedgerServer.post_journal(
+        body["data"]["agent"]["symbol"],
+        ts,
+        "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{tx["waypointSymbol"]}",
+        "Cost of Merchandise Sold",
+        "Merchandise",
+        tx["totalPrice"]
+      )
 
     {:noreply, socket}
   end
@@ -1015,11 +1090,16 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   defp update_ship(fleet, ship_symbol, ship_update_fn) when is_list(fleet) do
-    i = Enum.find_index(fleet, fn ship ->
-      ship["symbol"] == ship_symbol
-    end)
+    i =
+      Enum.find_index(fleet, fn ship ->
+        ship["symbol"] == ship_symbol
+      end)
 
-    List.update_at(fleet, i, ship_update_fn)
+    if is_integer(i) do
+      List.update_at(fleet, i, ship_update_fn)
+    else
+      fleet
+    end
   end
 
   defp update_ship(%Phoenix.LiveView.Socket{} = socket, ship_symbol, ship_update_fn) do
@@ -1029,11 +1109,16 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   defp update_contract(contracts, contract_id, contract_update_fn) when is_list(contracts) do
-    i = Enum.find_index(contracts, fn contract ->
-      contract["id"] == contract_id
-    end)
+    i =
+      Enum.find_index(contracts, fn contract ->
+        contract["id"] == contract_id
+      end)
 
-    List.update_at(contracts, i, contract_update_fn)
+    if is_integer(i) do
+      List.update_at(contracts, i, contract_update_fn)
+    else
+      contracts
+    end
   end
 
   defp update_contract(%Phoenix.LiveView.Socket{} = socket, contract_id, contract_update_fn) do
@@ -1050,16 +1135,17 @@ defmodule SpacetradersClientWeb.GameLive do
       assign_async(socket, :system, fn ->
         case Systems.get_system(client, symbol) do
           {:ok, %{status: 200, body: body}} ->
-
             system =
               body["data"]
               |> Map.update!("waypoints", fn waypoints ->
-                Enum.sort_by(waypoints, &(&1["symbol"]))
+                Enum.sort_by(waypoints, & &1["symbol"])
               end)
 
             {:ok, %{system: system}}
+
           {:ok, resp} ->
             {:error, resp}
+
           err ->
             err
         end
@@ -1079,12 +1165,13 @@ defmodule SpacetradersClientWeb.GameLive do
             meta: body["meta"],
             data: body["data"]
           }
+
         {:ok, resp} ->
           {:error, resp}
+
         err ->
           err
       end
-
     end)
   end
 
@@ -1098,8 +1185,10 @@ defmodule SpacetradersClientWeb.GameLive do
             meta: body["meta"],
             data: body["data"]
           }
+
         {:ok, resp} ->
           {:error, resp}
+
         err ->
           err
       end
@@ -1115,8 +1204,10 @@ defmodule SpacetradersClientWeb.GameLive do
         case Contracts.get_contract(client, id) do
           {:ok, %{status: 200, body: body}} ->
             {:ok, %{contract: body["data"]}}
+
           {:ok, resp} ->
             {:error, resp}
+
           err ->
             err
         end
