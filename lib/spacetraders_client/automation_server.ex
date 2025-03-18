@@ -12,8 +12,8 @@ defmodule SpacetradersClient.AutomationServer do
 
   @pubsub SpacetradersClient.PubSub
 
-  def start_link(_opts \\ []) do
-    token = System.fetch_env!("SPACETRADERS_TOKEN")
+  def start_link(opts) do
+    token = Keyword.fetch!(opts, :token)
     client = Client.new(token)
 
     case Agents.my_agent(client) do
@@ -89,7 +89,11 @@ defmodule SpacetradersClient.AutomationServer do
 
     Logger.debug("Initialized automation server")
 
-    PubSub.broadcast(@pubsub, "agent:#{state.game_state.agent["symbol"]}", {:automation_started, state.automaton})
+    PubSub.broadcast(
+      @pubsub,
+      "agent:#{state.game_state.agent["symbol"]}",
+      {:automation_started, state.automaton}
+    )
 
     timer = Process.send_after(self(), :reload_game, :timer.minutes(5))
 
@@ -111,7 +115,11 @@ defmodule SpacetradersClient.AutomationServer do
   def handle_info(:tick_behaviors, state) do
     {automaton, game_state} = AgentAutomaton.tick(state.automaton, state.game_state)
 
-    PubSub.broadcast(@pubsub, "agent:#{state.game_state.agent["symbol"]}", {:automaton_updated, automaton})
+    PubSub.broadcast(
+      @pubsub,
+      "agent:#{state.game_state.agent["symbol"]}",
+      {:automaton_updated, automaton}
+    )
 
     state =
       state

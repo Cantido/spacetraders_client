@@ -1,11 +1,11 @@
 defmodule SpacetradersClientWeb.GameLive do
+  use SpacetradersClientWeb, :live_view
+
   alias SpacetradersClient.Cldr.Number
   alias SpacetradersClient.LedgerServer
   alias Phoenix.LiveView.Socket
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Fleet
-  use SpacetradersClientWeb, :live_view
-
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Client
   alias SpacetradersClient.Systems
@@ -21,7 +21,46 @@ defmodule SpacetradersClientWeb.GameLive do
   attr :system_symbol, :string, default: nil
   attr :waypoint_symbol, :string, default: nil
 
-  def render(assigns) do
+  def render(assigns), do: render_new(assigns)
+
+  def render_new(assigns) do
+    ~H"""
+    <div
+        phx-hook="SurveyStorage"
+        id="gamedata"
+    >
+        <.async_result :let={agent} assign={@agent}>
+          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+          <:failed :let={_failure}>Failed to fetch your agent</:failed>
+
+          <.link class="hover:link" patch={~p"/game/agent"}>
+            <Heroicons.user mini class="w-4 h-4" />
+            <span class="font-mono"><%= agent["symbol"] %></span>
+          </.link>
+        </.async_result>
+
+        <.async_result :let={agent} assign={@agent}>
+          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+          <:failed :let={_failure}>Failed to fetch your agent</:failed>
+
+          <span class="badge">
+            <Heroicons.circle_stack mini class="w-4 h-4" />
+            <%= Number.to_string!(agent["credits"], format: :accounting, fractional_digits: 0) %>
+          </span>
+        </.async_result>
+
+        <span>
+          <Heroicons.play mini class="w-4 h-4" />
+          <span>Start bot</span>
+        </span>
+
+      </div>
+
+
+    """
+  end
+
+  def render_old(assigns) do
     ~H"""
     <.async_result :let={agent} assign={@agent}>
       <:loading><span class="loading loading-ring loading-lg"></span></:loading>
@@ -36,7 +75,7 @@ defmodule SpacetradersClientWeb.GameLive do
             <div class="px-5 py-2 bg-neutral w-full flex justify-between items-center">
               <span>
                 <.icon name="hero-user" />
-                <span class="font-mono text-xl"><%= agent["symbol"] %></span>
+                <span class="font-mono"><%= agent["symbol"] %></span>
               </span>
               <span class="badge">
                 <.icon name="hero-circle-stack" class="w-4 h-4" />
@@ -404,7 +443,7 @@ defmodule SpacetradersClientWeb.GameLive do
                         agent={agent}
                         system={system}
                         ship={Enum.find(fleet, &(&1["symbol"] == @selected_ship_symbol))}
-                      />
+                      />systems/X1-ZF88/waypoints/X1-ZF88-A1/ships/C0SM1C_R05E-1
                     </div>
                   </.async_result>
                 </div>
@@ -543,6 +582,16 @@ defmodule SpacetradersClientWeb.GameLive do
     assign(socket, :selected_ship_symbol, ship["symbol"])
   end
 
+  def handle_event("automation-started", %{}, socket) do
+    {:ok, _} =
+      DynamicSupervisor.start_child(
+        SpacetradersClient.AutomatonSupervisor,
+        {SpaceTradersClient.AutomatonServer, [token: socket.assigns.token]}
+      )
+
+    {:noreply, socket}
+  end
+
   def handle_event("purchase-fuel", %{"ship-symbol" => ship_symbol}, socket) do
     case Fleet.refuel_ship(socket.assigns.client, ship_symbol) do
       {:ok, %{status: 200, body: body}} ->
@@ -627,15 +676,15 @@ defmodule SpacetradersClientWeb.GameLive do
     flight_mode = Map.get(params, "flight-mode", "CRUISE")
 
     socket =
-        case Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode) do
-          {:ok, %{status: 200, body: body}} ->
-            socket =
-              update_ship(socket, ship_symbol, fn ship ->
-                Map.put(ship, "nav", body["data"]["nav"])
-              end)
+      case Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode) do
+        {:ok, %{status: 200, body: body}} ->
+          socket =
+            update_ship(socket, ship_symbol, fn ship ->
+              Map.put(ship, "nav", body["data"]["nav"])
+            end)
 
-            socket
-        end
+          socket
+      end
 
     case Fleet.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
       {:ok, %{status: 200, body: body}} ->

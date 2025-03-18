@@ -1,2 +1,14 @@
-@import "tailwindcss";
 @plugin "daisyui";
+
+@variant dark (&:where(.dark, .dark *));
+
+@variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+
+
+@source "../js/**/*.js";
+@source "../../lib/spacetraders_web.ex";
+@source "../../lib/spacetraders_web/**/*.*ex";
+
+@import "tailwindcss";

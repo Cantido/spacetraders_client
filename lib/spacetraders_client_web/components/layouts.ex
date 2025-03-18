@@ -10,5 +10,7 @@ defmodule SpacetradersClientWeb.Layouts do
   """
   use SpacetradersClientWeb, :html
 
+  alias SpacetradersClient.Cldr.Number
+
   embed_templates "layouts/*"
 end
