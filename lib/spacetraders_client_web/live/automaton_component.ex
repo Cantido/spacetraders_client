@@ -11,13 +11,16 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
 
         <div class="rounded-xl p-6 bg-neutral text-neutral-content mb-8">
           <h2 class="mb-4 flex flex-row gap-4 items-center">
-            <.icon name="hero-cog" class="w-12 h-12" />
+            <Heroicons.cog class="w-12 h-12" />
             <div>
               <div class="font-bold text-xl">
-                <%= if @task_finished? do %>
-                  Automation task completed
-                <% else %>
-                  Automation task in progress
+                <%= cond do %>
+                  <% @latest_action && @latest_action.name == :idle -> %>
+                    Automaton idling
+                  <% @task_finished? -> %>
+                    Automation task completed
+                  <% true -> %>
+                    Automation task in progress
                 <% end %>
               </div>
             </div>
@@ -29,13 +32,13 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
                 <%= for action <- Enum.reject(@automaton.alternative_actions, &is_nil/1) do %>
                   <li class="mb-1">
                     <a
-                      class={[@selected_action && action.id == @selected_action.id && "active"]}
+                      class={[@selected_action && action.id == @selected_action.id]}
                       phx-click="select-action"
                       phx-value-action-id={action.id}
                       phx-target={@myself}
                     >
                       <%= if @latest_action && action.id == @latest_action.id do %>
-                        <span class="tooltip" data-tip="The ship chose to perform this action"><.icon name="hero-chevron-right" class="w-4 h-4" /></span>
+                        <span class="tooltip" data-tip="The ship chose to perform this action"><Heroicons.chevron_right class="w-4 h-4" /></span>
                       <% else %>
                         <span></span>
                       <% end %>
@@ -145,6 +148,7 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
             latest_action
           else
             id = socket.assigns.selected_action.id
+
             if action = Enum.find(automaton.alternative_actions, fn a -> a.id == id end) do
               action
             else

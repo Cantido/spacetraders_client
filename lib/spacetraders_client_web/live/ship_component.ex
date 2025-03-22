@@ -1,17 +1,20 @@
 defmodule SpacetradersClientWeb.ShipComponent do
+  use SpacetradersClientWeb, :live_component
+
+  alias Phoenix.LiveView.AsyncResult
+  alias SpacetradersClient.Systems
   alias SpacetradersClient.ShipAutomaton
   alias SpacetradersClient.AutomationServer
   alias SpacetradersClientWeb.ShipStatsComponent
-  use SpacetradersClientWeb, :live_component
 
-  alias SpacetradersClient.Systems
-
+  attr :client, :map, required: true
   attr :ship, :map, required: true
+  attr :system, :map, default: nil
   attr :automaton, ShipAutomaton, default: nil
 
   def render(assigns) do
     ~H"""
-    <section class="p-8 w-full flex flex-col overflow-y-auto">
+    <section class="flex flex-col overflow-y-auto">
       <header class="mb-4 flex-none">
         <h1 class="text-2xl font-bold"><%= @ship["registration"]["name"] %></h1>
       </header>
@@ -170,11 +173,12 @@ defmodule SpacetradersClientWeb.ShipComponent do
     """
   end
 
-
   def mount(socket) do
-    {:ok, assign(socket, %{
-      tab: :cargo
-    })}
+    {:ok,
+     assign(socket, %{
+       tab: :cargo,
+       system: AsyncResult.loading()
+     })}
   end
 
   def update(assigns, socket) do
@@ -190,33 +194,43 @@ defmodule SpacetradersClientWeb.ShipComponent do
       end
 
     socket =
-      if socket.assigns[:tab] == :waypoint do
-        client = socket.assigns.client
-        system_symbol = socket.assigns.ship["nav"]["systemSymbol"]
-        waypoint_symbol = socket.assigns.ship["nav"]["waypointSymbol"]
-
-        assign_async(socket, :waypoint, fn ->
-          case Systems.get_waypoint(client, system_symbol, waypoint_symbol) do
-            {:ok, %{status: 200, body: body}} ->
-              {:ok, %{waypoint: body["data"]}}
-            err ->
-              err
-          end
-        end)
+      if dbg(socket.assigns.tab) == :navigate do
       else
         socket
       end
 
     {:ok, socket}
-
   end
 
   def handle_event("select-tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, :tab, String.to_existing_atom(tab))}
+    socket =
+      case tab do
+        "cargo" ->
+          assign(socket, :tab, :cargo)
+
+        "navigate" ->
+          socket = assign(socket, :tab, :navigate)
+          client = socket.assigns.client
+          system_symbol = socket.assigns.ship["nav"]["systemSymbol"]
+
+          assign_async(socket, :system, fn ->
+            case Systems.get_system(client, system_symbol) do
+              {:ok, %{status: 200, body: body}} ->
+                {:ok, %{system: body["data"]}}
+
+              err ->
+                err
+            end
+          end)
+      end
+
+    {:noreply, socket}
   end
 
   def handle_async(:update_counter, _, socket) do
-    socket = assign(socket, :cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns.ship))
+    socket =
+      assign(socket, :cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns.ship))
+
     socket = schedule_cooldown_update(socket)
 
     {:noreply, socket}
@@ -229,7 +243,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
         :ok
       end)
     else
-      send self(), {:travel_cooldown_expired, socket.assigns.ship["symbol"]}
+      send(self(), {:travel_cooldown_expired, socket.assigns.ship["symbol"]})
       socket
     end
   end

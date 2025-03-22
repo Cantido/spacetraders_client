@@ -25,36 +25,39 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def render_new(assigns) do
     ~H"""
-    <div
-        phx-hook="SurveyStorage"
-        id="gamedata"
-    >
-        <.async_result :let={agent} assign={@agent}>
-          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-          <:failed :let={_failure}>Failed to fetch your agent</:failed>
 
-          <.link class="hover:link" patch={~p"/game/agent"}>
-            <Heroicons.user mini class="w-4 h-4" />
-            <span class="font-mono"><%= agent["symbol"] %></span>
-          </.link>
-        </.async_result>
+        <%= case @live_action do %>
+          <% :agent -> %>
+            <.async_result :let={agent} assign={@agent}>
+              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+              <:failed :let={_failure}>There was an error loading your agent.</:failed>
 
-        <.async_result :let={agent} assign={@agent}>
-          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-          <:failed :let={_failure}>Failed to fetch your agent</:failed>
+              <.live_component
+                module={SpacetradersClientWeb.AgentComponent}
+                id="my-agent"
+                client={@client}
+                ledger={@ledger}
+                agent={agent}
+              />
+            </.async_result>
+          <% :fleet -> %>
+            <.async_result :let={fleet} assign={@fleet}>
+              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+              <:failed :let={_failure}>There was an error loading your fleet</:failed>
 
-          <span class="badge">
-            <Heroicons.circle_stack mini class="w-4 h-4" />
-            <%= Number.to_string!(agent["credits"], format: :accounting, fractional_digits: 0) %>
-          </span>
-        </.async_result>
+              <.async_result :let={agent_automaton} assign={@agent_automaton}>
+                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                <:failed :let={_failure}>There was an error loading fleet automata</:failed>
 
-        <span>
-          <Heroicons.play mini class="w-4 h-4" />
-          <span>Start bot</span>
-        </span>
-
-      </div>
+                <.live_component
+                  module={SpacetradersClientWeb.FleetComponent}
+                  id="fleet-screen"
+                  fleet={fleet},
+                  fleet_automata={if agent_automaton, do: agent_automaton.ship_automata}
+                />
+              </.async_result>
+            </.async_result>
+        <% end %>
 
 
     """

@@ -36,6 +36,14 @@ defmodule SpacetradersClient.AutomationServer do
     {:ok, %{client: client}, {:continue, :load_data}}
   end
 
+  def stop(callsign) do
+    if is_pid(:global.whereis_name(callsign)) do
+      GenServer.stop({:global, callsign})
+    else
+      {:error, :callsign_not_found}
+    end
+  end
+
   def current_task(callsign, ship_symbol) do
     if is_pid(:global.whereis_name(callsign)) do
       GenServer.call({:global, callsign}, {:get_task, ship_symbol}, 20_000)
@@ -171,5 +179,15 @@ defmodule SpacetradersClient.AutomationServer do
     automaton = AgentAutomaton.new(state.game_state)
 
     Map.put(state, :automaton, automaton)
+  end
+
+  def terminate(_, state) do
+    PubSub.broadcast(
+      @pubsub,
+      "agent:#{state.game_state.agent["symbol"]}",
+      {:automation_stopped, state.automaton}
+    )
+
+    :ok
   end
 end

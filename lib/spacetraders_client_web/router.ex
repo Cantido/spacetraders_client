@@ -23,12 +23,13 @@ defmodule SpacetradersClientWeb.Router do
     post "/login", SessionController, :log_in
     live "/game", GameLive, :agent
     live "/game/agent", GameLive, :agent
-    live "/game/fleet", GameLive, :fleet
+    live "/game/fleet", FleetLive, :index
+    live "/game/fleet/:ship_symbol", FleetLive, :show
+    live "/game/automation", AutomationLive, :index
     live "/game/contracts/:contract_id", GameLive, :contract
-    live "/game/systems/:system_symbol", GameLive, :system
-    live "/game/systems/:system_symbol/map", GameLive, :map
-    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", GameLive, :waypoint
-    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol/ships/:ship_symbol", GameLive, :ship
+    live "/game/systems/:system_symbol", GalaxyLive, :system
+    live "/game/systems/:system_symbol/map", GalaxyLive, :map
+    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", WaypointLive, :show
   end
 
   # Other scopes may use custom stacks.

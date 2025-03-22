@@ -240,7 +240,12 @@ defmodule SpacetradersClient.Game do
         }
       end)
 
-    LedgerServer.start_ledger(game.agent["symbol"], game.agent["credits"], starting_fleet_value, starting_merchandise)
+    LedgerServer.start_ledger(
+      game.agent["symbol"],
+      game.agent["credits"],
+      starting_fleet_value,
+      starting_merchandise
+    )
 
     game
   end
@@ -471,7 +476,13 @@ defmodule SpacetradersClient.Game do
     selling_markets(game, system_symbol, trade_symbol)
     |> Enum.map(fn {_, price} -> price end)
     |> then(fn prices ->
-      Enum.sum(prices) / Enum.count(prices)
+      count = Enum.count(prices)
+
+      if count > 0 do
+        Enum.sum(prices) / Enum.count(prices)
+      else
+        nil
+      end
     end)
   end
 
@@ -567,17 +578,23 @@ defmodule SpacetradersClient.Game do
   def average_purchase_price(game, system_symbol, trade_symbol) do
     purchase_markets(game, system_symbol, trade_symbol)
     |> Enum.map(fn {_, price} -> price end)
-    |> then(fn prices ->
-      Enum.sum(prices) / Enum.count(prices)
-    end)
+    |> avg()
   end
 
   def average_purchase_price(game, trade_symbol) do
     purchase_markets(game, trade_symbol)
     |> Enum.map(fn {_, price} -> price end)
-    |> then(fn prices ->
-      Enum.sum(prices) / Enum.count(prices)
-    end)
+    |> avg()
+  end
+
+  defp avg(nums, default \\ nil) do
+    count = Enum.count(nums)
+
+    if count > 0 do
+      Enum.sum(nums) / count
+    else
+      default
+    end
   end
 
   def best_purchase_market_price(game, system_symbol, trade_symbol) do
@@ -665,7 +682,8 @@ defmodule SpacetradersClient.Game do
     market_vis = market_visibility_actions(game)
     construction_actions = construction_actions(game)
 
-    resource_extractions ++ resource_pickups ++ market_actions ++ market_vis ++ construction_actions
+    resource_extractions ++
+      resource_pickups ++ market_actions ++ market_vis ++ construction_actions
   end
 
   defp resource_actions(waypoint) do
@@ -802,7 +820,6 @@ defmodule SpacetradersClient.Game do
         {waypoint_symbol, satellites}
       end)
 
-
     duplicate_sat_symbols =
       satellites_at_wp
       |> Enum.flat_map(fn {_waypoint, sats} ->
@@ -850,6 +867,10 @@ defmodule SpacetradersClient.Game do
   end
 
   def update_construction_site!(game, waypoint_symbol, update_fun) do
-    update_in(game, [Access.key(:construction_sites), Access.key(waypoint_symbol, nil)], update_fun)
+    update_in(
+      game,
+      [Access.key(:construction_sites), Access.key(waypoint_symbol, nil)],
+      update_fun
+    )
   end
 end

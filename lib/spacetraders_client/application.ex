@@ -9,12 +9,13 @@ defmodule SpacetradersClient.Application do
   def start(_type, _args) do
     children = [
       SpacetradersClientWeb.Telemetry,
-      {DNSCluster, query: Application.get_env(:spacetraders_client, :dns_cluster_query) || :ignore},
+      {DNSCluster,
+       query: Application.get_env(:spacetraders_client, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SpacetradersClient.PubSub},
       {SpacetradersClient.Cache, []},
       Cldr.Currency,
       {SpacetradersClient.LedgerServer, []},
-      {DynamicSupervisor, name: SpacetradersClient.AutomatonSupervisor},
+      {DynamicSupervisor, name: SpacetradersClient.AutomationSupervisor},
       # Start the Finch HTTP client for sending emails
       {Finch, name: SpacetradersClient.Finch},
       # Start a worker by calling: SpacetradersClient.Worker.start_link(arg)
@@ -31,6 +32,7 @@ defmodule SpacetradersClient.Application do
     case result do
       {:ok, _} ->
         {:ok, _} = Cldr.Currency.new(:XST, name: "SpaceTraders credits", digits: 0)
+
       _ ->
         :noop
     end
