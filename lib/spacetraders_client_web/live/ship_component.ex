@@ -194,7 +194,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
       end
 
     socket =
-      if dbg(socket.assigns.tab) == :navigate do
+      if socket.assigns.tab == :navigate do
       else
         socket
       end

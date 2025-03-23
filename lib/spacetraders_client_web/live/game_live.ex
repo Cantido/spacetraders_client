@@ -647,69 +647,6 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, select_ship(socket, ship_symbol)}
   end
 
-  def handle_event("dock-ship", %{"ship-symbol" => ship_symbol}, socket) do
-    {:ok, %{status: 200, body: body}} = Fleet.dock_ship(socket.assigns.client, ship_symbol)
-
-    socket =
-      update_ship(socket, ship_symbol, fn ship ->
-        Map.put(ship, "nav", body["data"]["nav"])
-      end)
-      |> put_flash(:info, "Ship #{ship_symbol} docked successfully")
-
-    {:noreply, socket}
-  end
-
-  def handle_event("orbit-ship", %{"ship-symbol" => ship_symbol}, socket) do
-    {:ok, %{status: 200, body: body}} = Fleet.orbit_ship(socket.assigns.client, ship_symbol)
-
-    socket =
-      update_ship(socket, ship_symbol, fn ship ->
-        Map.put(ship, "nav", body["data"]["nav"])
-      end)
-      |> put_flash(:info, "Ship #{ship_symbol} undocked successfully")
-
-    {:noreply, socket}
-  end
-
-  def handle_event(
-        "navigate-ship",
-        %{"ship-symbol" => ship_symbol, "waypoint-symbol" => waypoint_symbol} = params,
-        socket
-      ) do
-    flight_mode = Map.get(params, "flight-mode", "CRUISE")
-
-    socket =
-      case Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode) do
-        {:ok, %{status: 200, body: body}} ->
-          socket =
-            update_ship(socket, ship_symbol, fn ship ->
-              Map.put(ship, "nav", body["data"]["nav"])
-            end)
-
-          socket
-      end
-
-    case Fleet.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
-      {:ok, %{status: 200, body: body}} ->
-        socket =
-          update_ship(socket, ship_symbol, fn ship ->
-            Map.put(ship, "nav", body["data"]["nav"])
-          end)
-
-        {:noreply, socket}
-
-      {:ok, %{status: 400, body: %{"error" => %{"code" => 4203, "data" => data}}}} ->
-        socket =
-          put_flash(
-            socket,
-            :error,
-            "Not enough fuel, #{data["fuelRequired"]} fuel is required, but only #{data["fuelAvailable"]} is available"
-          )
-
-        {:noreply, socket}
-    end
-  end
-
   def handle_event(
         "set-flight-mode",
         %{"ship-symbol" => ship_symbol, "flight-mode" => flight_mode},

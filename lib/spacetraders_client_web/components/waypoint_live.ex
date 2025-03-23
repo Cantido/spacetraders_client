@@ -27,7 +27,8 @@ defmodule SpacetradersClientWeb.WaypointLive do
         <:failed :let={_failure}>There was an error loading the waypoint.</:failed>
 
         <header class="mb-8">
-          <h3 class="text-2xl font-bold"><%= waypoint["type"] %></h3>
+          <h3 class="text-2xl font-bold"><%= waypoint["symbol"] %></h3>
+          <p class="font-bold"><%= waypoint["type"] %></p>
         </header>
 
         <div role="tablist" class="tabs tabs-bordered mb-12 w-full">
@@ -288,9 +289,7 @@ defmodule SpacetradersClientWeb.WaypointLive do
                 Ships in this system
               </div>
 
-              <% ships_in_system = Enum.filter(@fleet, fn ship -> ship["nav"]["systemSymbol"] == @system_symbol end)
-                  |> Enum.reject(fn ship -> ship["nav"]["waypointSymbol"] == @waypoint_symbol end)
-              %>
+              <% ships_in_system = Enum.filter(@fleet, fn ship -> ship["nav"]["systemSymbol"] == @system_symbol end) %>
 
               <table class="table table-zebra table-fixed">
                 <thead>

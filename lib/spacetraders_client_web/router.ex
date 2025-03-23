@@ -23,6 +23,7 @@ defmodule SpacetradersClientWeb.Router do
     post "/login", SessionController, :log_in
     live "/game", GameLive, :agent
     live "/game/agent", GameLive, :agent
+    live "/game/credits", CreditsLive, :index
     live "/game/fleet", FleetLive, :index
     live "/game/fleet/:ship_symbol", FleetLive, :show
     live "/game/automation", AutomationLive, :index

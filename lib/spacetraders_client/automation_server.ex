@@ -20,7 +20,7 @@ defmodule SpacetradersClient.AutomationServer do
       {:ok, %{status: 200, body: body}} ->
         callsign = body["data"]["symbol"]
 
-        opts = [token: token]
+        opts = [token: token, callsign: callsign]
 
         GenServer.start_link(__MODULE__, opts, name: {:global, callsign})
 
@@ -32,6 +32,13 @@ defmodule SpacetradersClient.AutomationServer do
   def init(opts) do
     token = Keyword.fetch!(opts, :token)
     client = SpacetradersClient.Client.new(token)
+    callsign = Keyword.fetch!(opts, :callsign)
+
+    PubSub.broadcast(
+      @pubsub,
+      "agent:#{callsign}",
+      {:automation_starting, callsign}
+    )
 
     {:ok, %{client: client}, {:continue, :load_data}}
   end
