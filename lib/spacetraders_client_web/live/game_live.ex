@@ -69,7 +69,8 @@ defmodule SpacetradersClientWeb.GameLive do
               id={@waypoint_symbol}
               module={SpacetradersClientWeb.WaypointComponent}
               client={@client}
-              waypoint={@waypoint} waypoint_symbol={@waypoint_symbol} system={@system} system_symbol={@system_symbol} waypoint_tab={@waypoint_tab} fleet={@fleet} selected_flight_mode={@selected_flight_mode} />
+              waypoint_symbol={@waypoint_symbol} system_symbol={@system_symbol} />
+
         <% end %>
       </.live_component>
     """
@@ -472,12 +473,13 @@ defmodule SpacetradersClientWeb.GameLive do
     """
   end
 
-  def mount(params, %{"token" => token}, socket) do
-    client = Client.new(token)
+  on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
-    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
+  def mount(params, _session, socket) do
+    client = socket.assigns.client
+    agent_symbol = socket.assigns.agent.result["symbol"]
 
-    PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
+    PubSub.subscribe(@pubsub, "agent:#{agent_symbol}")
 
     system_symbol = params["system_symbol"]
 
@@ -491,18 +493,16 @@ defmodule SpacetradersClientWeb.GameLive do
       |> assign(%{
         token_attempted?: false,
         token_valid?: AsyncResult.ok(false),
-        client: client,
         surveys: [],
         app_section: app_section,
         selected_waypoint_symbol: nil,
         selected_ship_symbol: nil,
         selected_survey_id: nil,
         system: AsyncResult.loading(),
-        waypoints: %{},
-        agent: AsyncResult.ok(agent_body["data"])
+        waypoints: %{}
       })
       |> assign_async(:agent_automaton, fn ->
-        case SpacetradersClient.AutomationServer.automaton(agent_body["data"]["symbol"]) do
+        case SpacetradersClient.AutomationServer.automaton(agent_symbol) do
           {:ok, agent_automaton} ->
             {:ok, %{agent_automaton: agent_automaton}}
 
@@ -511,7 +511,7 @@ defmodule SpacetradersClientWeb.GameLive do
         end
       end)
       |> then(fn socket ->
-        case SpacetradersClient.LedgerServer.ledger(agent_body["data"]["symbol"]) do
+        case SpacetradersClient.LedgerServer.ledger(agent_symbol) do
           {:ok, ledger} ->
             assign(socket, %{ledger: ledger})
 
@@ -537,9 +537,7 @@ defmodule SpacetradersClientWeb.GameLive do
           err -> err
         end
       end)
-      |> assign(:token, token)
-      |> assign(:fleet, AsyncResult.loading())
-      |> load_fleet()
+      |> SpacetradersClientWeb.GameLoader.load_fleet()
       |> assign_async(:contracts, fn ->
         {:ok, %{status: 200, body: body}} = Contracts.my_contracts(client)
 

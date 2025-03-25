@@ -21,17 +21,20 @@ defmodule SpacetradersClientWeb.Router do
 
     get "/login", SessionController, :index
     post "/login", SessionController, :log_in
-    live "/game", GameLive, :agent
-    live "/game/agent", GameLive, :agent
-    live "/game/credits", CreditsLive, :index
-    live "/game/fleet", FleetLive, :index
-    live "/game/fleet/:ship_symbol", FleetLive, :show
-    live "/game/automation", AutomationLive, :index
-    live "/game/contracts/:contract_id", GameLive, :contract
-    live "/game/galaxy", GalaxyLive, :index
-    live "/game/systems/:system_symbol", SystemLive, :show
-    live "/game/systems/:system_symbol/map", SystemLive, :map
-    live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", GameLive, :waypoint
+
+    live_session :default do
+      live "/game", GameLive, :agent
+      live "/game/agent", GameLive, :agent
+      live "/game/credits", CreditsLive, :index
+      live "/game/fleet", FleetLive, :index
+      live "/game/fleet/:ship_symbol", FleetLive, :show
+      live "/game/automation", AutomationLive, :index
+      live "/game/contracts/:contract_id", GameLive, :contract
+      live "/game/galaxy", GalaxyLive, :index
+      live "/game/systems/:system_symbol", SystemLive, :show
+      live "/game/systems/:system_symbol/map", SystemLive, :map
+      live "/game/systems/:system_symbol/waypoints/:waypoint_symbol", GameLive, :waypoint
+    end
   end
 
   # Other scopes may use custom stacks.

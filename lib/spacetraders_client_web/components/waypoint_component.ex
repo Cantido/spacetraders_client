@@ -15,7 +15,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   attr :waypoint_symbol, :string, required: true
   attr :contracts, :list, default: []
   attr :ships_at_waypoint, :list, default: []
-  attr :fleet, :list, default: []
 
   def render(assigns) do
     ~H"""
@@ -81,33 +80,35 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                 fleet={@fleet}
                 ships_at_waypoint={@ships_at_waypoint}
                 selected_flight_mode={@selected_flight_mode}
+                construction_site={@construction_site}
               />
             </div>
           </div>
 
-          <a
-            :if={Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "MARKETPLACE" end)}
-            role="tab"
-            class={if @waypoint_tab == "market", do: ["tab tab-active"], else: ["tab"]}
-            phx-click="select-waypoint-tab"
-            phx-value-waypoint-tab="market"
-            phx-target={@myself}
-          >
-            Market
-          </a>
+          <%= if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "MARKETPLACE" end) do %>
+            <a
+              role="tab"
+              class={if @waypoint_tab == "market", do: ["tab tab-active"], else: ["tab"]}
+              phx-click="select-waypoint-tab"
+              phx-value-waypoint-tab="market"
+              phx-target={@myself}
+            >
+              Market
+            </a>
 
-          <div class="tab-content border-base-300">
-            <.market_tab_content
-              :if={@waypoint_tab == "market"}
-              waypoint={waypoint}
-              system={@system}
-              system_symbol={@system_symbol}
-              waypoint_symbol={@waypoint_symbol}
-              ships_at_waypoint={@ships_at_waypoint}
-              market={@market}
-              market_action={@market_action}
-            />
-          </div>
+            <div class="tab-content border-base-300">
+              <.market_tab_content
+                :if={@waypoint_tab == "market"}
+                waypoint={waypoint}
+                system={@system}
+                system_symbol={@system_symbol}
+                waypoint_symbol={@waypoint_symbol}
+                ships_at_waypoint={@ships_at_waypoint}
+                market={@market}
+                market_action={@market_action}
+              />
+            </div>
+        <% end %>
 
           <%= if waypoint["type"] in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) do %>
             <a
@@ -120,7 +121,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
               Mining
             </a>
 
-            <div class="tab-content bg-base-300">
+            <div class="tab-content border-base-300">
               <.mining_tab_content
                 :if={@waypoint_tab == "mining"}
                 waypoint={waypoint}
@@ -185,36 +186,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   def info_tab_content(assigns) do
     ~H"""
-    <div :if={is_binary(@waypoint["orbits"])} class="mb-8">
-      <div class="text-lg font-bold mb-4">
-        Orbits
-      </div>
-
-      <.link
-        class="link"
-        patch={~p"/game/systems/#{@waypoint["systemSymbol"]}/waypoints/#{@waypoint["orbits"]}"}
-      >
-        {@waypoint["orbits"]}
-      </.link>
-    </div>
-
-    <div :if={Enum.any?(@waypoint["orbitals"])} class="mb-8">
-      <div class="text-lg font-bold mb-4">
-        Orbitals
-      </div>
-
-      <ul class="list">
-        <li :for={orbital <- @waypoint["orbitals"]} class="list-row">
-          <.link
-            class="link"
-            patch={~p"/game/systems/#{@waypoint["systemSymbol"]}/waypoints/#{orbital["symbol"]}"}
-          >
-            {orbital["symbol"]}
-          </.link>
-        </li>
-      </ul>
-    </div>
-
     <%= if @waypoint["isUnderConstruction"] do %>
       <div class="mb-8">
         <div class="font-bold text-lg mb-4">
@@ -999,7 +970,12 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             {:ok, %{shipyard: nil}}
         end
       end)
-      |> assign(:construction_site, AsyncResult.loading())
+      |> assign_async(:construction_site, fn ->
+        case Systems.get_construction_site(client, system_symbol, waypoint_symbol) do
+          {:ok, s} -> {:ok, %{construction_site: s.body["data"]}}
+          {:error, reason} -> {:error, reason}
+        end
+      end)
       |> assign_async(:system, fn ->
         case Systems.get_system(client, system_symbol) do
           {:ok, s} -> {:ok, %{system: s.body["data"]}}
@@ -1144,7 +1120,9 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   defp load_fleet(socket, page \\ 1) do
     client = socket.assigns.client
 
-    start_async(socket, :load_fleet, fn ->
+    socket
+    |> assign(:fleet, AsyncResult.loading())
+    |> start_async(:load_fleet, fn ->
       case Fleet.list_ships(client, page: page) do
         {:ok, %{status: 200, body: body}} ->
           %{
