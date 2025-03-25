@@ -22,11 +22,19 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
       <input id="waypoints-drawer" type="checkbox" class="drawer-toggle" />
       <div class="drawer-side">
         <.async_result :let={system} assign={@system}>
-          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+          <:loading>
+            <div class="w-72 h-full">
+              <div class="bg-neutral-600 h-24 p-4">
+                <div class="skeleton h-6 w-full bg-neutral-700 mb-2"></div>
+                <div class="skeleton h-5 w-24 bg-neutral-700"></div>
+              </div>
+              <div class="bg-base-200 skeleton rounded-none h-full"></div>
+            </div>
+          </:loading>
           <:failed :let={_failure}>There was an error loading the system.</:failed>
 
           <div class="w-72">
-            <div class="bg-neutral-600 p-4 h-24">
+            <div class="bg-neutral-600 p-4 h-24 hover:link">
               <.link patch={~p"/game/systems/#{system["symbol"]}"}>
                 <h1 class="text-xl font-bold bg-neutral-600">{system["name"]}</h1>
               </.link>

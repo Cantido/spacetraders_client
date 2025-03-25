@@ -68,6 +68,7 @@ defmodule SpacetradersClientWeb.GameLive do
             <.live_component
               id={@waypoint_symbol}
               module={SpacetradersClientWeb.WaypointComponent}
+              client={@client}
               waypoint={@waypoint} waypoint_symbol={@waypoint_symbol} system={@system} system_symbol={@system_symbol} waypoint_tab={@waypoint_tab} fleet={@fleet} selected_flight_mode={@selected_flight_mode} />
         <% end %>
       </.live_component>

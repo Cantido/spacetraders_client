@@ -20,254 +20,363 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   def render(assigns) do
     ~H"""
     <div class="p-4">
-
       <.async_result :let={waypoint} assign={@waypoint}>
         <:loading><span class="loading loading-ring loading-lg"></span></:loading>
         <:failed :let={_failure}>There was an error loading the waypoint.</:failed>
 
         <header class="mb-2">
           <h1 class="text-2xl font-bold mb-2">
-            <%= waypoint["symbol"] %>
+            {waypoint["symbol"]}
           </h1>
 
           <span class="opacity-50 text-xl font-normal">
-            <%= waypoint["type"] %>
-            in
-
+            {waypoint["type"]} in
             <.async_result :let={system} assign={@system}>
-              <:loading><div class="skeleton h-6 w-56 inline-block align-middle"></div></:loading>
+              <:loading>
+                <div class="skeleton h-6 w-56 inline-block align-middle"></div>
+              </:loading>
               <:failed :let={_failure}>
                 an unknown system
               </:failed>
               the
-              <.link patch={~p"/game/systems/#{system["symbol"]}"} class="link">{system["name"]}</.link>
+              <.link patch={~p"/game/systems/#{system["symbol"]}"} class="link">
+                {system["name"]}
+              </.link>
               system
             </.async_result>
-
           </span>
-
         </header>
 
         <div class="mb-4">
           <SpacetradersClientWeb.WaypointInfoComponent.traits waypoint={waypoint} />
         </div>
-        <div class="mb-4">
-
-          <%
-            modifier = %{
-              "name" => "Big stuff",
-              "description" => "Some cool shit is happening"
-            }
-          %>
-
-
-          <%= if Enum.any?(waypoint["modifiers"]) do %>
-          <div class="card bg-warning text-warning-content max-w-96">
-            <div class="card-body">
-              <h2 class="card-title">{modifier["name"]}</h2>
-              <p>{modifier["description"]}</p>
-            </div>
+        <div
+          :for={modifier <- waypoint["modifiers"]}
+          class="card bg-warning text-warning-content max-w-96 mb-4"
+        >
+          <div class="card-body">
+            <h2 class="card-title">{modifier["name"]}</h2>
+            <p>{modifier["description"]}</p>
           </div>
-          <% end %>
         </div>
 
-
         <div role="tablist" class="tabs tabs-lift mb-4 w-full">
-          <a role="tab" class={if @waypoint_tab == "info", do: ["tab tab-active"], else: ["tab"]} phx-click="select-waypoint-tab" phx-value-waypoint-tab="info">Info</a>
+          <a
+            role="tab"
+            class={if @waypoint_tab == "info", do: ["tab tab-active"], else: ["tab"]}
+            phx-click="select-waypoint-tab"
+            phx-value-waypoint-tab="info"
+            phx-target={@myself}
+          >
+            Info
+          </a>
           <div class="tab-content border-base-300 p-6">
             <div :if={@waypoint_tab == "info"}>
+              <.info_tab_content
+                waypoint={waypoint}
+                system={@system}
+                system_symbol={@system_symbol}
+                waypoint_symbol={@waypoint_symbol}
+                contracts={@contracts}
+                fleet={@fleet}
+                ships_at_waypoint={@ships_at_waypoint}
+                selected_flight_mode={@selected_flight_mode}
+              />
+            </div>
+          </div>
 
-              <div :if={is_binary(waypoint["orbits"])} class="mb-8">
-                <div class="text-lg font-bold mb-4">
-                  Orbits
-                </div>
+          <a
+            :if={Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "MARKETPLACE" end)}
+            role="tab"
+            class={if @waypoint_tab == "market", do: ["tab tab-active"], else: ["tab"]}
+            phx-click="select-waypoint-tab"
+            phx-value-waypoint-tab="market"
+            phx-target={@myself}
+          >
+            Market
+          </a>
 
-                <.link class="link" patch={~p"/game/systems/#{waypoint["systemSymbol"]}/waypoints/#{waypoint["orbits"]}"}>{waypoint["orbits"]}</.link>
-              </div>
+          <div class="tab-content border-base-300">
+            <.market_tab_content
+              :if={@waypoint_tab == "market"}
+              waypoint={waypoint}
+              system={@system}
+              system_symbol={@system_symbol}
+              waypoint_symbol={@waypoint_symbol}
+              ships_at_waypoint={@ships_at_waypoint}
+              market={@market}
+              market_action={@market_action}
+            />
+          </div>
 
-              <div :if={Enum.any?(waypoint["orbitals"])} class="mb-8">
-                <div class="text-lg font-bold mb-4">
-                  Orbitals
-                </div>
+          <%= if waypoint["type"] in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) do %>
+            <a
+              role="tab"
+              class={if @waypoint_tab == "mining", do: ["tab tab-active"], else: ["tab"]}
+              phx-click="select-waypoint-tab"
+              phx-value-waypoint-tab="mining"
+              phx-target={@myself}
+            >
+              Mining
+            </a>
 
-                <ul class="list">
-                  <li :for={orbital <- waypoint["orbitals"]} class="list-row">
-                    <.link class="link" patch={~p"/game/systems/#{waypoint["systemSymbol"]}/waypoints/#{orbital["symbol"]}"}>{orbital["symbol"]}</.link>
-                  </li>
-                </ul>
-              </div>
+            <div class="tab-content bg-base-300">
+              <.mining_tab_content
+                :if={@waypoint_tab == "mining"}
+                waypoint={waypoint}
+                system={@system}
+                system_symbol={@system_symbol}
+                waypoint_symbol={@waypoint_symbol}
+                surveys={@surveys}
+                selected_survey_id={@selected_survey_id}
+                ships_at_waypoint={@ships_at_waypoint}
+              />
+            </div>
+          <% end %>
 
-              <%= if waypoint["isUnderConstruction"] do %>
-                <div class="mb-8">
-                  <div class="font-bold text-lg mb-4">
-                    Construction Site
-                  </div>
+          <%= if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "SHIPYARD" end) do %>
+            <a
+              role="tab"
+              class={if @waypoint_tab == "shipyard", do: ["tab tab-active"], else: ["tab"]}
+              phx-click="select-waypoint-tab"
+              phx-value-waypoint-tab="shipyard"
+              phx-target={@myself}
+            >
+              Shipyard
+            </a>
 
-                  <.async_result :let={construction} assign={@construction_site}>
-                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                    <:failed :let={_failure}>There was an error loading the construction site.</:failed>
+            <div class="tab-content border-base-300">
+              <.shipyard_tab_content
+                :if={@waypoint_tab == "shipyard"}
+                waypoint={waypoint}
+                system={@system}
+                system_symbol={@system_symbol}
+                waypoint_symbol={@waypoint_symbol}
+                surveys={@surveys}
+                selected_survey_id={@selected_survey_id}
+                ships_at_waypoint={@ships_at_waypoint}
+                market={@market}
+                market_action={@market_action}
+                shipyard={@shipyard}
+              />
+            </div>
+          <% end %>
 
-                    <%= if construction["isComplete"] do %>
-                      Construction is completed.
+          <a
+            role="tab"
+            class={if @waypoint_tab == "chart", do: ["tab tab-active"], else: ["tab"]}
+            phx-click="select-waypoint-tab"
+            phx-value-waypoint-tab="chart"
+            phx-target={@myself}
+          >
+            Chart
+          </a>
 
-                    <% else %>
-                      Required resources
+          <div class="tab-content border-base-300">
+            <div :if={@waypoint_tab == "chart"}>
+              Chart go here
+            </div>
+          </div>
+        </div>
+      </.async_result>
+    </div>
+    """
+  end
 
-                      <table class="table">
-                        <%= for material <- construction["materials"] do %>
-                          <tr>
-                            <td><%= material["tradeSymbol"] %></td>
-                            <td><%= material["fulfilled"] %> / <%= material["required"] %></td>
-                          </tr>
+  def info_tab_content(assigns) do
+    ~H"""
+    <div :if={is_binary(@waypoint["orbits"])} class="mb-8">
+      <div class="text-lg font-bold mb-4">
+        Orbits
+      </div>
 
-                        <% end %>
-                      </table>
-                    <% end %>
+      <.link
+        class="link"
+        patch={~p"/game/systems/#{@waypoint["systemSymbol"]}/waypoints/#{@waypoint["orbits"]}"}
+      >
+        {@waypoint["orbits"]}
+      </.link>
+    </div>
 
+    <div :if={Enum.any?(@waypoint["orbitals"])} class="mb-8">
+      <div class="text-lg font-bold mb-4">
+        Orbitals
+      </div>
 
-                  </.async_result>
-                </div>
+      <ul class="list">
+        <li :for={orbital <- @waypoint["orbitals"]} class="list-row">
+          <.link
+            class="link"
+            patch={~p"/game/systems/#{@waypoint["systemSymbol"]}/waypoints/#{orbital["symbol"]}"}
+          >
+            {orbital["symbol"]}
+          </.link>
+        </li>
+      </ul>
+    </div>
+
+    <%= if @waypoint["isUnderConstruction"] do %>
+      <div class="mb-8">
+        <div class="font-bold text-lg mb-4">
+          Construction Site
+        </div>
+
+        <.async_result :let={construction} assign={@construction_site}>
+          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+          <:failed :let={_failure}>There was an error loading the construction site.</:failed>
+
+          <%= if construction["isComplete"] do %>
+            Construction is completed.
+          <% else %>
+            Required resources
+            <table class="table">
+              <%= for material <- construction["materials"] do %>
+                <tr>
+                  <td>{material["tradeSymbol"]}</td>
+                  <td>{material["fulfilled"]} / {material["required"]}</td>
+                </tr>
               <% end %>
+            </table>
+          <% end %>
+        </.async_result>
+      </div>
+    <% end %>
 
-              <% contracts_here = deliveries_here(@contracts, @waypoint_symbol) %>
-              <%= if Enum.any?(contracts_here) do %>
-                <div class="mb-8">
+    <% contracts_here = deliveries_here(@contracts, @waypoint_symbol) %>
+    <%= if Enum.any?(contracts_here) do %>
+      <div class="mb-8">
+        <div class="font-bold text-lg mb-4">
+          Contracts
+        </div>
 
-                  <div class="font-bold text-lg mb-4">
-                    Contracts
-                  </div>
+        <%= for contract <- contracts_here do %>
+          <div class="border-neutral border rounded-lg p-4 w-1/3">
+            <div class="mb-4">
+              <div class="font-bold">
+                <.link class="link-hover" patch={~p"/game/contracts/#{contract["id"]}"}>
+                  {contract["type"]} for {contract["factionSymbol"]}
+                </.link>
+              </div>
+              <div class="text-sm opacity-50">
+                Expires at {contract["terms"]["deadline"]}
+              </div>
+            </div>
 
-                  <%= for contract <- contracts_here do %>
-                    <div class="border-neutral border rounded-lg p-4 w-1/3">
-                      <div class="mb-4">
-                        <div class="font-bold">
-                          <.link
-                            class="link-hover"
-                            patch={~p"/game/contracts/#{contract["id"]}"}
-                          >
-                            <%= contract["type"] %>
-                            for
-                            <%= contract["factionSymbol"] %>
-                          </.link>
-                        </div>
-                        <div class="text-sm opacity-50">
-                          Expires at <%= contract["terms"]["deadline"] %>
-                        </div>
-                      </div>
+            <div :if={@fleet.ok?}>
+              <%= for delivery <- contract["terms"]["deliver"] do %>
+                <%= if delivery["destinationSymbol"] == @waypoint_symbol do %>
+                  <% ships = ships_with_cargo(@fleet.result, delivery["tradeSymbol"]) %>
+                  <% delivery_fulfilled = delivery["unitsFulfilled"] == delivery["unitsRequired"] %>
 
-                      <div :if={@fleet.ok?}>
-                        <%= for delivery <- contract["terms"]["deliver"] do %>
-                          <%= if delivery["destinationSymbol"] == @waypoint_symbol do %>
-                            <% ships = ships_with_cargo(@fleet.result, delivery["tradeSymbol"]) %>
-                            <% delivery_fulfilled = delivery["unitsFulfilled"] == delivery["unitsRequired"] %>
-
-                            <details class={["collapse collapse-arrow bg-base-200"]}>
-
-                              <summary class="collapse-title">
-                                <div class="flex flex-row justify-between">
-                                  <div class="flex flex-row items-center">
-                                    <%= if delivery_fulfilled do %>
-                                      <.icon name="hero-check-circle" class="w-8" />
-                                    <% else %>
-                                      <.icon name="hero-minus-circle" class="w-8" />
-                                    <% end %>
-
-                                    <div><%= delivery["tradeSymbol"] %></div>
-
-                                    <%= if Enum.any?(ships) do %>
-                                      <span class="badge badge-xs badge-primary ml-4"></span>
-                                    <% end %>
-                                  </div>
-                                  <div class="">
-                                    <%= delivery["unitsFulfilled"] %> /
-                                    <%= delivery["unitsRequired"] %>
-                                  </div>
-                                </div>
-                              </summary>
-
-                              <div class="collapse-content">
-                                <%= if Enum.any?(ships) do %>
-                                  <%= for ship <- ships do %>
-                                    <% deliverable_count = units_deliverable(ship, contract, delivery["tradeSymbol"]) %>
-                                    <div class="flex flex-row justify-between ml-9 mb-2">
-                                      <span><%= ship["registration"]["name"] %></span>
-                                      <button
-                                        class="btn btn-xs btn-primary"
-                                        phx-click="deliver-contract-cargo"
-                                        phx-value-contract-id={contract["id"]}
-                                        phx-value-ship-symbol={ship["symbol"]}
-                                        phx-value-trade-symbol={delivery["tradeSymbol"]}
-                                        phx-value-units={deliverable_count}
-                                      >
-                                        Deliver
-                                        <%= deliverable_count %>
-                                      </button>
-                                    </div>
-                                  <% end %>
-                                <% else %>
-                                  <p class="opacity-50 italic">No ships availble to fulfill this request</p>
-                                <% end %>
-                              </div>
-                            </details>
-                          <% end %>
-                        <% end %>
-                      </div>
-                    </div>
-                  <% end %>
-
-                </div>
-              <% end %>
-
-              <.async_result :let={fleet} assign={@fleet}>
-                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                <:failed :let={_failure}>There was an error loading the fleet.</:failed>
-              <div class="mb-4">
-                <div class="font-bold text-lg mb-4">
-                  Ships at this waypoint
-                </div>
-
-                <table class="table table-zebra table-fixed">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th class="w-32">Role</th>
-                      <th class="w-24">Status</th>
-                      <th class="w-28">Condition</th>
-                      <th class="w-28">Fuel</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <%= for ship <- @ships_at_waypoint do %>
-                      <tr>
-                        <td>
-                          <.link
-                            class="link-hover"
-                            patch={~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}/ships/#{ship["symbol"]}"}
-                          >
-                          <%= ship["registration"]["name"] %>
-                          </.link>
-                        </td>
-                        <td><%= ship["registration"]["role"] %></td>
-                        <td>
-                          <%= ship["nav"]["status"] %>
-                        </td>
-                        <td><%= condition_percentage(ship) %>%</td>
-                        <td>
-                          <%= if ship["fuel"]["capacity"] > 0 do %>
-                            <%= trunc(Float.round(ship["fuel"]["current"] / ship["fuel"]["capacity"] * 100)) %>%
+                  <details class={["collapse collapse-arrow bg-base-200"]}>
+                    <summary class="collapse-title">
+                      <div class="flex flex-row justify-between">
+                        <div class="flex flex-row items-center">
+                          <%= if delivery_fulfilled do %>
+                            <.icon name="hero-check-circle" class="w-8" />
                           <% else %>
-                            <span class="opacity-50 italic">No fuel tank</span>
+                            <.icon name="hero-minus-circle" class="w-8" />
                           <% end %>
-                        </td>
 
-                        <td class="flex gap-3">
+                          <div>{delivery["tradeSymbol"]}</div>
+
+                          <%= if Enum.any?(ships) do %>
+                            <span class="badge badge-xs badge-primary ml-4"></span>
+                          <% end %>
+                        </div>
+                        <div class="">
+                          {delivery["unitsFulfilled"]} / {delivery["unitsRequired"]}
+                        </div>
+                      </div>
+                    </summary>
+
+                    <div class="collapse-content">
+                      <%= if Enum.any?(ships) do %>
+                        <%= for ship <- ships do %>
+                          <% deliverable_count =
+                            units_deliverable(ship, contract, delivery["tradeSymbol"]) %>
+                          <div class="flex flex-row justify-between ml-9 mb-2">
+                            <span>{ship["registration"]["name"]}</span>
+                            <button
+                              class="btn btn-xs btn-primary"
+                              phx-click="deliver-contract-cargo"
+                              phx-value-contract-id={contract["id"]}
+                              phx-value-ship-symbol={ship["symbol"]}
+                              phx-value-trade-symbol={delivery["tradeSymbol"]}
+                              phx-value-units={deliverable_count}
+                            >
+                              Deliver {deliverable_count}
+                            </button>
+                          </div>
+                        <% end %>
+                      <% else %>
+                        <p class="opacity-50 italic">No ships availble to fulfill this request</p>
+                      <% end %>
+                    </div>
+                  </details>
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <.async_result :let={fleet} assign={@fleet}>
+      <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+      <:failed :let={_failure}>There was an error loading the fleet.</:failed>
+      <div class="mb-4">
+        <div class="font-bold text-lg mb-4">
+          Ships at this waypoint
+        </div>
+
+        <table class="table table-zebra table-fixed">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="w-32">Role</th>
+              <th class="w-24">Status</th>
+              <th class="w-28">Condition</th>
+              <th class="w-28">Fuel</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <%= for ship <- @ships_at_waypoint do %>
+              <tr>
+                <td>
+                  <.link
+                    class="link-hover"
+                    patch={
+                      ~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}/ships/#{ship["symbol"]}"
+                    }
+                  >
+                    {ship["registration"]["name"]}
+                  </.link>
+                </td>
+                <td>{ship["registration"]["role"]}</td>
+                <td>
+                  {ship["nav"]["status"]}
+                </td>
+                <td>{condition_percentage(ship)}%</td>
+                <td>
+                  <%= if ship["fuel"]["capacity"] > 0 do %>
+                    {trunc(Float.round(ship["fuel"]["current"] / ship["fuel"]["capacity"] * 100))}%
+                  <% else %>
+                    <span class="opacity-50 italic">No fuel tank</span>
+                  <% end %>
+                </td>
+
+                <td class="flex gap-3">
                   <button
                     class="btn btn-sm"
                     phx-click="purchase-fuel"
                     phx-value-ship-symbol={ship["symbol"]}
-                    disabled={ship["nav"]["status"] != "DOCKED" || ship["fuel"]["capacity"] in [0, nil] || ship["fuel"]["capacity"] == ship["fuel"]["current"]}
+                    disabled={
+                      ship["nav"]["status"] != "DOCKED" || ship["fuel"]["capacity"] in [0, nil] ||
+                        ship["fuel"]["capacity"] == ship["fuel"]["current"]
+                    }
                   >
                     Refuel
                   </button>
@@ -275,7 +384,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                   <button
                     class="btn btn-sm"
                     phx-click="show-repair-modal"
-                    disabled={ship["nav"]["status"] != "DOCKED" ||  condition_percentage(ship) == 100}
+                    disabled={ship["nav"]["status"] != "DOCKED" || condition_percentage(ship) == 100}
                   >
                     Repair
                   </button>
@@ -297,105 +406,112 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                       Dock
                     </button>
                   </div>
-                        </td>
-                      </tr>
-                    <% end %>systems
-                  </tbody>
-                </table>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
 
-              </div>
+      <div>
+        <div class="font-bold text-lg mb-4">
+          Ships in this system
+        </div>
 
-              <div>
+        <% ships_in_system =
+          Enum.filter(fleet, fn ship -> ship["nav"]["systemSymbol"] == @system_symbol end) %>
 
+        <table class="table table-zebra table-fixed">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="w-32">Location</th>
+              <th class="w-24">Distance</th>
+              <th class="w-32">Role</th>
+              <th class="w-24">Status</th>
+              <th class="w-28">Condition</th>
+              <th class="w-28">Fuel</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
 
+          <tbody>
+            <%= for ship <- ships_in_system do %>
+              <tr>
+                <td>
+                  <.link class="link-hover" patch={~p"/game/fleet/#{ship["symbol"]}"}>
+                    {ship["registration"]["name"]}
+                  </.link>
+                </td>
+                <td>
+                  <.link
+                    class="link-hover"
+                    patch={
+                      ~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}"
+                    }
+                  >
+                    {ship["nav"]["waypointSymbol"]}
+                  </.link>
+                </td>
+                <td>
+                  <.async_result :let={system} assign={@system}>
+                    <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                    <:failed :let={_failure}>There was an error loading the system.</:failed>
+                    {trunc(
+                      Float.round(distance(system, @waypoint_symbol, ship["nav"]["waypointSymbol"]))
+                    )}u
+                  </.async_result>
+                </td>
+                <td>{ship["registration"]["role"]}</td>
+                <td>
+                  {ship["nav"]["status"]}
+                </td>
+                <td>{condition_percentage(ship)}%</td>
+                <td>
+                  <%= if ship["fuel"]["capacity"] > 0 do %>
+                    {trunc(Float.round(ship["fuel"]["current"] / ship["fuel"]["capacity"] * 100))}%
+                  <% else %>
+                    <span class="opacity-50 italic">No fuel tank</span>
+                  <% end %>
+                </td>
 
-                <div class="font-bold text-lg mb-4">
-                  Ships in this system
-                </div>
-
-                <% ships_in_system = Enum.filter(fleet, fn ship -> ship["nav"]["systemSymbol"] == @system_symbol end) %>
-
-                <table class="table table-zebra table-fixed">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th class="w-32">Location</th>
-                      <th class="w-24">Distance</th>
-                      <th class="w-32">Role</th>
-                      <th class="w-24">Status</th>
-                      <th class="w-28">Condition</th>
-                      <th class="w-28">Fuel</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <%= for ship <- ships_in_system do %>
-                      <tr>
-                        <td>
-                          <.link
-                            class="link-hover"
-                            patch={~p"/game/fleet/#{ship["symbol"]}"}
-                          >
-                          <%= ship["registration"]["name"] %>
-                          </.link>
-                        </td>
-                        <td>
-
-                          <.link
-                            class="link-hover"
-                            patch={~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}"}
-                          >
-                            <%= ship["nav"]["waypointSymbol"] %>
-                          </.link>
-
-                        </td>
-                        <td>
-                          <.async_result :let={system} assign={@system}>
-                            <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                            <:failed :let={_failure}>There was an error loading the system.</:failed>
-                            <%= trunc(Float.round(distance(system, @waypoint_symbol, ship["nav"]["waypointSymbol"]))) %>u
-                          </.async_result>
-                        </td>
-                        <td><%= ship["registration"]["role"] %></td>
-                        <td>
-                          <%= ship["nav"]["status"] %>
-                        </td>
-                        <td><%= condition_percentage(ship) %>%</td>
-                        <td>
-                          <%= if ship["fuel"]["capacity"] > 0 do %>
-                            <%= trunc(Float.round(ship["fuel"]["current"] / ship["fuel"]["capacity"] * 100)) %>%
-                          <% else %>
-                            <span class="opacity-50 italic">No fuel tank</span>
-                          <% end %>
-                        </td>
-
-                        <td class="flex gap-3">
-                          <div class="join">
-                            <button
-                              class="btn btn-sm btn-accent join-item"
-                              phx-click="navigate-ship"
-                              phx-value-ship-symbol={ship["symbol"]}
-                              phx-value-system-symbol={@system_symbol}
-                              phx-value-waypoint-symbol={@waypoint_symbol}
-                              phx-value-flight-mode={@selected_flight_mode}
-                              disabled={ship["nav"]["status"] != "IN_ORBIT"}
-                            >
-                              <%= @selected_flight_mode %> here
-                            </button>
-                            <details class="dropdown">
-                              <summary class="btn btn-sm btn-outline btn-accent btn-square rounded-l-none">
-                                <Heroicons.chevron_down class="w-4 h-4" />
-                              </summary>
-                              <ul class="menu dropdown-content bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
-                                <li><a phx-click="flight-mode-selected" phx-value-flight-mode="CRUISE">CRUISE</a></li>
-                                <li><a phx-click="flight-mode-selected" phx-value-flight-mode="BURN">BURN</a></li>
-                                <li><a phx-click="flight-mode-selected" phx-value-flight-mode="DRIFT">DRIFT</a></li>
-                                <li><a phx-click="flight-mode-selected" phx-value-flight-mode="STEALTH">STEALTH</a></li>
-                              </ul>
-                            </details>
-
-                          </div>
+                <td class="flex gap-3">
+                  <div class="join">
+                    <button
+                      class="btn btn-sm btn-accent join-item"
+                      phx-click="navigate-ship"
+                      phx-value-ship-symbol={ship["symbol"]}
+                      phx-value-system-symbol={@system_symbol}
+                      phx-value-waypoint-symbol={@waypoint_symbol}
+                      phx-value-flight-mode={@selected_flight_mode}
+                      disabled={ship["nav"]["status"] != "IN_ORBIT"}
+                    >
+                      {@selected_flight_mode} here
+                    </button>
+                    <details class="dropdown">
+                      <summary class="btn btn-sm btn-outline btn-accent btn-square rounded-l-none">
+                        <Heroicons.chevron_down class="w-4 h-4" />
+                      </summary>
+                      <ul class="menu dropdown-content bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+                        <li>
+                          <a phx-click="flight-mode-selected" phx-value-flight-mode="CRUISE">
+                            CRUISE
+                          </a>
+                        </li>
+                        <li>
+                          <a phx-click="flight-mode-selected" phx-value-flight-mode="BURN">BURN</a>
+                        </li>
+                        <li>
+                          <a phx-click="flight-mode-selected" phx-value-flight-mode="DRIFT">DRIFT</a>
+                        </li>
+                        <li>
+                          <a phx-click="flight-mode-selected" phx-value-flight-mode="STEALTH">
+                            STEALTH
+                          </a>
+                        </li>
+                      </ul>
+                    </details>
+                  </div>
 
                   <div class="join">
                     <button
@@ -415,469 +531,449 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                       Dock
                     </button>
                   </div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </.async_result>
+    """
+  end
 
-                        </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
-              </div>
-              </.async_result>
-            </div>
-          </div>
+  def market_tab_content(assigns) do
+    ~H"""
+    <.async_result :let={market} assign={@market}>
+      <%= if market do %>
+        <div class="mb-8">
+          <SpacetradersClientWeb.WaypointMarketComponent.imports_exports
+            market={market}
+            system_symbol={@waypoint["systemSymbol"]}
+            waypoint_symbol={@waypoint["symbol"]}
+          />
+        </div>
+      <% end %>
 
-
-
-          <%= if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "MARKETPLACE" end) do %>
-            <a role="tab" class={if @waypoint_tab == "market", do: ["tab tab-active"], else: ["tab"]} phx-click="select-waypoint-tab" phx-value-waypoint-tab="market">Market</a>
-
-            <div class="tab-content border-base-300">
-              <div :if={@waypoint_tab == "market"}>
-                <.async_result :let={market} assign={@market}>
-
-                  <%= if market do %>
-                    <div class="mb-8">
-                      <SpacetradersClientWeb.WaypointMarketComponent.imports_exports
-                        market={market}
-                        system_symbol={waypoint["systemSymbol"]}
-                        waypoint_symbol={waypoint["symbol"]}
-                      />
-                    </div>
-                  <% end %>
-
-                  <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
-                    <div class="text-lg font-bold text-right">
-                      Select ship
-                    </div>
-
-
-                    <form phx-change="select-ship">
-                      <select class="select select-border w-72" name="ship-symbol">
-                        <%= for ship <- @ships_at_waypoint do %>
-                          <option value={ship["symbol"]}>
-                            <%= ship["registration"]["name"] %>
-                          </option>
-                        <% end %>
-                      </select>
-                    </form>
-
-                    <div class="divider divider-horizontal"></div>
-
-                    <form class="w-20" phx-change="set-market-action">
-                      <div class="form-control">
-                        <label class="label cursor-pointer">
-                          <input type="radio" name="radio-market" class="radio" value="buy" checked={@market_action == "buy"} />
-                          <span class="label-text">Buy</span>
-                        </label>
-                      </div>
-                      <div class="form-control">
-                        <label class="label cursor-pointer">
-                          <input type="radio" name="radio-market" class="radio" value="sell" checked={@market_action == "sell"} />
-                          <span class="label-text">Sell</span>
-                        </label>
-                      </div>
-                    </form>
-                  </div>
-
-                  <%= case @market_action do %>
-                    <% "sell" -> %>
-                      <div>
-                        <%= if anything_to_sell?(@ships_at_waypoint, market) do %>
-                          <table class="table table-zebra">
-                            <thead>
-                              <tr>
-                                <th>Ship</th>
-                                <th>Item</th>
-                                <th class="text-right">Quantity</th>
-                                <th class="text-right">Value</th>
-                                <th></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <%= for ship <- @ships_at_waypoint do %>
-                                <%= for item <- ship["cargo"]["inventory"] do %>
-                                  <% sell_value = cargo_sell_value(market, item) %>
-                                  <%= if is_integer(sell_value) do %>
-                                    <tr>
-                                      <td><%= ship["registration"]["name"] %></td>
-                                      <td><%= item["name"] %></td>
-                                      <td class="text-right"><%= item["units"] %></td>
-                                      <td class="text-right"><%= sell_value %></td>
-                                      <td class="text-right">
-                                        <button
-                                          class="btn btn-xs btn-success"
-                                          phx-click="sell-cargo"
-                                          phx-value-ship-symbol={ship["symbol"]}
-                                          phx-value-trade-symbol={item["symbol"]}
-                                          phx-value-units={item["units"]}
-                                        >
-                                          Sell
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  <% end %>
-                                <% end %>
-                              <% end %>
-                            </tbody>
-                          </table>
-                        <% else %>
-                          <div class="opacity-50 italic text-center mt-32">
-                            This ship has no items that the market is buying
-                          </div>
-                        <% end %>
-                      </div>
-
-                    <% "buy" -> %>
-
-                      <div>
-                        <%= if market do %>
-                          <%= if items = market["tradeGoods"] do %>
-                            <SpacetradersClientWeb.WaypointMarketComponent.item_table items={items} />
-                          <% end %>
-                        <% end %>
-                      </div>
-                  <% end %>
-              </.async_result>
-              </div>
-            </div>
-
-
-
-
-          <% end %>
-          <%= if waypoint["type"] in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) do %>
-            <a role="tab" class={if @waypoint_tab == "mining", do: ["tab tab-active"], else: ["tab"]} phx-click="select-waypoint-tab" phx-value-waypoint-tab="mining">Mining</a>
-
-            <div class="tab-content bg-base-300">
-              <div :if={@waypoint_tab == "mining"}>
-
-                <div>
-                  <% selected_ship = Enum.find(@ships_at_waypoint, fn s -> s["symbol"] == @selected_ship_symbol end) %>
-
-                  <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
-                    <%= if Enum.any?(@ships_at_waypoint) do %>
-                      <div class="text-lg font-bold text-right">
-                        Select ship
-                      </div>
-
-                      <form phx-change="select-ship">
-                        <select class="select select-border w-72" name="ship-symbol">
-                          <%= for ship <- @ships_at_waypoint do %>
-                            <option value={ship["symbol"]} selected={@selected_ship_symbol == ship["symbol"]}>
-                              <%= ship["registration"]["name"] %>
-                            </option>
-                          <% end %>
-                        </select>
-                      </form>
-
-                      <.link
-                        class="btn btn-neutral"
-                        patch={"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}/ships/#{@selected_ship_symbol}"}
-                      >
-                        View ship
-                      </.link>
-
-                      <div class="w-64 h-32">
-                        <%= if @selected_ship_symbol do %>
-                          <SpacetradersClientWeb.ShipStatsComponent.cargo ship={Enum.find(@ships_at_waypoint, fn s -> s["symbol"] == @selected_ship_symbol end)} />
-                        <% end %>
-                      </div>
-                    <% else %>
-                      <div class="text-lg font-bold text-right">
-                        No ships at waypoint
-                      </div>
-                    <% end %>
-
-                  </div>
-
-                  <div class="flex flex-col justify-center items-center mb-8">
-                    <%= cond do %>
-                      <% Enum.empty?(@ships_at_waypoint) -> %>
-                        There are no ships capable of mining at this waypoint
-                      <% selected_ship["nav"]["status"] == "IN_TRANSIT" -> %>
-                        <div class="mb-4">
-                          Ship is in transit to this location.
-                          <span class="countdown font-mono text-lg">
-                            <span style={"--value:#{@cooldown_remaining};"}></span>
-                          </span>
-                          seconds until it arrives.
-                        </div>
-
-                        <button
-                          class="btn btn-accent btn-outline"
-                          phx-click="dock-ship"
-                          phx-value-ship-symbol={selected_ship["symbol"]}
-                          disabled
-                        >
-                          Dock
-                        </button>
-                      <% selected_ship["nav"]["status"] == "DOCKED" -> %>
-                        <div class="mb-4">
-                          Ship must be in orbit to mine.
-                        </div>
-
-                        <button
-                          class="btn btn-accent"
-                          phx-click="orbit-ship"
-                          phx-value-ship-symbol={selected_ship["symbol"]}
-                        >
-                          Undock
-                        </button>
-
-                      <% @cooldown_remaining == 0 -> %>
-                        <div class="mb-4">
-                          Equipment is ready to use.
-                        </div>
-
-                        <button
-                          class="btn btn-accent btn-outline"
-                          phx-click="dock-ship"
-                          phx-value-ship-symbol={selected_ship["symbol"]}
-                        >
-                          Dock
-                        </button>
-                      <% true -> %>
-                        <div class="mb-4">
-                          Equipment is cooling down:
-                          <span class="countdown font-mono text-lg">
-                            <span style={"--value:#{@cooldown_remaining};"}></span>
-                          </span>
-                          seconds until functionality returns.
-                        </div>
-
-                        <button
-                          class="btn btn-accent btn-outline"
-                          phx-click="dock-ship"
-                          phx-value-ship-symbol={selected_ship["symbol"]}
-                          disabled
-                        >
-                          Dock
-                        </button>
-                      <% end %>
-                  </div>
-
-
-                  <%= if can_survey?(selected_ship) do %>
-                    <div class="flex flex-col items-center">
-                      <button
-                        phx-click="create-survey"
-                        phx-value-ship-symbol={selected_ship["symbol"]}
-                        class="btn btn-neutral w-1/2"
-                        disabled={selected_ship["nav"]["status"] != "IN_ORBIT" || @cooldown_remaining > 0}
-                      >
-                        Start survey
-                      </button>
-                    </div>
-                  <% end %>
-
-                  <%= if can_mine?(selected_ship) do %>
-                    <div class="flex flex-col items-center">
-                      <button
-                        phx-click="extract-resources"
-                        phx-value-ship-symbol={selected_ship["symbol"]}
-                        class="btn btn-primary w-1/2"
-                        disabled={selected_ship["nav"]["status"] != "IN_ORBIT" || @cooldown_remaining > 0}
-                      >
-                        Start mining
-                      </button>
-                    </div>
-                  <%end %>
-
-                  <div>
-                    <table class="table">
-                      <thead>
-                        <tr>
-                          <th class="w-12">Use</th>
-                          <th class="w-64">Survey ID</th>
-                          <th>Deposits</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <%= for survey <- @surveys do %>
-                          <%
-                            [{first_freq_symbol, first_freq_count} | rest_freqs] =
-                              Enum.frequencies_by(survey["deposits"], fn d -> d["symbol"] end)
-                              |> Enum.to_list()
-                              |> Enum.sort_by(fn {_, count} -> count end, :desc)
-
-                            unique_symbol_count =
-                              Enum.map(survey["deposits"], fn d -> d["symbol"] end)
-                              |> Enum.uniq()
-                              |> Enum.count()
-
-                          %>
-                          <tr>
-                            <td rowspan={unique_symbol_count}>
-                              <input
-                                class="radio"
-                                type="radio"
-                                name="survey-id"
-                                value={survey["signature"]}
-                                checked={@selected_survey_id == survey["signature"]}
-                                phx-click="survey-selected"
-                              />
-                            </td>
-                            <td rowspan={unique_symbol_count}><%= survey["signature"] %></td>
-                            <td>
-                              <%= first_freq_symbol %> &times;<%= first_freq_count %>
-                            </td>
-                          </tr>
-                          <%= for {symbol, count} <- rest_freqs do %>
-                            <tr>
-                              <td>
-                                <%= symbol %> &times;<%= count %>
-                              </td>
-                            </tr>
-                          <% end %>
-                        <% end %>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          <% end %>
-
-          <%= if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "SHIPYARD" end) do %>
-            <a role="tab" class={if @waypoint_tab == "shipyard", do: ["tab tab-active"], else: ["tab"]} phx-click="select-waypoint-tab" phx-value-waypoint-tab="shipyard">Shipyard</a>
-
-            <div class="tab-content border-base-300">
-              <div :if={@waypoint_tab == "shipyard"}>
-
-                <div>
-                  <.async_result :let={shipyard} assign={@shipyard}>
-                    <%= if Enum.any?(@ships_at_waypoint) && shipyard do %>
-                      <table class="table table-zebra">
-                        <tbody>
-                          <%= for ship <- shipyard["ships"] do %>
-                            <tr>
-                              <td><%= ship["name"] %></td>
-                              <td>
-                                <p class="mb-2"><%= ship["description"] %></p>
-                                <div class="flex flex-row justify-between">
-                                  <div>
-                                    <div class="font-bold">Frame</div>
-                                    <div>
-                                      <%= ship["frame"]["name"] %>
-                                    </div>
-                                    <div>
-                                      Module slots: <%= ship["frame"]["moduleSlots"] %>
-                                    </div>
-                                    <div>
-                                      Mounting points: <%= ship["frame"]["mountingPoints"] %>
-                                    </div>
-                                    <div>
-                                      Fuel capacity: <%= ship["frame"]["fuelCapacity"] %>
-                                    </div>
-
-                                  </div>
-
-                                  <div>
-                                    <div class="font-bold">Engine</div>
-                                    <div>
-                                      <%= ship["engine"]["name"] %>
-                                    </div>
-                                    <div>
-                                      Speed: <%= ship["engine"]["speed"] %>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <div class="font-bold">Reactor</div>
-                                    <div>
-                                      <%= ship["reactor"]["name"] %>
-                                    </div>
-                                    <div>
-                                      Speed: <%= ship["reactor"]["powerOutput"] %>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <div class="font-bold">Modules</div>
-                                    <ul class="list-disc">
-                                    <%= for module <- ship["modules"] do %>
-                                      <li class="ml-3">
-                                        <%= module["name"] %>
-                                        <%= if module["capacity"] do %>
-                                          (capacity: <%= module["capacity"] %>)
-                                        <% end %>
-                                      </li>
-                                    <% end %>
-                                    </ul>
-                                  </div>
-
-                                  <div>
-                                    <div class="font-bold">Mounts</div>
-                                    <ul class="list-disc">
-                                    <%= for module <- ship["mounts"] do %>
-                                      <li class="ml-3"><%= module["name"] %></li>
-                                    <% end %>
-                                    </ul>
-                                  </div>
-
-                                </div>
-
-                              </td>
-                              <td><%= ship["supply"] %></td>
-                              <td><%= ship["purchasePrice"] %></td>
-                              <td>
-                                <button
-                                  class="btn btn-error"
-                                  phx-click="purchase-ship"
-                                  phx-value-ship-type={ship["type"]}
-                                  phx-value-waypoint-symbol={@waypoint_symbol}
-                                >
-                                  Buy
-                                </button>
-                              </td>
-
-                            </tr>
-                          <% end %>
-                        </tbody>
-                      </table>
-                    <% else %>
-                      A ship must be present at this waypoint to use the shipyard.
-                    <% end %>
-                  </.async_result>
-                </div>
-              </div>
-            </div>
-
-
-          <% end %>
-
-          <a role="tab" class={if @waypoint_tab == "chart", do: ["tab tab-active"], else: ["tab"]} phx-click="select-waypoint-tab" phx-value-waypoint-tab="chart">Chart</a>
-
-          <div class="tab-content border-base-300">
-            <div :if={@waypoint_tab == "chart"}>
-              Chart go here
-            </div>
-          </div>
+      <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
+        <div class="text-lg font-bold text-right">
+          Select ship
         </div>
 
+        <form phx-change="select-ship">
+          <select class="select select-border w-72" name="ship-symbol">
+            <%= for ship <- @ships_at_waypoint do %>
+              <option value={ship["symbol"]}>
+                {ship["registration"]["name"]}
+              </option>
+            <% end %>
+          </select>
+        </form>
+
+        <div class="divider divider-horizontal"></div>
+
+        <form class="w-20" phx-change="set-market-action">
+          <div class="form-control">
+            <label class="label cursor-pointer">
+              <input
+                type="radio"
+                name="radio-market"
+                class="radio"
+                value="buy"
+                checked={@market_action == "buy"}
+              />
+              <span class="label-text">Buy</span>
+            </label>
+          </div>
+          <div class="form-control">
+            <label class="label cursor-pointer">
+              <input
+                type="radio"
+                name="radio-market"
+                class="radio"
+                value="sell"
+                checked={@market_action == "sell"}
+              />
+              <span class="label-text">Sell</span>
+            </label>
+          </div>
+        </form>
+      </div>
+
+      <%= case @market_action do %>
+        <% "sell" -> %>
+          <div>
+            <%= if anything_to_sell?(@ships_at_waypoint, market) do %>
+              <table class="table table-zebra">
+                <thead>
+                  <tr>
+                    <th>Ship</th>
+                    <th>Item</th>
+                    <th class="text-right">Quantity</th>
+                    <th class="text-right">Value</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <%= for ship <- @ships_at_waypoint do %>
+                    <%= for item <- ship["cargo"]["inventory"] do %>
+                      <% sell_value = cargo_sell_value(market, item) %>
+                      <%= if is_integer(sell_value) do %>
+                        <tr>
+                          <td>{ship["registration"]["name"]}</td>
+                          <td>{item["name"]}</td>
+                          <td class="text-right">{item["units"]}</td>
+                          <td class="text-right">{sell_value}</td>
+                          <td class="text-right">
+                            <button
+                              class="btn btn-xs btn-success"
+                              phx-click="sell-cargo"
+                              phx-value-ship-symbol={ship["symbol"]}
+                              phx-value-trade-symbol={item["symbol"]}
+                              phx-value-units={item["units"]}
+                            >
+                              Sell
+                            </button>
+                          </td>
+                        </tr>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                </tbody>
+              </table>
+            <% else %>
+              <div class="opacity-50 italic text-center mt-32">
+                This ship has no items that the market is buying
+              </div>
+            <% end %>
+          </div>
+        <% "buy" -> %>
+          <div>
+            <%= if market do %>
+              <%= if items = market["tradeGoods"] do %>
+                <SpacetradersClientWeb.WaypointMarketComponent.item_table items={items} />
+              <% end %>
+            <% end %>
+          </div>
+      <% end %>
+    </.async_result>
+    """
+  end
+
+  def mining_tab_content(assigns) do
+    ~H"""
+    <div>
+      <% selected_ship =
+        Enum.find(@ships_at_waypoint, fn s -> s["symbol"] == @selected_ship_symbol end) %>
+
+      <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
+        <%= if Enum.any?(@ships_at_waypoint) do %>
+          <div class="text-lg font-bold text-right">
+            Select ship
+          </div>
+
+          <form phx-change="select-ship">
+            <select class="select select-border w-72" name="ship-symbol">
+              <%= for ship <- @ships_at_waypoint do %>
+                <option value={ship["symbol"]} selected={@selected_ship_symbol == ship["symbol"]}>
+                  {ship["registration"]["name"]}
+                </option>
+              <% end %>
+            </select>
+          </form>
+
+          <.link
+            class="btn btn-neutral"
+            patch={"/game/systems/#{@system_symbol}/waypoints/#{@waypoint_symbol}/ships/#{@selected_ship_symbol}"}
+          >
+            View ship
+          </.link>
+
+          <div class="w-64 h-32">
+            <%= if @selected_ship_symbol do %>
+              <SpacetradersClientWeb.ShipStatsComponent.cargo ship={
+                Enum.find(@ships_at_waypoint, fn s -> s["symbol"] == @selected_ship_symbol end)
+              } />
+            <% end %>
+          </div>
+        <% else %>
+          <div class="text-lg font-bold text-right">
+            No ships at waypoint
+          </div>
+        <% end %>
+      </div>
+
+      <div class="flex flex-col justify-center items-center mb-8">
+        <%= cond do %>
+          <% Enum.empty?(@ships_at_waypoint) -> %>
+            There are no ships capable of mining at this waypoint
+          <% selected_ship["nav"]["status"] == "IN_TRANSIT" -> %>
+            <div class="mb-4">
+              Ship is in transit to this location.
+              <span class="countdown font-mono text-lg">
+                <span style={"--value:#{@cooldown_remaining};"}></span>
+              </span>
+              seconds until it arrives.
+            </div>
+
+            <button
+              class="btn btn-accent btn-outline"
+              phx-click="dock-ship"
+              phx-value-ship-symbol={selected_ship["symbol"]}
+              disabled
+            >
+              Dock
+            </button>
+          <% selected_ship["nav"]["status"] == "DOCKED" -> %>
+            <div class="mb-4">
+              Ship must be in orbit to mine.
+            </div>
+
+            <button
+              class="btn btn-accent"
+              phx-click="orbit-ship"
+              phx-value-ship-symbol={selected_ship["symbol"]}
+            >
+              Undock
+            </button>
+          <% @cooldown_remaining == 0 -> %>
+            <div class="mb-4">
+              Equipment is ready to use.
+            </div>
+
+            <button
+              class="btn btn-accent btn-outline"
+              phx-click="dock-ship"
+              phx-value-ship-symbol={selected_ship["symbol"]}
+            >
+              Dock
+            </button>
+          <% true -> %>
+            <div class="mb-4">
+              Equipment is cooling down:
+              <span class="countdown font-mono text-lg">
+                <span style={"--value:#{@cooldown_remaining};"}></span>
+              </span>
+              seconds until functionality returns.
+            </div>
+
+            <button
+              class="btn btn-accent btn-outline"
+              phx-click="dock-ship"
+              phx-value-ship-symbol={selected_ship["symbol"]}
+              disabled
+            >
+              Dock
+            </button>
+        <% end %>
+      </div>
+
+      <%= if can_survey?(selected_ship) do %>
+        <div class="flex flex-col items-center">
+          <button
+            phx-click="create-survey"
+            phx-value-ship-symbol={selected_ship["symbol"]}
+            class="btn btn-neutral w-1/2"
+            disabled={selected_ship["nav"]["status"] != "IN_ORBIT" || @cooldown_remaining > 0}
+          >
+            Start survey
+          </button>
+        </div>
+      <% end %>
+
+      <%= if can_mine?(selected_ship) do %>
+        <div class="flex flex-col items-center">
+          <button
+            phx-click="extract-resources"
+            phx-value-ship-symbol={selected_ship["symbol"]}
+            class="btn btn-primary w-1/2"
+            disabled={selected_ship["nav"]["status"] != "IN_ORBIT" || @cooldown_remaining > 0}
+          >
+            Start mining
+          </button>
+        </div>
+      <% end %>
+
+      <div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="w-12">Use</th>
+              <th class="w-64">Survey ID</th>
+              <th>Deposits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for survey <- @surveys do %>
+              <% [{first_freq_symbol, first_freq_count} | rest_freqs] =
+                Enum.frequencies_by(survey["deposits"], fn d -> d["symbol"] end)
+                |> Enum.to_list()
+                |> Enum.sort_by(fn {_, count} -> count end, :desc)
+
+              unique_symbol_count =
+                Enum.map(survey["deposits"], fn d -> d["symbol"] end)
+                |> Enum.uniq()
+                |> Enum.count() %>
+              <tr>
+                <td rowspan={unique_symbol_count}>
+                  <input
+                    class="radio"
+                    type="radio"
+                    name="survey-id"
+                    value={survey["signature"]}
+                    checked={@selected_survey_id == survey["signature"]}
+                    phx-click="survey-selected"
+                  />
+                </td>
+                <td rowspan={unique_symbol_count}>{survey["signature"]}</td>
+                <td>
+                  {first_freq_symbol} &times;{first_freq_count}
+                </td>
+              </tr>
+              <%= for {symbol, count} <- rest_freqs do %>
+                <tr>
+                  <td>
+                    {symbol} &times;{count}
+                  </td>
+                </tr>
+              <% end %>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    """
+  end
+
+  def shipyard_tab_content(assigns) do
+    ~H"""
+    <div>
+      <.async_result :let={shipyard} assign={@shipyard}>
+        <%= if Enum.any?(@ships_at_waypoint) && shipyard do %>
+          <table class="table table-zebra">
+            <tbody>
+              <%= for ship <- shipyard["ships"] do %>
+                <tr>
+                  <td>{ship["name"]}</td>
+                  <td>
+                    <p class="mb-2">{ship["description"]}</p>
+                    <div class="flex flex-row justify-between">
+                      <div>
+                        <div class="font-bold">Frame</div>
+                        <div>
+                          {ship["frame"]["name"]}
+                        </div>
+                        <div>
+                          Module slots: {ship["frame"]["moduleSlots"]}
+                        </div>
+                        <div>
+                          Mounting points: {ship["frame"]["mountingPoints"]}
+                        </div>
+                        <div>
+                          Fuel capacity: {ship["frame"]["fuelCapacity"]}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div class="font-bold">Engine</div>
+                        <div>
+                          {ship["engine"]["name"]}
+                        </div>
+                        <div>
+                          Speed: {ship["engine"]["speed"]}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div class="font-bold">Reactor</div>
+                        <div>
+                          {ship["reactor"]["name"]}
+                        </div>
+                        <div>
+                          Speed: {ship["reactor"]["powerOutput"]}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div class="font-bold">Modules</div>
+                        <ul class="list-disc">
+                          <%= for module <- ship["modules"] do %>
+                            <li class="ml-3">
+                              {module["name"]}
+                              <%= if module["capacity"] do %>
+                                (capacity: {module["capacity"]})
+                              <% end %>
+                            </li>
+                          <% end %>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <div class="font-bold">Mounts</div>
+                        <ul class="list-disc">
+                          <%= for module <- ship["mounts"] do %>
+                            <li class="ml-3">{module["name"]}</li>
+                          <% end %>
+                        </ul>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{ship["supply"]}</td>
+                  <td>{ship["purchasePrice"]}</td>
+                  <td>
+                    <button
+                      class="btn btn-error"
+                      phx-click="purchase-ship"
+                      phx-value-ship-type={ship["type"]}
+                      phx-value-waypoint-symbol={@waypoint_symbol}
+                    >
+                      Buy
+                    </button>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        <% else %>
+          A ship must be present at this waypoint to use the shipyard.
+        <% end %>
       </.async_result>
     </div>
     """
   end
 
-  def mount(_params, %{"token" => token}, socket) do
-    client = Client.new(token)
-    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
-    PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
-    callsign = agent_body["data"]["symbol"]
-
+  def mount(socket) do
     socket =
       assign(socket, %{
         app_section: :galaxy,
-        client: client,
-        agent: AsyncResult.ok(agent_body["data"]),
         waypoint_tab: "info",
         market_action: "buy",
         cooldown_remaining: 0,
         selected_survey_id: nil,
         selected_flight_mode: "CRUISE",
-        contracts: []
+        contracts: [],
+        surveys: []
+      })
+
+    {:ok, socket}
+  end
+
+  def update(params, socket) do
+    socket =
+      assign(socket, params)
+
+    client = socket.assigns.client
+    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
+    PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
+    callsign = agent_body["data"]["symbol"]
+
+    waypoint_symbol = socket.assigns.waypoint_symbol
+    system_symbol = socket.assigns.system_symbol
+
+    socket =
+      socket
+      |> assign(%{
+        client: client,
+        agent: AsyncResult.ok(agent_body["data"])
       })
       |> assign_async(:agent_automaton, fn ->
         case AutomationServer.automaton(callsign) do
@@ -885,34 +981,24 @@ defmodule SpacetradersClientWeb.WaypointComponent do
           {:error, _} -> {:ok, %{agent_automaton: nil}}
         end
       end)
-      |> load_fleet()
-
-    {:ok, socket}
-  end
-
-  def handle_params(params, _uri, socket) do
-    socket =
-      assign(socket, %{
-        waypoint_symbol: params["waypoint_symbol"],
-        system_symbol: params["system_symbol"]
-      })
-
-    client = socket.assigns.client
-    waypoint_symbol = socket.assigns.waypoint_symbol
-    system_symbol = socket.assigns.system_symbol
-
-    socket =
-      socket
       |> assign_async(:market, fn ->
         case Systems.get_market(client, system_symbol, waypoint_symbol) do
           {:ok, %{status: 200, body: body}} ->
-            body["data"]
+            {:ok, %{market: body["data"]}}
 
           {:ok, %{status: 404}} ->
-            nil
+            {:ok, %{market: nil}}
         end
       end)
-      |> assign(:shipyard, AsyncResult.loading())
+      |> assign_async(:shipyard, fn ->
+        case Systems.get_shipyard(client, system_symbol, waypoint_symbol) do
+          {:ok, %{status: 200, body: body}} ->
+            {:ok, %{shipyard: body["data"]}}
+
+          {:ok, %{status: 404}} ->
+            {:ok, %{shipyard: nil}}
+        end
+      end)
       |> assign(:construction_site, AsyncResult.loading())
       |> assign_async(:system, fn ->
         case Systems.get_system(client, system_symbol) do
@@ -929,8 +1015,9 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             {:error, reason}
         end
       end)
+      |> load_fleet()
 
-    {:noreply, socket}
+    {:ok, socket}
   end
 
   def handle_event("select-waypoint-tab", %{"waypoint-tab" => waypoint_tab}, socket) do
