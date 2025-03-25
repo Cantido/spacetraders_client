@@ -2,7 +2,9 @@ defmodule SpacetradersClientWeb.SessionController do
   use SpacetradersClientWeb, :controller
 
   def index(conn, _params) do
-    render(conn, :index, form: %{"token" => nil})
+    conn
+    |> put_layout(html: false)
+    |> render(:index, form: %{"token" => nil})
   end
 
   def log_in(conn, %{"token" => token}) do
@@ -15,7 +17,6 @@ defmodule SpacetradersClientWeb.SessionController do
       |> render(:index, error_message: "That token is not valid")
     end
   end
-
 
   defp token_valid?(token) do
     client = SpacetradersClient.Client.new(token)

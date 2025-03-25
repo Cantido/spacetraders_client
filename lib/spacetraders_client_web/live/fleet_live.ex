@@ -18,37 +18,50 @@ defmodule SpacetradersClientWeb.FleetLive do
 
   def render(assigns) do
     ~H"""
-    <div class="">
-      <div :if={@live_action == :show}>
+    <.async_result :let={system} assign={@system}>
+      <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+      <:failed :let={_failure}>There was an error loading the ship.</:failed>
+      <.live_component
+        module={SpacetradersClientWeb.OrbitalsMenuComponent}
+        id="orbitals"
+        client={@client}
+        system_symbol={system["symbol"]}
+        fleet={@fleet}
+        class="bg-base-200 w-72"
+      >
+        <div class="p-4">
+          <div :if={@live_action == :show}>
 
-        <.async_result :let={ship} assign={@ship}>
-          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-          <:failed :let={_failure}>There was an error loading the ship.</:failed>
+            <.async_result :let={ship} assign={@ship}>
+              <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+              <:failed :let={_failure}>There was an error loading the ship.</:failed>
+
+              <.async_result :let={agent_automaton} assign={@agent_automaton}>
+                <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+                <:failed :let={_failure}>There was an error loading the agent.</:failed>
+
+
+                <div class="overflow-y-auto">
+                  <.live_component
+                    module={SpacetradersClientWeb.ShipComponent}
+                    id={"ship-#{@ship_symbol}"}
+                    client={@client}
+                    ship={ship}
+                    automaton={get_in(agent_automaton, [Access.key(:ship_automata), @ship_symbol])}
+                  />
+                </div>
+              </.async_result>
+            </.async_result>
+          </div>
 
           <.async_result :let={agent_automaton} assign={@agent_automaton}>
             <:loading><span class="loading loading-ring loading-lg"></span></:loading>
             <:failed :let={_failure}>There was an error loading the agent.</:failed>
-
-
-            <div class="overflow-y-auto">
-              <.live_component
-                module={SpacetradersClientWeb.ShipComponent}
-                id={"ship-#{@ship_symbol}"}
-                client={@client}
-                ship={ship}
-                automaton={get_in(agent_automaton, [Access.key(:ship_automata), @ship_symbol])}
-              />
-            </div>
+            <.fleet_table :if={@live_action == :index} fleet={@fleet} fleet_automata={if agent_automaton, do: agent_automaton.ship_automata, else: %{}} />
           </.async_result>
-        </.async_result>
-      </div>
-
-      <.async_result :let={agent_automaton} assign={@agent_automaton}>
-        <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-        <:failed :let={_failure}>There was an error loading the agent.</:failed>
-        <.fleet_table :if={@live_action == :index} fleet={@fleet} fleet_automata={if agent_automaton, do: agent_automaton.ship_automata, else: %{}} />
-      </.async_result>
-    </div>
+        </div>
+      </.live_component>
+    </.async_result>
     """
   end
 
@@ -142,6 +155,7 @@ defmodule SpacetradersClientWeb.FleetLive do
     socket =
       socket
       |> assign(%{
+        app_section: :fleet,
         client: client,
         agent: AsyncResult.ok(agent_body["data"])
       })

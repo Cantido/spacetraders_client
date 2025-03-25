@@ -3,6 +3,7 @@ defmodule SpacetradersClientWeb.GalaxyLive do
 
   alias Phoenix.LiveView.AsyncResult
   alias Phoenix.PubSub
+  alias SpacetradersClient.AutomationServer
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Systems
   alias SpacetradersClient.Client
@@ -11,7 +12,7 @@ defmodule SpacetradersClientWeb.GalaxyLive do
 
   def render(assigns) do
     ~H"""
-    Hi
+    hi
     """
   end
 
@@ -19,41 +20,23 @@ defmodule SpacetradersClientWeb.GalaxyLive do
     client = Client.new(token)
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
     PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
+    callsign = agent_body["data"]["symbol"]
 
     socket =
       socket
       |> assign(%{
+        app_section: :galaxy,
         token: token,
         client: client,
         agent: AsyncResult.ok(agent_body["data"])
       })
-
-    {:ok, socket}
-  end
-
-  def handle_params(params, _uri, socket) do
-    socket =
-      socket
-      |> assign(%{
-        system_symbol: params["system_symbol"],
-        waypoint_symbol: params["waypoint_symbol"]
-      })
-      |> then(fn socket ->
-        if socket.assigns.live_action in [:system, :waypoint] do
-          client = socket.assigns.client
-          system_symbol = socket.assigns.system_symbol
-
-          assign_async(socket, :system, fn ->
-            case Systems.get_system(client, system_symbol) do
-              {:ok, result} ->
-                {:ok, %{system: result.body["data"]}}
-            end
-          end)
-        else
-          assign(socket, :ship, nil)
+      |> assign_async(:agent_automaton, fn ->
+        case AutomationServer.automaton(callsign) do
+          {:ok, a} -> {:ok, %{agent_automaton: a}}
+          {:error, _} -> {:ok, %{agent_automaton: nil}}
         end
       end)
 
-    {:noreply, socket}
+    {:ok, socket}
   end
 end

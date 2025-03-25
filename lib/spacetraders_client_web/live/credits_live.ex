@@ -24,7 +24,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
       <.async_result :let={ledger} assign={@ledger}>
         <:loading><span class="loading loading-ring loading-lg"></span></:loading>
         <:failed :let={_failure}>There was an error loading the ledger.</:failed>
-        <div :if={is_struct(ledger)} class="stats mb-8">
+        <div :if={is_struct(ledger)} class="stats mb-8 bg-base-300">
           <% income =
             Statements.income_statement(
               ledger,
@@ -53,7 +53,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
         </div>
 
         <div class="flex flex-wrap gap-8">
-          <div class="grow bg-base-300 p-4 rounded">
+          <div class="shrink bg-base-300 p-4 rounded lg:basis-1/2">
             <h4 class="text-xl font-bold mb-4">Assets (Past Hour)</h4>
 
               <%
@@ -75,17 +75,19 @@ defmodule SpacetradersClientWeb.CreditsLive do
               <canvas id="credits-history" phx-hook="Chart" data-config={Jason.encode!(chart_cfg)}></canvas>
           </div>
 
-          <div class="bg-base-300 p-4 rounded">
+          <div class="bg-base-300 p-4 rounded grow">
             <h4 class="text-xl font-bold mb-4">Income (Past Hour)</h4>
 
             <.income_statement ledger={ledger} />
           </div>
-          <div class="bg-base-300 p-4 rounded">
+          <div class="bg-base-300 p-4 rounded grow">
             <h4 class="text-xl font-bold mb-4">Balances</h4>
 
             <.trial_balance_table ledger={ledger} />
           </div>
+          <.ledger_account_entries ledger={ledger} account_name="Cash" class="bg-base-300" />
         </div>
+
       </.async_result>
     """
   end
@@ -216,6 +218,132 @@ defmodule SpacetradersClientWeb.CreditsLive do
     """
   end
 
+  attr :ledger, :map, required: true
+  attr :account_name, :string, required: true
+  attr :class, :string, default: nil
+
+  def ledger_account_entries(assigns) do
+    ~H"""
+    <%
+      account = Ledger.account(@ledger, @account_name)
+
+      since = DateTime.add(DateTime.utc_now(), -1, :hour)
+       transactions =
+        account_txns(@ledger, account.id)
+
+      |> Enum.filter(fn txn ->
+        DateTime.after?(txn.date, since)
+      end)
+    %>
+      <.live_component
+        module={SpacetradersClientWeb.DataTableComponent}
+      id="income-statement"
+      class={["table-zebra table-sm", @class]}
+      initial_sort_key={:date}
+      initial_sort_direction={:desc}
+      rows={transactions}>
+
+      <:column :let={txn} label="Timestamp" class="w-52" key={:date} sorter={DateTime}>
+        <time datetime={DateTime.to_iso8601(txn.date)}>
+          <%= SpacetradersClient.Cldr.DateTime.to_string! txn.date %>
+        </time>
+      </:column>
+      <:column :let={txn} key={:description} label="Description">
+        <%= Journal.line_items(txn) |> List.first() |> Map.get(:description) %>
+      </:column>
+      <:column :let={txn} key={:debit_amount} label="Debit" class="text-right w-28">
+        <%
+          {:ok, debit_amount} =
+          txn
+          |> Journal.line_items()
+          |> Enum.filter(&(&1.account_id == account.id && &1.type == :debit))
+          |> Enum.map(&(&1.amount))
+          |> then(fn amounts ->
+            if Enum.empty?(amounts) do
+              {:ok, Money.zero(:XST)}
+            else
+              Money.sum(amounts)
+            end
+          end)
+
+        %>
+          <%= Money.to_string!(debit_amount, format: :accounting, currency_symbol: "", fractional_digits: 0) %>
+        </:column>
+
+
+        <:column :let={txn} key={:credit_amount} label="Credit" class="text-right w-28">
+        <%
+          {:ok, credit_amount} =
+          txn
+             |> Journal.line_items()
+          |> Enum.filter(&(&1.account_id == account.id && &1.type == :credit))
+          |> Enum.map(&(&1.amount))
+          |> then(fn amounts ->
+            if Enum.empty?(amounts) do
+              {:ok, Money.zero(:XST)}
+            else
+              Money.sum(amounts)
+            end
+          end)
+
+          %>
+        <%= Money.to_string!(credit_amount, format: :accounting, currency_symbol: "", fractional_digits: 0) %>
+        </:column>
+
+
+        <:footer>
+        <%
+          credit_sum = Ledger.credit_balance(@ledger, @account_name)
+          debit_sum = Ledger.debit_balance(@ledger, @account_name)
+           balance = Ledger.balance(@ledger, @account_name)
+
+           %>
+
+        <tr>
+          <th class="border-t"></th>
+          <th class="border-t">Total</th>
+          <td class="text-right border-t">
+            <%= Money.to_string!(debit_sum, format: :accounting, currency_symbol: "", fractional_digits: 0) %>
+          </td>
+            <td class="text-right border-t">
+            <%= Money.to_string!(credit_sum, format: :accounting, currency_symbol: "", fractional_digits: 0) %>
+          </td>
+        </tr>
+
+
+        <tr>
+          <th></th>
+          <th>Balance</th>
+          <%= if Money.positive?(balance) || Money.zero?(balance) do %>
+            <td class="text-right border-t">
+              <%= Money.to_string!(balance, format: :accounting, currency_symbol: "", fractional_digits: 0) %>
+            </td>
+              <td class="border-t"></td>
+
+
+
+          <% else %>
+            <td class="border-t"></td>
+            <td class="text-right border-t">
+              <%= Money.to_string!(Money.negate!(balance), format: :accounting, currency_symbol: "", fractional_digits: 0) %>
+            </td>
+          <% end %>
+
+
+          </tr>
+        </:footer>
+      </.live_component>
+    """
+  end
+
+  defp account_txns(ledger, account_id) do
+    ledger.transactions
+    |> Enum.filter(fn txn ->
+      Journal.affects_account?(txn, account_id)
+    end)
+    |> Enum.sort_by(fn txn -> txn.date end, :desc)
+  end
+
   def mount(_params, %{"token" => token}, socket) do
     client = Client.new(token)
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
@@ -224,6 +352,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
 
     socket =
       assign(socket, %{
+        app_section: :credits,
         client: client,
         agent: AsyncResult.ok(agent_body["data"])
       })

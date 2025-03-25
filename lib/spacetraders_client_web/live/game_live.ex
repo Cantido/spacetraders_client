@@ -25,7 +25,14 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def render_new(assigns) do
     ~H"""
-
+      <.live_component
+        module={SpacetradersClientWeb.OrbitalsMenuComponent}
+        id="orbitals"
+        client={@client}
+        system_symbol={@system_symbol}
+        waypoint_symbol={@waypoint_symbol}
+        fleet={@fleet}
+      >
         <%= case @live_action do %>
           <% :agent -> %>
             <.async_result :let={agent} assign={@agent}>
@@ -57,9 +64,13 @@ defmodule SpacetradersClientWeb.GameLive do
                 />
               </.async_result>
             </.async_result>
+          <% :waypoint -> %>
+            <.live_component
+              id={@waypoint_symbol}
+              module={SpacetradersClientWeb.WaypointComponent}
+              waypoint={@waypoint} waypoint_symbol={@waypoint_symbol} system={@system} system_symbol={@system_symbol} waypoint_tab={@waypoint_tab} fleet={@fleet} selected_flight_mode={@selected_flight_mode} />
         <% end %>
-
-
+      </.live_component>
     """
   end
 
@@ -308,6 +319,8 @@ defmodule SpacetradersClientWeb.GameLive do
 
                     <.async_result :let={fleet} assign={@fleet}>
                       <:loading><span class="loading loading-ring loading-lg"></span></:loading>
+
+    Ship 	Role 	System 	Waypoint 	Current task 	Task runtime
                       <:failed :let={_failure}>There was an error loading your fleet.</:failed>
 
                       <div class="overflow-auto">
@@ -458,12 +471,19 @@ defmodule SpacetradersClientWeb.GameLive do
     """
   end
 
-  def mount(_params, %{"token" => token}, socket) do
+  def mount(params, %{"token" => token}, socket) do
     client = Client.new(token)
 
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
 
     PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
+
+    system_symbol = params["system_symbol"]
+
+    app_section =
+      case socket.assigns.live_action do
+        :waypoint -> :galaxy
+      end
 
     socket =
       socket
@@ -472,6 +492,7 @@ defmodule SpacetradersClientWeb.GameLive do
         token_valid?: AsyncResult.ok(false),
         client: client,
         surveys: [],
+        app_section: app_section,
         selected_waypoint_symbol: nil,
         selected_ship_symbol: nil,
         selected_survey_id: nil,
@@ -497,6 +518,24 @@ defmodule SpacetradersClientWeb.GameLive do
             assign(socket, %{ledger: nil})
         end
       end)
+      |> assign_async(:system, fn ->
+        case Systems.get_system(client, system_symbol) do
+          {:ok, s} -> {:ok, %{system: s.body["data"]}}
+          err -> err
+        end
+      end)
+      |> assign_async(:marketplaces, fn ->
+        case Systems.list_waypoints(client, system_symbol, traits: "MARKETPLACE") do
+          {:ok, w} -> {:ok, %{marketplaces: w.body["data"]}}
+          err -> err
+        end
+      end)
+      |> assign_async(:shipyards, fn ->
+        case Systems.list_waypoints(client, system_symbol, traits: "SHIPYARD") do
+          {:ok, w} -> {:ok, %{shipyards: w.body["data"]}}
+          err -> err
+        end
+      end)
       |> assign(:token, token)
       |> assign(:fleet, AsyncResult.loading())
       |> load_fleet()
@@ -504,6 +543,25 @@ defmodule SpacetradersClientWeb.GameLive do
         {:ok, %{status: 200, body: body}} = Contracts.my_contracts(client)
 
         {:ok, %{contracts: body["data"]}}
+      end)
+      |> then(fn socket ->
+        case socket.assigns.live_action do
+          :waypoint ->
+            socket
+            |> assign(:waypoint_tab, "info")
+            |> assign(:selected_flight_mode, "CRUISE")
+            |> assign(:waypoint_symbol, params["waypoint_symbol"])
+            |> assign_async(:waypoint, fn ->
+              case Systems.get_waypoint(
+                     client,
+                     system_symbol,
+                     params["waypoint_symbol"]
+                   ) do
+                {:ok, w} -> {:ok, %{waypoint: w.body["data"]}}
+                err -> err
+              end
+            end)
+        end
       end)
 
     {:ok, socket}
@@ -516,6 +574,9 @@ defmodule SpacetradersClientWeb.GameLive do
   def handle_params(unsigned_params, _uri, socket) do
     case socket.assigns.live_action do
       :agent ->
+        socket =
+          assign(socket, :app_section, :agent)
+
         {:noreply, socket}
 
       :contract ->

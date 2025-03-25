@@ -47,6 +47,7 @@ defmodule SpacetradersClientWeb.AutomationLive do
     socket =
       socket
       |> assign(%{
+        app_section: :automation,
         token: token,
         client: client,
         agent: AsyncResult.ok(agent_body["data"])

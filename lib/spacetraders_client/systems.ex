@@ -15,9 +15,8 @@ defmodule SpacetradersClient.Systems do
 
   @decorate cacheable(cache: Cache, key: {:waypoints, system_symbol, opts})
   def list_waypoints(client, system_symbol, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 20)
-    page = Keyword.get(opts, :page, 1)
-    Tesla.get(client, "/v2/systems/#{system_symbol}/waypoints?page=#{page}&limit=#{limit}")
+    params = URI.encode_query(opts)
+    Tesla.get(client, "/v2/systems/#{system_symbol}/waypoints?#{params}")
   end
 
   def get_market(client, system_symbol, waypoint_symbol) do

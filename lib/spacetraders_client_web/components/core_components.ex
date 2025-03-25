@@ -574,12 +574,13 @@ defmodule SpacetradersClientWeb.CoreComponents do
   end
 
   attr :hex, :string, default: "ffffff"
+  attr :size, :integer, default: 32
 
   def icon(%{name: "game-" <> name} = assigns) do
     assigns = assign(assigns, :game_icon, name)
 
     ~H"""
-    <span><img phx-track-static src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={32} class="min-w-8" /></span>
+    <img phx-track-static src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={@size} height={@size} />
     """
   end
 

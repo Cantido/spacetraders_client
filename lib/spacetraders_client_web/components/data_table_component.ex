@@ -14,8 +14,6 @@ defmodule SpacetradersClientWeb.DataTableComponent do
 
   slot :footer
 
-
-
   def render(assigns) do
     ~H"""
     <table class={["table", @class]}>
@@ -32,14 +30,16 @@ defmodule SpacetradersClientWeb.DataTableComponent do
             >
               <%= col.label %>
 
+              <span class="inline-block align-bottom">
               <%= cond do %>
                 <% @sort_key == col.key && @sort_direction == :asc -> %>
-                  <.icon name="hero-chevron-up" />
+                  <Heroicons.chevron_up />
                 <% @sort_key == col.key && @sort_direction == :desc -> %>
-                  <.icon name="hero-chevron-down" />
+                  <Heroicons.chevron_down micro class="h-5 w-5" />
                 <% true -> %>
-                  <.icon name="hero-chevron-up-down" />
+                  <Heroicons.chevron_up_down micro class="h-5 w-5"/>
               <% end %>
+              </span>
             </a>
           </th>
         <% end %>
@@ -78,7 +78,6 @@ defmodule SpacetradersClientWeb.DataTableComponent do
 
     {:ok, socket}
   end
-
 
   def update(assigns, socket) do
     socket = assign(socket, assigns)
