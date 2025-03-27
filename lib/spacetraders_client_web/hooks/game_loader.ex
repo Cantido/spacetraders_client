@@ -1,4 +1,5 @@
 defmodule SpacetradersClientWeb.GameLoader do
+  use Phoenix.VerifiedRoutes, endpoint: SpacetradersClientWeb.Endpoint, router: SpacetradersClientWeb.Router
   alias Phoenix.Component
   alias Phoenix.LiveView
   alias Phoenix.LiveView.AsyncResult
@@ -6,15 +7,18 @@ defmodule SpacetradersClientWeb.GameLoader do
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Systems
+  alias SpacetradersClient.GameServer
 
   import Phoenix.LiveView
-  use Phoenix.VerifiedRoutes, endpoint: SpacetradersClientWeb.Endpoint, router: SpacetradersClientWeb.Router
 
   def on_mount(:agent, _params, %{"token" => token}, socket) do
     client = Client.new(token)
 
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
     agent_symbol = agent_body["data"]["symbol"]
+
+    {:ok, _} = GameServer.ensure_started(agent_symbol, token)
+    :ok = SpacetradersClient.LedgerServer.ensure_started(agent_symbol)
 
     socket =
       socket
@@ -32,13 +36,14 @@ defmodule SpacetradersClientWeb.GameLoader do
             {:ok, %{agent_automaton: nil}}
         end
       end)
-      |> then(fn socket ->
+      |> LiveView.assign_async(:ledger, fn ->
         case SpacetradersClient.LedgerServer.ledger(agent_symbol) do
           {:ok, ledger} ->
-            Component.assign(socket, %{ledger: ledger})
+            {:ok, %{ledger: ledger}}
 
-          _ ->
-            Component.assign(socket, %{ledger: nil})
+          {:error, reason} ->
+            dbg(reason)
+            {:error, reason}
         end
       end)
 

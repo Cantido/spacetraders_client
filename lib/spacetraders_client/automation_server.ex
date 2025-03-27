@@ -5,6 +5,7 @@ defmodule SpacetradersClient.AutomationServer do
   alias SpacetradersClient.Client
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Game
+  alias SpacetradersClient.GameServer
 
   alias Phoenix.PubSub
 
@@ -34,13 +35,15 @@ defmodule SpacetradersClient.AutomationServer do
     client = SpacetradersClient.Client.new(token)
     callsign = Keyword.fetch!(opts, :callsign)
 
+    {:ok, _} = GameServer.ensure_started(callsign, token)
+
     PubSub.broadcast(
       @pubsub,
       "agent:#{callsign}",
       {:automation_starting, callsign}
     )
 
-    {:ok, %{client: client}, {:continue, :load_data}}
+    {:ok, %{client: client, agent_symbol: callsign}, {:continue, :start_automation}}
   end
 
   def stop(callsign) do
@@ -95,10 +98,6 @@ defmodule SpacetradersClient.AutomationServer do
     {:reply, {:ok, state.automaton}, state}
   end
 
-  def handle_continue(:load_data, state) do
-    {:noreply, load_game(state), {:continue, :start_automation}}
-  end
-
   def handle_continue(:start_automation, state) do
     state = assign_automatons(state)
 
@@ -106,7 +105,7 @@ defmodule SpacetradersClient.AutomationServer do
 
     PubSub.broadcast(
       @pubsub,
-      "agent:#{state.game_state.agent["symbol"]}",
+      "agent:#{state.agent_symbol}",
       {:automation_started, state.automaton}
     )
 
@@ -128,29 +127,20 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def handle_info(:tick_behaviors, state) do
-    {automaton, game_state} = AgentAutomaton.tick(state.automaton, state.game_state)
+    {:ok, game_state} = GameServer.game(state.agent_symbol)
+    {automaton, game_state} = AgentAutomaton.tick(state.automaton, game_state)
 
     PubSub.broadcast(
       @pubsub,
-      "agent:#{state.game_state.agent["symbol"]}",
+      "agent:#{state.agent_symbol}",
       {:automaton_updated, automaton}
     )
 
     state =
       state
       |> Map.put(:automaton, automaton)
-      |> Map.put(:game_state, game_state)
 
     {:noreply, state, {:continue, :schedule_tick}}
-  end
-
-  def handle_info(:fleet_updated, state) do
-    state =
-      state
-      |> update_in([:game_state], &Game.load_fleet!/1)
-      |> assign_automatons()
-
-    {:noreply, state}
   end
 
   def handle_info(:reload_game, state) do
@@ -162,24 +152,15 @@ defmodule SpacetradersClient.AutomationServer do
     {:noreply, state, {:continue, :schedule_reload}}
   end
 
-  def handle_info(_msg, state) do
+  def handle_info(msg, state) do
+    Logger.warning("Automation server received unknown info message: #{inspect msg}")
     {:noreply, state}
   end
 
   defp load_game(state) do
-    game_state =
-      Game.new(state.client)
-      |> Game.load_agent!()
-      |> Game.load_fleet!()
-      |> Game.load_all_waypoints!()
-      |> Game.load_markets!()
-      |> Game.load_shipyards!()
-      |> Game.load_construction_sites!()
-      |> Game.start_ledger()
+    :ok = GameServer.reload(state.agent_symbol)
 
-    Phoenix.PubSub.subscribe(SpacetradersClient.PubSub, "agent:" <> game_state.agent["symbol"])
-
-    Map.put(state, :game_state, game_state)
+    state
   end
 
   defp assign_automatons(state) do
@@ -191,7 +172,7 @@ defmodule SpacetradersClient.AutomationServer do
   def terminate(_, state) do
     PubSub.broadcast(
       @pubsub,
-      "agent:#{state.game_state.agent["symbol"]}",
+      "agent:#{state.agent_symbol}",
       {:automation_stopped, state.automaton}
     )
 

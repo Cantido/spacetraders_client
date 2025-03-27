@@ -1,4 +1,6 @@
 defmodule SpacetradersClient.LedgerServer do
+  alias SpacetradersClient.GameServer
+  alias SpacetradersClient.Game
   alias Motocho.Account
   alias Motocho.Inventory
   alias Motocho.Ledger
@@ -14,15 +16,22 @@ defmodule SpacetradersClient.LedgerServer do
     {:ok, %{ledgers: %{}, inventories: %{}}}
   end
 
-  def start_ledger(agent_id, starting_credits, starting_fleet_value, starting_merchandise) do
+  def ensure_started(agent_id) do
     GenServer.call(
       __MODULE__,
-      {:start_ledger, agent_id, starting_credits, starting_fleet_value, starting_merchandise}
+      {:ensure_started, agent_id}
+    )
+  end
+
+  def start_ledger(agent_id) do
+    GenServer.call(
+      __MODULE__,
+      {:start_ledger, agent_id}
     )
   end
 
   def ledger(agent_id) do
-    GenServer.call(__MODULE__, {:get_ledger, agent_id})
+    GenServer.call(__MODULE__, {:get_ledger, agent_id}, 20_000)
   end
 
   def post_journal(agent_id, date, description, debit_account, credit_account, amount) when is_integer(amount) do
@@ -60,6 +69,14 @@ defmodule SpacetradersClient.LedgerServer do
     )
   end
 
+  def handle_call({:ensure_started, agent_id}, _from, state) do
+    if Map.has_key?(state.ledgers, agent_id) do
+      {:reply, :ok, state}
+    else
+      {:reply, :ok, state, {:continue, {:start_ledger, agent_id}}}
+    end
+  end
+
   def handle_call({:get_ledger, agent_id}, _from, state) do
     if ledger = get_in(state, [:ledgers, agent_id]) do
       {:reply, {:ok, ledger}, state}
@@ -69,74 +86,14 @@ defmodule SpacetradersClient.LedgerServer do
   end
 
   def handle_call(
-        {:start_ledger, agent_id, starting_credits, starting_fleet, starting_merchandise},
+        {:start_ledger, agent_id},
         _from,
         state
       ) do
     if Map.has_key?(state.ledgers, agent_id) do
       {:reply, {:error, :ledger_exists}, state}
     else
-      merch_value =
-        Enum.map(starting_merchandise, fn m -> m.total_cost end)
-        |> Enum.sum()
-
-      state =
-        state
-        |> ensure_ledger(agent_id)
-        |> update_in([:ledgers, agent_id], fn ledger ->
-          cash_account = Ledger.account(ledger, "Cash")
-          fleet_account = Ledger.account(ledger, "Fleet")
-          merch_account = Ledger.account(ledger, "Merchandise")
-          starting_account = Ledger.account(ledger, "Starting Balances")
-
-          [
-            Journal.simple(
-              DateTime.utc_now(),
-              "Starting Credits Balance",
-              cash_account.id,
-              starting_account.id,
-              Money.new(:XST, starting_credits)
-            ),
-            Journal.simple(
-              DateTime.utc_now(),
-              "Starting Fleet Value",
-              fleet_account.id,
-              starting_account.id,
-              Money.new(:XST, trunc(starting_fleet))
-            ),
-            Journal.simple(
-              DateTime.utc_now(),
-              "Starting Merchandise Value",
-              merch_account.id,
-              starting_account.id,
-              Money.new(:XST, trunc(merch_value))
-            )
-          ]
-          |> Enum.reduce(ledger, &Ledger.post(&2, &1))
-
-        end)
-
-      state =
-        Enum.reduce(starting_merchandise, state, fn merch, state ->
-          update_in(
-            state,
-            [
-              :inventories,
-              Access.key(agent_id, %{}),
-              Access.key(merch.trade_symbol, Inventory.new(:XST))
-            ],
-            fn inventory ->
-              Inventory.purchase_inventory_by_total(
-                inventory,
-                DateTime.utc_now(),
-                merch.units,
-                Money.new(:XST, trunc(merch.total_cost))
-              )
-            end
-          )
-        end)
-
-      {:reply, {:ok, state.ledgers[agent_id]}, state, {:continue, {:broadcast_update, agent_id}}}
+      {:reply, :ok, state, {:continue, {:start_ledger, agent_id}}}
     end
   end
 
@@ -324,6 +281,77 @@ defmodule SpacetradersClient.LedgerServer do
     {:reply, {:ok, get_in(state, [:inventories, agent_id, trade_symbol])}, state, {:continue, {:broadcast_update, agent_id}}}
   end
 
+  def handle_continue({:start_ledger, agent_id}, state) do
+    {:ok, game} = GameServer.game(agent_id)
+
+    starting_credits = game.agent["credits"]
+    starting_fleet = Game.fleet_value(game)
+    starting_merchandise = Game.merchandise_value(game)
+
+    merch_value =
+      Enum.map(starting_merchandise, fn m -> m.total_cost end)
+      |> Enum.sum()
+
+    state =
+      state
+      |> ensure_ledger(agent_id)
+      |> update_in([:ledgers, agent_id], fn ledger ->
+        cash_account = Ledger.account(ledger, "Cash")
+        fleet_account = Ledger.account(ledger, "Fleet")
+        merch_account = Ledger.account(ledger, "Merchandise")
+        starting_account = Ledger.account(ledger, "Starting Balances")
+
+        [
+          Journal.simple(
+            DateTime.utc_now(),
+            "Starting Credits Balance",
+            cash_account.id,
+            starting_account.id,
+            Money.new(:XST, starting_credits)
+          ),
+          Journal.simple(
+            DateTime.utc_now(),
+            "Starting Fleet Value",
+            fleet_account.id,
+            starting_account.id,
+            Money.new(:XST, trunc(starting_fleet))
+          ),
+          Journal.simple(
+            DateTime.utc_now(),
+            "Starting Merchandise Value",
+            merch_account.id,
+            starting_account.id,
+            Money.new(:XST, trunc(merch_value))
+          )
+        ]
+        |> Enum.reduce(ledger, &Ledger.post(&2, &1))
+
+      end)
+
+    state =
+      Enum.reduce(starting_merchandise, state, fn merch, state ->
+        update_in(
+          state,
+          [
+            :inventories,
+            Access.key(agent_id, %{}),
+            Access.key(merch.trade_symbol, Inventory.new(:XST))
+          ],
+          fn inventory ->
+            Inventory.purchase_inventory_by_total(
+              inventory,
+              DateTime.utc_now(),
+              merch.units,
+              Money.new(:XST, trunc(merch.total_cost))
+            )
+          end
+        )
+      end)
+
+    {:noreply, state, {:continue, {:broadcast_update, agent_id}}}
+  end
+
+
   def handle_continue({:broadcast_update, agent_id}, state) do
     if ledger = get_in(state, [:ledgers, agent_id]) do
       PubSub.broadcast(SpacetradersClient.PubSub, "agent:#{agent_id}", {:ledger_updated, ledger})
@@ -336,11 +364,11 @@ defmodule SpacetradersClient.LedgerServer do
     if Map.has_key?(state.ledgers, agent_id) do
       state
     else
-      put_in(state, [:ledgers, agent_id], start_ledger())
+      put_in(state, [:ledgers, agent_id], zero_ledger())
     end
   end
 
-  defp start_ledger do
+  defp zero_ledger do
     Ledger.new()
     |> put_in([Access.key(:currency)], :XST)
     |> Ledger.add_account(Account.new("Cash", :assets, number: 1000))

@@ -21,6 +21,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
 
   def render(assigns) do
     ~H"""
+    <div class="p-4">
       <.async_result :let={ledger} assign={@ledger}>
         <:loading><span class="loading loading-ring loading-lg"></span></:loading>
         <:failed :let={_failure}>There was an error loading the ledger.</:failed>
@@ -89,6 +90,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
         </div>
 
       </.async_result>
+    </div>
     """
   end
 
@@ -344,36 +346,23 @@ defmodule SpacetradersClientWeb.CreditsLive do
     |> Enum.sort_by(fn txn -> txn.date end, :desc)
   end
 
-  def mount(_params, %{"token" => token}, socket) do
-    client = Client.new(token)
-    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
-    PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
-    callsign = agent_body["data"]["symbol"]
+  on_mount {SpacetradersClientWeb.GameLoader, :agent}
+
+  def mount(_params, _session, socket) do
+    PubSub.subscribe(@pubsub, "agent:#{socket.assigns.agent.result["symbol"]}")
 
     socket =
       assign(socket, %{
-        app_section: :credits,
-        client: client,
-        agent: AsyncResult.ok(agent_body["data"])
+        app_section: :credits
       })
-      |> assign_async(:ledger, fn ->
-        case LedgerServer.ledger(callsign) do
-          {:ok, l} -> {:ok, %{ledger: l}}
-          {:error, reason} -> {:error, reason}
-        end
-      end)
-      |> assign_async(:agent_automaton, fn ->
-        case AutomationServer.automaton(callsign) do
-          {:ok, a} ->
-            {:ok, %{agent_automaton: a}}
-
-          {:error, _} ->
-            {:ok, %{agent_automaton: nil}}
-        end
-      end)
 
     {:ok, socket}
   end
+
+  def handle_params(_params, _uri, socket) do
+    {:noreply, socket}
+  end
+
 
   def money_ratio(%Money{} = numerator, %Money{} = denominator) do
     {:XST, numerator_int, _, _} = Money.to_integer_exp(numerator)

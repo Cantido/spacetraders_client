@@ -29,6 +29,19 @@ defmodule SpacetradersClient.Game do
     %__MODULE__{client: client}
   end
 
+  def load_agent(game) do
+    case Agents.my_agent(game.client) do
+      {:ok, %{status: 200, body: body}} ->
+        {:ok, %{game | agent: body["data"]}}
+
+      {:ok, resp} ->
+        {:error, resp.body}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   def load_agent!(game) do
     {:ok, %{status: 200, body: body}} = Agents.my_agent(game.client)
 
@@ -205,49 +218,50 @@ defmodule SpacetradersClient.Game do
     )
   end
 
-  def start_ledger(game) do
-    starting_fleet_value =
-      Enum.map(game.fleet, fn {_id, ship} ->
-        case ship["registration"]["role"] do
-          "EXCAVATOR" -> "SHIP_MINING_DRONE"
-          "TRANSPORT" -> "SHIP_LIGHT_SHUTTLE"
-          "SATELLITE" -> "SHIP_PROBE"
-          _ -> nil
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.frequencies()
-      |> Enum.map(fn {ship_type, count} ->
-        price = average_ship_price(game, ship_type)
-        {price, count}
-      end)
-      |> Enum.reject(&is_nil(elem(&1, 0)))
-      |> Enum.map(fn {price, count} -> price * count end)
-      |> Enum.sum()
+  @doc """
+  Returns the credit value of all ships in the agent's fleet.
 
-    starting_merchandise =
-      Enum.flat_map(game.fleet, fn {_id, ship} ->
-        ship["cargo"]["inventory"]
-      end)
-      |> Enum.map(fn item ->
-        price_per_unit =
-          average_selling_price(game, item["symbol"])
+  Ship prices are averaged from all known shipyards.
+  """
+  def fleet_value(game) do
+    Enum.map(game.fleet, fn {_id, ship} ->
+      case ship["registration"]["role"] do
+        "EXCAVATOR" -> "SHIP_MINING_DRONE"
+        "TRANSPORT" -> "SHIP_LIGHT_SHUTTLE"
+        "SATELLITE" -> "SHIP_PROBE"
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.frequencies()
+    |> Enum.map(fn {ship_type, count} ->
+      price = average_ship_price(game, ship_type)
+      {price, count}
+    end)
+    |> Enum.reject(&is_nil(elem(&1, 0)))
+    |> Enum.map(fn {price, count} -> price * count end)
+    |> Enum.sum()
+  end
 
-        %{
-          trade_symbol: item["symbol"],
-          units: item["units"],
-          total_cost: price_per_unit * item["units"]
-        }
-      end)
+  @doc """
+  Returns the credit value of all merchandise in the agent's fleet's cargo holds.
 
-    LedgerServer.start_ledger(
-      game.agent["symbol"],
-      game.agent["credits"],
-      starting_fleet_value,
-      starting_merchandise
-    )
+  Merchandise prices are averaged over the selling price from all known markets.
+  """
+  def merchandise_value(game) do
+    Enum.flat_map(game.fleet, fn {_id, ship} ->
+      ship["cargo"]["inventory"]
+    end)
+    |> Enum.map(fn item ->
+      price_per_unit =
+        average_selling_price(game, item["symbol"])
 
-    game
+      %{
+        trade_symbol: item["symbol"],
+        units: item["units"],
+        total_cost: price_per_unit * item["units"]
+      }
+    end)
   end
 
   def add_extraction(game, waypoint_symbol, extraction) do

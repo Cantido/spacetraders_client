@@ -16,6 +16,7 @@ defmodule SpacetradersClient.Application do
       Cldr.Currency,
       {SpacetradersClient.LedgerServer, []},
       {DynamicSupervisor, name: SpacetradersClient.AutomationSupervisor},
+      {DynamicSupervisor, name: SpacetradersClient.GameSupervisor},
       # Start the Finch HTTP client for sending emails
       {Finch, name: SpacetradersClient.Finch},
       # Start a worker by calling: SpacetradersClient.Worker.start_link(arg)
