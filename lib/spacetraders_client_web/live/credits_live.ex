@@ -53,8 +53,8 @@ defmodule SpacetradersClientWeb.CreditsLive do
           </div>
         </div>
 
-        <div class="flex flex-wrap gap-8">
-          <div class="shrink bg-base-300 p-4 rounded lg:basis-1/2">
+        <div class="flex flex-wrap gap-8 mb-4">
+          <div class="bg-base-300 p-4 rounded basis-1/2">
             <h4 class="text-xl font-bold mb-4">Assets (Past Hour)</h4>
 
               <%
@@ -73,20 +73,56 @@ defmodule SpacetradersClientWeb.CreditsLive do
                 }
                 }
               %>
-              <canvas id="credits-history" phx-hook="Chart" data-config={Jason.encode!(chart_cfg)}></canvas>
+              <div class="relative aspect-2/1">
+                <canvas id="credits-history" phx-hook="Chart" data-config={Jason.encode!(chart_cfg)}></canvas>
+              </div>
           </div>
 
-          <div class="bg-base-300 p-4 rounded grow">
+          <div class="flex-1 bg-base-300 p-4 rounded grow">
             <h4 class="text-xl font-bold mb-4">Income (Past Hour)</h4>
 
             <.income_statement ledger={ledger} />
           </div>
-          <div class="bg-base-300 p-4 rounded grow">
+          <div class="flex-1 bg-base-300 p-4 rounded grow">
             <h4 class="text-xl font-bold mb-4">Balances</h4>
 
             <.trial_balance_table ledger={ledger} />
           </div>
-          <.ledger_account_entries ledger={ledger} account_name="Cash" class="bg-base-300" />
+
+        </div>
+
+        <div class="bg-base-300 p-4 rounded">
+          <h4 class="text-xl font-bold mb-4">Accounts</h4>
+
+          <.radio_tablist name="transactions" class="tabs-lift">
+            <:tab label="Cash" active={true}>
+              <.ledger_account_entries ledger={ledger} account_name="Cash" class="bg-base-100" />
+            </:tab>
+            <:tab label="Fleet">
+              <.ledger_account_entries ledger={ledger} account_name="Fleet" class="bg-base-100" />
+            </:tab>
+            <:tab label="Merchandise">
+              <.ledger_account_entries ledger={ledger} account_name="Merchandise" class="bg-base-100" />
+            </:tab>
+            <:tab label="Sales">
+              <.ledger_account_entries ledger={ledger} account_name="Sales" class="bg-base-100" />
+            </:tab>
+            <:tab label="Natural Resources">
+              <.ledger_account_entries ledger={ledger} account_name="Natural Resources" class="bg-base-100" />
+            </:tab>
+            <:tab label="Starting Balances">
+              <.ledger_account_entries ledger={ledger} account_name="Starting Balances" class="bg-base-100" />
+            </:tab>
+            <:tab label="Cost of Merchandise Sold">
+              <.ledger_account_entries ledger={ledger} account_name="Cost of Merchandise Sold" class="bg-base-100" />
+            </:tab>
+            <:tab label="Construction Site Supply">
+              <.ledger_account_entries ledger={ledger} account_name="Construction Site Supply" class="bg-base-100" />
+            </:tab>
+            <:tab label="Fuel">
+              <.ledger_account_entries ledger={ledger} account_name="Fuel" class="bg-base-100" />
+            </:tab>
+          </.radio_tablist>
         </div>
 
       </.async_result>
@@ -239,7 +275,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
     %>
       <.live_component
         module={SpacetradersClientWeb.DataTableComponent}
-      id="income-statement"
+      id={"transactions-" <> @account_name}
       class={["table-zebra table-sm", @class]}
       initial_sort_key={:date}
       initial_sort_direction={:desc}

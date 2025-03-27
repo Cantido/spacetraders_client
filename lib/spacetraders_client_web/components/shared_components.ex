@@ -23,4 +23,33 @@ defmodule SpacetradersClientWeb.SharedComponents do
     </div>
     """
   end
+
+  attr :name, :string, required: true
+  attr :class, :string, default: nil
+  attr :rest, :global
+
+  slot :tab do
+    attr :label, :string, required: true
+    attr :active, :boolean
+    attr :class, :string
+  end
+
+  def radio_tablist(assigns) do
+    ~H"""
+    <div role="tablist" {@rest} class={["tabs", @class]}>
+      <%= for tab <- @tab do %>
+        <input
+          type="radio"
+          class="tab"
+          name={@name}
+          aria-label={tab.label}
+          checked={Map.get(tab, :active, false)}
+        />
+        <div class={["tab-content", Map.get(tab, :class)]} >
+          {render_slot(tab)}
+        </div>
+      <% end %>
+    </div>
+    """
+  end
 end
