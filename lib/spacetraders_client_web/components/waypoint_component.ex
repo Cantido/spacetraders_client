@@ -928,74 +928,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     {:ok, socket}
   end
 
-  def update(params, socket) do
-    socket =
-      assign(socket, params)
-
-    client = socket.assigns.client
-    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
-    PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
-    callsign = agent_body["data"]["symbol"]
-
-    waypoint_symbol = socket.assigns.waypoint_symbol
-    system_symbol = socket.assigns.system_symbol
-
-    socket =
-      socket
-      |> assign(%{
-        client: client,
-        agent: AsyncResult.ok(agent_body["data"])
-      })
-      |> assign_async(:agent_automaton, fn ->
-        case AutomationServer.automaton(callsign) do
-          {:ok, a} -> {:ok, %{agent_automaton: a}}
-          {:error, _} -> {:ok, %{agent_automaton: nil}}
-        end
-      end)
-      |> assign_async(:market, fn ->
-        case Systems.get_market(client, system_symbol, waypoint_symbol) do
-          {:ok, %{status: 200, body: body}} ->
-            {:ok, %{market: body["data"]}}
-
-          {:ok, %{status: 404}} ->
-            {:ok, %{market: nil}}
-        end
-      end)
-      |> assign_async(:shipyard, fn ->
-        case Systems.get_shipyard(client, system_symbol, waypoint_symbol) do
-          {:ok, %{status: 200, body: body}} ->
-            {:ok, %{shipyard: body["data"]}}
-
-          {:ok, %{status: 404}} ->
-            {:ok, %{shipyard: nil}}
-        end
-      end)
-      |> assign_async(:construction_site, fn ->
-        case Systems.get_construction_site(client, system_symbol, waypoint_symbol) do
-          {:ok, s} -> {:ok, %{construction_site: s.body["data"]}}
-          {:error, reason} -> {:error, reason}
-        end
-      end)
-      |> assign_async(:system, fn ->
-        case Systems.get_system(client, system_symbol) do
-          {:ok, s} -> {:ok, %{system: s.body["data"]}}
-          {:error, reason} -> {:error, reason}
-        end
-      end)
-      |> assign_async(:waypoint, fn ->
-        case Systems.get_waypoint(client, system_symbol, waypoint_symbol) do
-          {:ok, w} ->
-            {:ok, %{waypoint: w.body["data"]}}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end)
-      |> load_fleet()
-
-    {:ok, socket}
-  end
-
   def handle_event("select-waypoint-tab", %{"waypoint-tab" => waypoint_tab}, socket) do
     {:noreply, assign(socket, :waypoint_tab, waypoint_tab)}
   end
@@ -1016,47 +948,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     waypoint_symbol = socket.assigns.waypoint_symbol
 
     socket =
-      if Enum.any?(body["data"]["traits"], fn t -> t["symbol"] == "MARKETPLACE" end) do
-        assign_async(socket, :market, fn ->
-          case Systems.get_market(client, system_symbol, waypoint_symbol) do
-            {:ok, %{status: 200, body: body}} ->
-              {:ok, %{market: body["data"]}}
-
-            {:ok, %{status: 404}} ->
-              {:ok, %{market: nil}}
-          end
-        end)
-      else
-        socket
-        |> assign(:market, AsyncResult.ok(nil))
-        |> then(fn socket ->
-          if socket.assigns[:waypoint_tab] == "market" do
-            assign(socket, :waypoint_tab, "info")
-          else
-            socket
-          end
-        end)
-      end
-
-    socket =
-      if Enum.any?(body["data"]["traits"], fn t -> t["symbol"] == "SHIPYARD" end) do
-        assign_async(socket, :shipyard, fn ->
-          case Systems.get_shipyard(client, system_symbol, waypoint_symbol) do
-            {:ok, %{status: 200, body: body}} ->
-              {:ok, %{shipyard: body["data"]}}
-          end
-        end)
-      else
-        socket
-        |> assign(:shipyard, AsyncResult.ok(nil))
-        |> then(fn socket ->
-          if socket.assigns[:waypoint_tab] == "shipyard" do
-            assign(socket, :waypoint_tab, "info")
-          else
-            socket
-          end
-        end)
-      end
 
     socket =
       if body["data"]["isUnderConstruction"] do
@@ -1078,65 +969,23 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   def handle_async(:update_counter, _, socket) do
     socket =
-      assign(
-        socket,
-        :cooldown_remaining,
-        seconds_til_cooldown_expiration(
-          Enum.find(socket.assigns.fleet, fn s ->
-            s["symbol"] == socket.assigns.selected_ship_symbol
-          end)
+      if socket.assigns.fleet.ok? do
+        assign(
+          socket,
+          :cooldown_remaining,
+          seconds_til_cooldown_expiration(
+            Enum.find(socket.assigns.fleet, fn s ->
+              s["symbol"] == socket.assigns.selected_ship_symbol
+            end)
+          )
         )
-      )
+      else
+        socket
+      end
 
     socket = schedule_cooldown_update(socket)
 
     {:noreply, socket}
-  end
-
-  def handle_async(:load_fleet, {:ok, result}, socket) do
-    page = Map.fetch!(result.meta, "page")
-
-    socket =
-      if page == 1 do
-        assign(socket, :fleet, AsyncResult.loading(result.data))
-      else
-        assign(
-          socket,
-          :fleet,
-          AsyncResult.loading(socket.assigns.fleet, socket.assigns.fleet.loading ++ result.data)
-        )
-      end
-
-    socket =
-      if Enum.count(socket.assigns.fleet.loading) < Map.fetch!(result.meta, "total") do
-        load_fleet(socket, page + 1)
-      else
-        assign(socket, :fleet, AsyncResult.ok(socket.assigns.fleet, socket.assigns.fleet.loading))
-      end
-
-    {:noreply, socket}
-  end
-
-  defp load_fleet(socket, page \\ 1) do
-    client = socket.assigns.client
-
-    socket
-    |> assign(:fleet, AsyncResult.loading())
-    |> start_async(:load_fleet, fn ->
-      case Fleet.list_ships(client, page: page) do
-        {:ok, %{status: 200, body: body}} ->
-          %{
-            meta: body["meta"],
-            data: body["data"]
-          }
-
-        {:ok, resp} ->
-          {:error, resp}
-
-        err ->
-          err
-      end
-    end)
   end
 
   defp anything_to_sell?(fleet, market) do

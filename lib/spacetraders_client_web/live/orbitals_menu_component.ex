@@ -259,34 +259,4 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     </span>
     """
   end
-
-  def update(assigns, socket) do
-    socket = assign(socket, assigns)
-
-    client = socket.assigns.client
-    system_symbol = socket.assigns.system_symbol
-
-    socket =
-      socket
-      |> assign_async(:system, fn ->
-        case Systems.get_system(client, system_symbol) do
-          {:ok, s} -> {:ok, %{system: s.body["data"]}}
-          err -> err
-        end
-      end)
-      |> assign_async(:marketplaces, fn ->
-        case Systems.list_waypoints(client, system_symbol, traits: "MARKETPLACE") do
-          {:ok, w} -> {:ok, %{marketplaces: w.body["data"]}}
-          err -> err
-        end
-      end)
-      |> assign_async(:shipyards, fn ->
-        case Systems.list_waypoints(client, system_symbol, traits: "SHIPYARD") do
-          {:ok, w} -> {:ok, %{shipyards: w.body["data"]}}
-          err -> err
-        end
-      end)
-
-    {:ok, socket}
-  end
 end
