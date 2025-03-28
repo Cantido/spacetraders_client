@@ -1,5 +1,8 @@
 defmodule SpacetradersClientWeb.GameLoader do
-  use Phoenix.VerifiedRoutes, endpoint: SpacetradersClientWeb.Endpoint, router: SpacetradersClientWeb.Router
+  use Phoenix.VerifiedRoutes,
+    endpoint: SpacetradersClientWeb.Endpoint,
+    router: SpacetradersClientWeb.Router
+
   alias Phoenix.Component
   alias Phoenix.LiveView
   alias Phoenix.LiveView.AsyncResult
@@ -8,8 +11,14 @@ defmodule SpacetradersClientWeb.GameLoader do
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Systems
   alias SpacetradersClient.GameServer
+  alias SpacetradersClient.Repo
+
+  alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Game.Waypoint
 
   import Phoenix.LiveView
+
+  import Ecto.Query
 
   def on_mount(:agent, _params, %{"token" => token}, socket) do
     client = Client.new(token)
@@ -32,8 +41,7 @@ defmodule SpacetradersClientWeb.GameLoader do
           {:ok, agent_automaton} ->
             {:ok, %{agent_automaton: agent_automaton}}
 
-          {:error, reason} ->
-            dbg(reason)
+          {:error, _reason} ->
             {:ok, %{agent_automaton: nil}}
         end
       end)
@@ -54,7 +62,6 @@ defmodule SpacetradersClientWeb.GameLoader do
   def mount(:agent, _params, _token, socket) do
     {:halt, redirect(socket, to: ~p"/login")}
   end
-
 
   def attach_params_handler(socket) do
     socket
@@ -81,7 +88,10 @@ defmodule SpacetradersClientWeb.GameLoader do
       })
       |> then(fn socket ->
         if socket.assigns.fleet.ok? do
-          ship = Enum.find(socket.assigns.fleet.result, fn s -> s["symbol"] == socket.assigns.ship_symbol end)
+          ship =
+            Enum.find(socket.assigns.fleet.result, fn s ->
+              s["symbol"] == socket.assigns.ship_symbol
+            end)
 
           if !is_nil(ship) && ship["symbol"] != socket.assigns[:ship_symbol] do
             system_symbol = ship["nav"]["systemSymbol"]
@@ -93,7 +103,6 @@ defmodule SpacetradersClientWeb.GameLoader do
               system_symbol: system_symbol,
               waypoint_symbol: waypoint_symbol
             })
-
           else
             socket
           end
@@ -103,7 +112,8 @@ defmodule SpacetradersClientWeb.GameLoader do
       end)
       |> then(fn socket ->
         if is_binary(socket.assigns[:system_symbol]) do
-          if (socket.assigns.system.ok? && socket.assigns.system.result["symbol"] == socket.assigns[:system_symbol]) do
+          if socket.assigns.system.ok? &&
+               socket.assigns.system.result.symbol == socket.assigns[:system_symbol] do
             socket
           else
             load_system(socket, socket.assigns.system_symbol)
@@ -114,7 +124,8 @@ defmodule SpacetradersClientWeb.GameLoader do
       end)
       |> then(fn socket ->
         if is_binary(socket.assigns[:waypoint_symbol]) do
-          if (socket.assigns.waypoint.ok? && socket.assigns.waypoint.result["symbol"] == socket.assigns[:waypoint_symbol]) do
+          if socket.assigns.waypoint.ok? &&
+               socket.assigns.waypoint.result.symbol == socket.assigns[:waypoint_symbol] do
             socket
           else
             socket
@@ -137,6 +148,7 @@ defmodule SpacetradersClientWeb.GameLoader do
         ship: AsyncResult.loading(),
         system: AsyncResult.loading(),
         waypoint: AsyncResult.loading(),
+        waypoints: AsyncResult.loading(),
         marketplaces: AsyncResult.loading(),
         marketplace: AsyncResult.loading(),
         shipyards: AsyncResult.loading(),
@@ -147,7 +159,7 @@ defmodule SpacetradersClientWeb.GameLoader do
       socket
     end
     |> Component.assign(%{
-      fleet: AsyncResult.loading(),
+      fleet: AsyncResult.loading()
     })
     |> LiveView.start_async(:load_fleet, fn ->
       case Fleet.list_ships(client, page: page) do
@@ -173,14 +185,27 @@ defmodule SpacetradersClientWeb.GameLoader do
 
     socket
     |> Component.assign(%{
-      system: AsyncResult.loading([:system]),
-      marketplaces: AsyncResult.loading([:marketplaces]),
-      shipyards: AsyncResult.loading([:shipyards]),
+      system: AsyncResult.loading(),
+      waypoints: AsyncResult.loading(),
+      marketplaces: AsyncResult.loading(),
+      shipyards: AsyncResult.loading()
     })
     |> LiveView.start_async(:load_system, fn ->
-      case Systems.get_system(client, system_symbol) do
-        {:ok, s} -> %{data: s.body["data"]}
-        err -> err
+      if system = Repo.get(System, system_symbol) do
+        %{system: system}
+      else
+        case Systems.get_system(client, system_symbol) do
+          {:ok, s} ->
+            {:ok, system} =
+              %System{}
+              |> System.changeset(s.body["data"])
+              |> Repo.insert()
+
+            %{system: system, data: s.body["data"]}
+
+          err ->
+            err
+        end
       end
     end)
     |> LiveView.detach_hook(:load_system, :handle_async)
@@ -192,25 +217,30 @@ defmodule SpacetradersClientWeb.GameLoader do
     |> Component.assign(%{
       system: AsyncResult.loading(),
       marketplaces: AsyncResult.loading(),
-      shipyards: AsyncResult.loading(),
+      shipyards: AsyncResult.loading()
     })
     |> unload_waypoint()
   end
 
-  def load_waypoint(socket, system_symbol, waypoint_symbol) when is_binary(system_symbol) and is_binary(waypoint_symbol) do
-    client = socket.assigns.client
-
+  def load_waypoint(socket, system_symbol, waypoint_symbol)
+      when is_binary(system_symbol) and is_binary(waypoint_symbol) do
     socket
     |> unload_waypoint()
     |> LiveView.start_async({:load_waypoint, system_symbol, waypoint_symbol}, fn ->
-      case Systems.get_waypoint(client, system_symbol, waypoint_symbol) do
-        {:ok, %{body: body, status: 200}} -> %{data: body["data"]}
-        {:ok, %{body: body}} -> {:error, body["error"]}
-        err -> err
+      case Repo.get(Waypoint, waypoint_symbol) do
+        nil ->
+          {:error, :waypoint_not_found}
+
+        waypoint ->
+          {:ok, waypoint}
       end
     end)
     |> LiveView.detach_hook({:load_waypoint, system_symbol, waypoint_symbol}, :handle_async)
-    |> LiveView.attach_hook({:load_waypoint, system_symbol, waypoint_symbol}, :handle_async, &handle_async/3)
+    |> LiveView.attach_hook(
+      {:load_waypoint, system_symbol, waypoint_symbol},
+      :handle_async,
+      &handle_async/3
+    )
   end
 
   def unload_waypoint(socket) do
@@ -222,7 +252,6 @@ defmodule SpacetradersClientWeb.GameLoader do
       construction_site: AsyncResult.loading()
     })
   end
-
 
   def handle_async(:load_fleet, {:ok, result}, socket) do
     page = Map.fetch!(result.meta, "page")
@@ -266,14 +295,74 @@ defmodule SpacetradersClientWeb.GameLoader do
     {:halt, socket}
   end
 
-
-  def handle_async(:load_system, {:ok, result}, socket) do
+  def handle_async(:load_system, {:ok, %{system: %System{} = system} = result}, socket) do
     client = socket.assigns.client
-    system_symbol = result.data["symbol"]
+    system_symbol = system.symbol
 
     socket =
       socket
-      |> Component.assign(:system, AsyncResult.ok(socket.assigns.system, result.data))
+      |> Component.assign(
+        :system,
+        AsyncResult.ok(
+          socket.assigns.system,
+          Repo.preload(system, waypoints: [:orbits, :orbitals])
+        )
+      )
+      |> LiveView.start_async({:load_waypoints, system_symbol}, fn ->
+        Stream.iterate(1, &(&1 + 1))
+        |> Stream.map(fn page ->
+          Systems.list_waypoints(client, system_symbol, page: page)
+        end)
+        |> Enum.reduce_while([], fn page, waypoints ->
+          case page do
+            {:ok, %{body: body, status: 200}} ->
+              {:ok, new_waypoints} =
+                Repo.transaction(fn ->
+                  Enum.map(body["data"], fn wp ->
+                    if waypoint = Repo.get(Waypoint, wp["symbol"]) do
+                      waypoint
+                    else
+                      Ecto.build_assoc(system, :waypoints)
+                      |> Waypoint.changeset(wp)
+                      |> Repo.insert!(on_conflict: :nothing)
+                    end
+                  end)
+                end)
+
+              waypoint_count =
+                Ecto.assoc(system, :waypoints)
+                |> Repo.aggregate(:count)
+
+              if waypoint_count < Map.fetch!(body["meta"], "total") do
+                {:cont, waypoints ++ new_waypoints}
+              else
+                {:halt, {:ok, waypoints ++ new_waypoints}}
+              end
+
+            {:ok, result} ->
+              {:error, result}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+        end)
+        |> then(fn
+          {:ok, waypoints} ->
+            Map.get(result, :data, %{})
+            |> Map.get("waypoints", [])
+            |> Enum.each(fn wp ->
+              if is_binary(wp["orbits"]) do
+                from(w in Waypoint, where: w.symbol == ^wp["symbol"])
+                |> Repo.update_all(set: [orbits_waypoint_symbol: wp["orbits"]])
+              end
+            end)
+
+            {:ok, waypoints}
+
+          err ->
+            err
+        end)
+      end)
       |> LiveView.assign_async(:marketplaces, fn ->
         case Systems.list_waypoints(client, system_symbol, traits: "MARKETPLACE") do
           {:ok, w} -> {:ok, %{marketplaces: w.body["data"]}}
@@ -290,15 +379,33 @@ defmodule SpacetradersClientWeb.GameLoader do
     {:halt, socket}
   end
 
-  def handle_async({:load_waypoint, system_symbol, waypoint_symbol}, {:ok, result}, socket) do
+  def handle_async({:load_waypoints, _system_symbol}, {:ok, _waypoints}, socket) do
+    socket =
+      socket
+      |> Component.assign(%{
+        system:
+          AsyncResult.ok(
+            socket.assigns.system,
+            Repo.preload(socket.assigns.system.result, waypoints: [:orbits, :orbitals])
+          )
+      })
+
+    {:halt, socket}
+  end
+
+  def handle_async(
+        {:load_waypoint, system_symbol, waypoint_symbol},
+        {:ok, {:ok, %Waypoint{} = waypoint}},
+        socket
+      ) do
     client = socket.assigns.client
-    waypoint = result.data
+    waypoint = Repo.preload(waypoint, [:traits, :modifiers])
 
     socket =
       socket
-      |> Component.assign(:waypoint, AsyncResult.ok(socket.assigns.waypoint, waypoint))
+      |> Component.assign(:waypoint, AsyncResult.ok(waypoint))
       |> then(fn socket ->
-        if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "MARKETPLACE" end) do
+        if Enum.find(waypoint.traits, fn trait -> trait.symbol == "MARKETPLACE" end) do
           LiveView.assign_async(socket, :marketplace, fn ->
             case Systems.get_market(client, system_symbol, waypoint_symbol) do
               {:ok, m} -> {:ok, %{marketplace: m.body["data"]}}
@@ -310,7 +417,7 @@ defmodule SpacetradersClientWeb.GameLoader do
         end
       end)
       |> then(fn socket ->
-        if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "SHIPYARD" end) do
+        if Enum.find(waypoint.traits, fn trait -> trait.symbol == "SHIPYARD" end) do
           LiveView.assign_async(socket, :shipyard, fn ->
             case Systems.get_shipyard(client, system_symbol, waypoint_symbol) do
               {:ok, s} -> {:ok, %{shipyard: s.body["data"]}}
@@ -322,7 +429,7 @@ defmodule SpacetradersClientWeb.GameLoader do
         end
       end)
       |> then(fn socket ->
-        if waypoint["isUnderConstruction"] do
+        if waypoint.under_construction do
           LiveView.assign_async(socket, :construction_site, fn ->
             case Systems.get_construction_site(client, system_symbol, waypoint_symbol) do
               {:ok, %{status: 200, body: body}} ->
@@ -343,5 +450,4 @@ defmodule SpacetradersClientWeb.GameLoader do
   def handle_async(_event, _params, socket) do
     {:cont, socket}
   end
-
 end

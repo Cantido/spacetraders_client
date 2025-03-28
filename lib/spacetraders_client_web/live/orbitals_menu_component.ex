@@ -1,6 +1,8 @@
 defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   use SpacetradersClientWeb, :live_component
 
+  alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Repo
   alias SpacetradersClient.Systems
   alias Phoenix.LiveView.AsyncResult
   alias Phoenix.PubSub
@@ -35,42 +37,53 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
 
           <div class="w-72">
             <div class="bg-neutral-600 p-4 h-24 hover:link">
-              <.link patch={~p"/game/systems/#{system["symbol"]}"}>
-                <h1 class="text-xl font-bold bg-neutral-600">{system["name"]}</h1>
+              <.link patch={~p"/game/systems/#{system.symbol}"}>
+                <h1 class="text-xl font-bold bg-neutral-600">{system.name}</h1>
               </.link>
               <span class="text-sm font-mono">
-                  {system["symbol"]}
+                {system.symbol}
               </span>
             </div>
             <.menu
+              :let={waypoint_symbol}
               system={system}
               active_waypoint={@waypoint_symbol}
               class="bg-base-200 w-72"
-              :let={waypoint_symbol}
             >
               <:additional_waypoint_items :let={waypoint_symbol}>
-
                 <.async_result :let={fleet} assign={@fleet}>
                   <:loading></:loading>
                   <:failed :let={_failure}></:failed>
-                  <li :for={ship <- Enum.filter(fleet, fn ship -> ship["nav"]["waypointSymbol"] == waypoint_symbol end)} class="">
+                  <li
+                    :for={
+                      ship <-
+                        Enum.filter(fleet, fn ship ->
+                          ship["nav"]["waypointSymbol"] == waypoint_symbol
+                        end)
+                    }
+                    class=""
+                  >
                     <.link patch={~p"/game/fleet/#{ship["symbol"]}"} class="">
                       <Heroicons.rocket_launch solid class="w-6 h-6 text-primary" />
                       {ship["symbol"]}
                     </.link>
                   </li>
-                  </.async_result>
+                </.async_result>
               </:additional_waypoint_items>
               <.waypoint_item
                 symbol={waypoint_symbol}
-                type={Enum.find(system["waypoints"], fn wp -> wp["symbol"] == waypoint_symbol end)["type"]}
+                type={Enum.find(system.waypoints, fn wp -> wp.symbol == waypoint_symbol end).type}
                 active={waypoint_symbol == @waypoint_symbol}
               >
                 <:indicator>
                   <.async_result :let={shipyards} assign={@shipyards}>
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading shipyards.</:failed>
-                    <span :if={Enum.any?(shipyards, fn s -> s["symbol"] == waypoint_symbol end)} class="tooltip tooltip-left tooltip-info" data-tip="This waypoint has a shipyard">
+                    <span
+                      :if={Enum.any?(shipyards, fn s -> s["symbol"] == waypoint_symbol end)}
+                      class="tooltip tooltip-left tooltip-info"
+                      data-tip="This waypoint has a shipyard"
+                    >
                       <Heroicons.wrench_screwdriver mini class="mr-1 w-4 h-4 aspect-square" />
                     </span>
                   </.async_result>
@@ -79,7 +92,11 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
                   <.async_result :let={marketplaces} assign={@marketplaces}>
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading marketplaces.</:failed>
-                    <span :if={Enum.any?(marketplaces, fn m -> m["symbol"] == waypoint_symbol end)} class="tooltip tooltip-left tooltip-info" data-tip="This waypoint has a marketplace">
+                    <span
+                      :if={Enum.any?(marketplaces, fn m -> m["symbol"] == waypoint_symbol end)}
+                      class="tooltip tooltip-left tooltip-info"
+                      data-tip="This waypoint has a marketplace"
+                    >
                       <Heroicons.building_storefront mini class="mr-1 w-4 h-4 aspect-square" />
                     </span>
                   </.async_result>
@@ -97,7 +114,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     """
   end
 
-  attr :system, :map, required: true
+  attr :system, System, required: true
   attr :active_waypoint, :string, default: nil
   attr :class, :string, default: nil
 
@@ -124,7 +141,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     section_waypoints =
       get_primary_satellites(assigns.system)
       |> Enum.reduce(%{}, fn wp, sections_acc ->
-        if section_name = Map.get(type_sections, wp["type"]) do
+        if section_name = Map.get(type_sections, wp.type) do
           sections_acc
           |> Map.put_new(section_name, [])
           |> Map.update!(section_name, &[wp | &1])
@@ -139,24 +156,25 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     ~H"""
     <ul class={["menu", @class]}>
       <%= for %{name: section_name} <- @section_types do %>
-        <% in_section = Map.get(@section_waypoints, section_name, []) |> Enum.sort_by(fn wp -> wp["symbol"] end) %>
+        <% in_section =
+          Map.get(@section_waypoints, section_name, []) |> Enum.sort_by(fn wp -> wp.symbol end) %>
         <%= if Enum.any?(in_section) do %>
           <li>
             <details open>
-              <summary class="bg-base-300 font-bold my-2"><%= section_name %></summary>
+              <summary class="bg-base-300 font-bold my-2">{section_name}</summary>
               <ul>
                 <%= for waypoint <- in_section do %>
                   <.submenu
                     system={@system}
-                    waypoint_symbol={waypoint["symbol"]}
+                    waypoint_symbol={waypoint.symbol}
                     active_waypoint={@active_waypoint}
                   >
-                  <:additional_items :let={waypoint_symbol}>
-                    {render_slot(@additional_waypoint_items, waypoint_symbol)}
-                  </:additional_items>
-                  <:link_content :let={waypoint_symbol}>
-                    {render_slot(@inner_block, waypoint_symbol)}
-                  </:link_content>
+                    <:additional_items :let={waypoint_symbol}>
+                      {render_slot(@additional_waypoint_items, waypoint_symbol)}
+                    </:additional_items>
+                    <:link_content :let={waypoint_symbol}>
+                      {render_slot(@inner_block, waypoint_symbol)}
+                    </:link_content>
                   </.submenu>
                 <% end %>
               </ul>
@@ -179,21 +197,24 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     ~H"""
     <li class="my-1">
       <.link
-        patch={~p"/game/systems/#{@system["symbol"]}/waypoints/#{@waypoint_symbol}"}
+        patch={~p"/game/systems/#{@system.symbol}/waypoints/#{@waypoint_symbol}"}
         class={if @active_waypoint == @waypoint_symbol, do: ["menu-active"], else: []}
       >
         {render_slot(@link_content, @waypoint_symbol)}
-
       </.link>
       <ul>
         {render_slot(@additional_items, @waypoint_symbol)}
         <%= for waypoint <- get_satellites(@system, @waypoint_symbol) do %>
-          <.submenu system={@system} waypoint_symbol={waypoint["symbol"]} active_waypoint={@active_waypoint}>
+          <.submenu
+            system={@system}
+            waypoint_symbol={waypoint.symbol}
+            active_waypoint={@active_waypoint}
+          >
             <:additional_items :let={additional_wp_symbol}>
               {render_slot(@additional_items, additional_wp_symbol)}
             </:additional_items>
             <:link_content :let={waypoint_symbol}>
-            {render_slot(@link_content, waypoint_symbol)}
+              {render_slot(@link_content, waypoint_symbol)}
             </:link_content>
           </.submenu>
         <% end %>
@@ -203,11 +224,11 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   end
 
   defp get_primary_satellites(system) do
-    Enum.filter(system["waypoints"], fn wp -> is_nil(wp["orbits"]) end)
+    Enum.filter(system.waypoints, fn wp -> is_nil(wp.orbits) end)
   end
 
   defp get_satellites(system, waypoint_symbol) do
-    Enum.filter(system["waypoints"], fn wp -> wp["orbits"] == waypoint_symbol end)
+    Enum.filter(system.waypoints, fn wp -> wp.orbits_waypoint_symbol == waypoint_symbol end)
   end
 
   attr :type, :string, required: true
@@ -248,15 +269,34 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     ~H"""
     <.waypoint_icon type={@type} />
     <span class="flex flex-row items-center justify-between">
-      <span><%= @symbol %></span>
+      <span>{@symbol}</span>
 
       <span>
         <span :for={icon <- @indicator} class="w-4">
           {render_slot(icon)}
         </span>
       </span>
-
     </span>
     """
+  end
+
+  def mount(socket) do
+    {:ok, socket}
+  end
+
+  def update(assigns, socket) do
+    socket = assign(socket, assigns)
+
+    # system =
+    #   Repo.get(System, socket.assigns.system_symbol)
+    #   |> Repo.preload(waypoints: [:orbits, :orbitals])
+
+    # socket =
+    #   socket
+    #   |> assign(%{
+    #     system: AsyncResult.ok(system)
+    #   })
+
+    {:ok, socket}
   end
 end

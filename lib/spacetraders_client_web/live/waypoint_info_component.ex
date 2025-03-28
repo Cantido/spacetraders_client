@@ -4,13 +4,13 @@ defmodule SpacetradersClientWeb.WaypointInfoComponent do
   def traits(assigns) do
     ~H"""
     <ul class="flex flex-wrap gap-1">
-    <%= for trait <- @waypoint["traits"] do %>
+    <%= for trait <- @waypoint.traits do %>
       <li>
         <span
-          class={["tooltip tooltip-bottom w-max"] ++ badge_class_for_trait(trait["symbol"])}
-          data-tip={trait["description"]}
+          class={["tooltip tooltip-bottom w-max"] ++ badge_class_for_trait(trait.symbol)}
+          data-tip={trait.description}
         >
-          <%= trait["name"] %>
+          <%= trait.name %>
         </span>
       </li>
     <% end %>

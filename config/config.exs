@@ -22,7 +22,14 @@ config :spacetraders_client, SpacetradersClient.Cache,
   gc_cleanup_max_timeout: :timer.minutes(10)
 
 config :spacetraders_client,
+  ecto_repos: [SpacetradersClient.Repo],
   generators: [timestamp_type: :utc_datetime]
+
+config :spacetraders_client, SpacetradersClient.Repo,
+  database: "tmp/#{config_env()}.db",
+  migration_timestamps: [
+    type: :utc_datetime
+  ]
 
 config :ex_cldr,
   default_locale: "en",
@@ -52,13 +59,10 @@ config :spacetraders_client, SpacetradersClientWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :spacetraders_client, SpacetradersClient.Mailer, adapter: Swoosh.Adapters.Local
 
-config :tesla, Tesla.Middleware.Logger,
-  filter_headers: ["authorization"]
+config :tesla, Tesla.Middleware.Logger, filter_headers: ["authorization"]
 
 config :hammer,
-  backend: {Hammer.Backend.ETS,
-            [expiry_ms: 60_000 * 60 * 4,
-             cleanup_interval_ms: 60_000 * 10]}
+  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000 * 60 * 4, cleanup_interval_ms: 60_000 * 10]}
 
 # Configure esbuild (the version is required)
 config :esbuild,
@@ -81,8 +85,7 @@ config :tailwind,
     cd: Path.expand("..", __DIR__)
   ]
 
-config :phoenix_template, :format_encoders,
-  svg: Phoenix.HTML.Engine
+config :phoenix_template, :format_encoders, svg: Phoenix.HTML.Engine
 
 # Configures Elixir's Logger
 config :logger, :console,

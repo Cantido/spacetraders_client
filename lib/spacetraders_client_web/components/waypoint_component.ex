@@ -25,22 +25,18 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
         <header class="mb-2">
           <h1 class="text-2xl font-bold mb-2">
-            {waypoint["symbol"]}
+            {waypoint.symbol}
           </h1>
 
           <span class="opacity-50 text-xl font-normal">
-            {waypoint["type"]} in
+            {waypoint.type} in
             <.async_result :let={system} assign={@system}>
               <:loading>
                 <div class="skeleton h-6 w-56 inline-block align-middle"></div>
               </:loading>
-              <:failed :let={_failure}>
-                an unknown system
-              </:failed>
+              <:failed :let={_failure}>an unknown system</:failed>
               the
-              <.link patch={~p"/game/systems/#{system["symbol"]}"} class="link">
-                {system["name"]}
-              </.link>
+              <.link patch={~p"/game/systems/#{system.symbol}"} class="link">{system.name}</.link>
               system
             </.async_result>
           </span>
@@ -50,12 +46,12 @@ defmodule SpacetradersClientWeb.WaypointComponent do
           <SpacetradersClientWeb.WaypointInfoComponent.traits waypoint={waypoint} />
         </div>
         <div
-          :for={modifier <- waypoint["modifiers"]}
+          :for={modifier <- waypoint.modifiers}
           class="card bg-warning text-warning-content max-w-96 mb-4"
         >
           <div class="card-body">
-            <h2 class="card-title">{modifier["name"]}</h2>
-            <p>{modifier["description"]}</p>
+            <h2 class="card-title">{modifier.name}</h2>
+            <p>{modifier.description}</p>
           </div>
         </div>
 
@@ -85,7 +81,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             </div>
           </div>
 
-          <%= if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "MARKETPLACE" end) do %>
+          <%= if Enum.find(waypoint.traits, fn trait -> trait == "MARKETPLACE" end) do %>
             <a
               role="tab"
               class={if @waypoint_tab == "market", do: ["tab tab-active"], else: ["tab"]}
@@ -110,7 +106,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             </div>
         <% end %>
 
-          <%= if waypoint["type"] in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) do %>
+          <%= if waypoint.type in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) do %>
             <a
               role="tab"
               class={if @waypoint_tab == "mining", do: ["tab tab-active"], else: ["tab"]}
@@ -135,7 +131,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             </div>
           <% end %>
 
-          <%= if Enum.find(waypoint["traits"], fn trait -> trait["symbol"] == "SHIPYARD" end) do %>
+          <%= if Enum.find(waypoint.traits, fn trait -> trait.symbol == "SHIPYARD" end) do %>
             <a
               role="tab"
               class={if @waypoint_tab == "shipyard", do: ["tab tab-active"], else: ["tab"]}
@@ -186,7 +182,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   def info_tab_content(assigns) do
     ~H"""
-    <%= if @waypoint["isUnderConstruction"] do %>
+    <%= if @waypoint.under_construction do %>
       <div class="mb-8">
         <div class="font-bold text-lg mb-4">
           Construction Site
@@ -948,8 +944,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     waypoint_symbol = socket.assigns.waypoint_symbol
 
     socket =
-
-    socket =
+      socket =
       if body["data"]["isUnderConstruction"] do
         assign_async(socket, :construction_site, fn ->
           case Systems.get_construction_site(client, system_symbol, waypoint_symbol) do
@@ -1121,9 +1116,12 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   end
 
   defp distance(system, wp_a_symbol, wp_b_symbol) do
-    wp_a = Enum.find(system["waypoints"], fn w -> w["symbol"] == wp_a_symbol end)
-    wp_b = Enum.find(system["waypoints"], fn w -> w["symbol"] == wp_b_symbol end)
+    wp_a = Enum.find(system.waypoints, fn w -> w.symbol == wp_a_symbol end)
+    wp_b = Enum.find(system.waypoints, fn w -> w.symbol == wp_b_symbol end)
 
-    :math.sqrt(:math.pow(wp_a["x"] - wp_b["x"], 2) + :math.pow(wp_a["y"] - wp_b["y"], 2))
+    :math.sqrt(
+      :math.pow(wp_a.x_coordinate - wp_b.x_coordinate, 2) +
+        :math.pow(wp_a.y_coordinate - wp_b.y_coordinate, 2)
+    )
   end
 end
