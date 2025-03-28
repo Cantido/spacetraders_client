@@ -16,7 +16,7 @@
 
             <div>
               <.link class="hover:link" patch={~p"/game/agent"}>
-                <span class="font-mono text-lg"><%= agent["symbol"] %></span>
+                <span class="font-mono text-lg"><%= agent.symbol %></span>
               </.link>
             </div>
           </.async_result>
@@ -29,7 +29,7 @@
               <span style="font-variant: small-caps;">credits</span>
               <span class="text-sm">
                 <.link patch={~p"/game/credits"} class="hover:link">
-                <%= Number.to_string!(agent["credits"], format: :accounting, fractional_digits: 0) %>
+                <%= Number.to_string!(agent.credits, format: :accounting, fractional_digits: 0) %>
                 </.link>
               </span>
             </div>

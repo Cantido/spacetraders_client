@@ -42,6 +42,7 @@ defmodule SpacetradersClient.Game.Waypoint do
       x_coordinate: params["x"],
       y_coordinate: params["y"]
     })
+    |> unique_constraint(:symbol)
     |> cast_assoc(:modifiers)
     |> cast_assoc(:traits)
   end

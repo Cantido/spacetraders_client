@@ -58,14 +58,14 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
                     :for={
                       ship <-
                         Enum.filter(fleet, fn ship ->
-                          ship["nav"]["waypointSymbol"] == waypoint_symbol
+                          ship.nav_waypoint.symbol == waypoint_symbol
                         end)
                     }
                     class=""
                   >
-                    <.link patch={~p"/game/fleet/#{ship["symbol"]}"} class="">
+                    <.link patch={~p"/game/fleet/#{ship.symbol}"} class="">
                       <Heroicons.rocket_launch solid class="w-6 h-6 text-primary" />
-                      {ship["symbol"]}
+                      {ship.symbol}
                     </.link>
                   </li>
                 </.async_result>

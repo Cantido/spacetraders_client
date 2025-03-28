@@ -11,8 +11,14 @@ defmodule SpacetradersClientWeb.GameLive do
   alias SpacetradersClient.Systems
   alias SpacetradersClient.Contracts
   alias SpacetradersClient.Fleet
+  alias SpacetradersClient.Repo
+  alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Game.Waypoint
 
   alias Phoenix.PubSub
+
+  import Ecto.Query, except: [update: 3]
 
   require Logger
 
@@ -73,9 +79,8 @@ defmodule SpacetradersClientWeb.GameLive do
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
   def mount(params, _session, socket) do
-
     client = socket.assigns.client
-    agent_symbol = socket.assigns.agent.result["symbol"]
+    agent_symbol = socket.assigns.agent.result.symbol
 
     PubSub.subscribe(@pubsub, "agent:#{agent_symbol}")
 
@@ -103,9 +108,35 @@ defmodule SpacetradersClientWeb.GameLive do
         selected_waypoint_symbol: nil,
         selected_ship_symbol: nil,
         selected_survey_id: nil,
+        marketplaces: AsyncResult.loading(),
+        marketplace: AsyncResult.loading(),
+        shipyards: AsyncResult.loading(),
+        shipyard: AsyncResult.loading(),
+        construction_site: AsyncResult.loading()
       })
-      |> SpacetradersClientWeb.GameLoader.load_fleet()
-      |> SpacetradersClientWeb.GameLoader.attach_params_handler()
+      |> assign_async(:fleet, fn ->
+        {:ok,
+         %{
+           fleet:
+             Repo.all(from s in Ship, where: [agent_symbol: ^agent_symbol])
+             |> Repo.preload([:nav_waypoint])
+         }}
+      end)
+      |> assign_async(:system, fn ->
+        {:ok,
+         %{
+           system:
+             Repo.get(System, system_symbol)
+             |> Repo.preload(waypoints: [:orbits, :modifiers, :traits])
+         }}
+      end)
+      |> assign_async(:waypoint, fn ->
+        {:ok,
+         %{
+           waypoint:
+             Repo.get(Waypoint, waypoint_symbol) |> Repo.preload([:orbits, :modifiers, :traits])
+         }}
+      end)
 
     {:ok, socket}
   end

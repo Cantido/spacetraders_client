@@ -24,13 +24,19 @@ defmodule SpacetradersClient.Game.System do
   end
 
   def changeset(model, params) do
-    model
-    |> cast(params, [:name, :symbol, :type])
-    |> change(%{
+    params = %{
+      symbol: params["symbol"],
+      name: params["name"],
+      type: params["type"],
       sector_symbol: params["sectorSymbol"],
       x_coordinate: params["x"],
-      y_coordinate: params["y"]
-    })
-    |> validate_required([:name, :type, :sector_symbol, :x_coordinate, :y_coordinate])
+      y_coordinate: params["y"],
+      waypoints: params["waypoints"]
+    }
+
+    model
+    |> cast(params, [:name, :symbol, :type, :sector_symbol, :x_coordinate, :y_coordinate])
+    |> cast_assoc(:waypoints)
+    |> validate_required([:name, :symbol, :type, :sector_symbol, :x_coordinate, :y_coordinate])
   end
 end

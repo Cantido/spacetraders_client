@@ -386,7 +386,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
         </div>
 
         <% ships_in_system =
-          Enum.filter(fleet, fn ship -> ship["nav"]["systemSymbol"] == @system_symbol end) %>
+          Enum.filter(fleet, fn ship -> ship.nav_waypoint.system_symbol == @system_symbol end) %>
 
         <table class="table table-zebra table-fixed">
           <thead>
@@ -406,18 +406,18 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             <%= for ship <- ships_in_system do %>
               <tr>
                 <td>
-                  <.link class="link-hover" patch={~p"/game/fleet/#{ship["symbol"]}"}>
-                    {ship["registration"]["name"]}
+                  <.link class="link-hover" patch={~p"/game/fleet/#{ship.symbol}"}>
+                    {ship.symbol}
                   </.link>
                 </td>
                 <td>
                   <.link
                     class="link-hover"
                     patch={
-                      ~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}"
+                      ~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"
                     }
                   >
-                    {ship["nav"]["waypointSymbol"]}
+                    {ship.nav_waypoint.symbol}
                   </.link>
                 </td>
                 <td>
@@ -425,18 +425,18 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading the system.</:failed>
                     {trunc(
-                      Float.round(distance(system, @waypoint_symbol, ship["nav"]["waypointSymbol"]))
+                      Float.round(distance(system, @waypoint_symbol, ship.nav_waypoint.symbol))
                     )}u
                   </.async_result>
                 </td>
-                <td>{ship["registration"]["role"]}</td>
+                <td>{ship.registration_role}</td>
                 <td>
-                  {ship["nav"]["status"]}
+                  {ship.nav_status}
                 </td>
                 <td>{condition_percentage(ship)}%</td>
                 <td>
-                  <%= if ship["fuel"]["capacity"] > 0 do %>
-                    {trunc(Float.round(ship["fuel"]["current"] / ship["fuel"]["capacity"] * 100))}%
+                  <%= if ship.fuel_capacity > 0 do %>
+                    {trunc(Float.round(ship.fuel_current / ship.fuel_capacity * 100))}%
                   <% else %>
                     <span class="opacity-50 italic">No fuel tank</span>
                   <% end %>
@@ -447,11 +447,11 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                     <button
                       class="btn btn-sm btn-accent join-item"
                       phx-click="navigate-ship"
-                      phx-value-ship-symbol={ship["symbol"]}
+                      phx-value-ship-symbol={ship.symbol}
                       phx-value-system-symbol={@system_symbol}
                       phx-value-waypoint-symbol={@waypoint_symbol}
                       phx-value-flight-mode={@selected_flight_mode}
-                      disabled={ship["nav"]["status"] != "IN_ORBIT"}
+                      disabled={ship.nav_status != :in_orbit}
                     >
                       {@selected_flight_mode} here
                     </button>
@@ -484,16 +484,16 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                     <button
                       class="btn btn-sm btn-accent join-item"
                       phx-click="orbit-ship"
-                      phx-value-ship-symbol={ship["symbol"]}
-                      disabled={ship["nav"]["status"] in ["IN_ORBIT", "IN_TRANSIT"]}
+                      phx-value-ship-symbol={ship.symbol}
+                      disabled={ship.nav_status in ~w(in_orbit in_transit)a}
                     >
                       Undock
                     </button>
                     <button
                       class="btn btn-sm btn-accent join-item"
                       phx-click="dock-ship"
-                      phx-value-ship-symbol={ship["symbol"]}
-                      disabled={ship["nav"]["status"] in ["DOCKED", "IN_TRANSIT"]}
+                      phx-value-ship-symbol={ship.symbol}
+                      disabled={ship.nav_status in ~w(docked in_transit)a}
                     >
                       Dock
                     </button>
@@ -1006,14 +1006,15 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   end
 
   defp condition_percentage(ship) do
-    (ship["frame"]["condition"] +
-       ship["reactor"]["condition"] +
-       ship["engine"]["condition"])
-    |> then(fn sum ->
-      sum / 3 * 100
-    end)
-    |> Float.round(0)
-    |> trunc()
+    # (ship["frame"]["condition"] +
+    #    ship["reactor"]["condition"] +
+    #    ship["engine"]["condition"])
+    # |> then(fn sum ->
+    #   sum / 3 * 100
+    # end)
+    # |> Float.round(0)
+    # |> trunc()
+    100
   end
 
   defp deliveries_here(contracts, waypoint_symbol) do
