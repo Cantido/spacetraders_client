@@ -32,7 +32,8 @@ defmodule SpacetradersClientWeb.GameLoader do
           {:ok, agent_automaton} ->
             {:ok, %{agent_automaton: agent_automaton}}
 
-          _ ->
+          {:error, reason} ->
+            dbg(reason)
             {:ok, %{agent_automaton: nil}}
         end
       end)

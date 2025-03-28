@@ -39,28 +39,14 @@ defmodule SpacetradersClientWeb.AutomationLive do
     """
   end
 
-  def mount(_params, %{"token" => token}, socket) do
-    client = Client.new(token)
-    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
-    PubSub.subscribe(@pubsub, "agent:#{agent_body["data"]["symbol"]}")
+  on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
+  def mount(_params, _session, socket) do
     socket =
       socket
       |> assign(%{
-        app_section: :automation,
-        token: token,
-        client: client,
-        agent: AsyncResult.ok(agent_body["data"])
+        app_section: :automation
       })
-      |> assign_async(:agent_automaton, fn ->
-        case AutomationServer.automaton(agent_body["data"]["symbol"]) do
-          {:ok, automaton} ->
-            {:ok, %{agent_automaton: automaton}}
-
-          {:error, _reason} ->
-            {:ok, %{agent_automaton: nil}}
-        end
-      end)
 
     {:ok, socket}
   end

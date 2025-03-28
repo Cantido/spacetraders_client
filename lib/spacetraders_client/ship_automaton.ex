@@ -15,6 +15,7 @@ defmodule SpacetradersClient.ShipAutomaton do
     :tree,
     :current_action,
     :current_action_started_at,
+    :current_action_finished_at,
     alternative_actions: [],
     action_history: []
   ]
@@ -75,8 +76,7 @@ defmodule SpacetradersClient.ShipAutomaton do
             Enum.take([struct.current_action | history], 10)
           end)
           |> Map.put(:tree, nil)
-          |> Map.put(:current_action, nil)
-          |> Map.put(:current_action_started_at, nil)
+          |> Map.put(:current_action_finished_at, DateTime.utc_now())
 
         {struct, game}
     end

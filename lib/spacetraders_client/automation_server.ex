@@ -13,6 +13,8 @@ defmodule SpacetradersClient.AutomationServer do
 
   @pubsub SpacetradersClient.PubSub
 
+  defp name(agent_symbol), do: {:automation_server, agent_symbol}
+
   def start_link(opts) do
     token = Keyword.fetch!(opts, :token)
     client = Client.new(token)
@@ -23,7 +25,7 @@ defmodule SpacetradersClient.AutomationServer do
 
         opts = [token: token, callsign: callsign]
 
-        GenServer.start_link(__MODULE__, opts, name: {:global, callsign})
+        GenServer.start_link(__MODULE__, opts, name: {:global, name(callsign)})
 
       err ->
         {:error, err}
@@ -47,32 +49,32 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def stop(callsign) do
-    if is_pid(:global.whereis_name(callsign)) do
-      GenServer.stop({:global, callsign})
+    if is_pid(:global.whereis_name(name(callsign))) do
+      GenServer.stop({:global, name(callsign)})
     else
       {:error, :callsign_not_found}
     end
   end
 
   def current_task(callsign, ship_symbol) do
-    if is_pid(:global.whereis_name(callsign)) do
-      GenServer.call({:global, callsign}, {:get_task, ship_symbol}, 20_000)
+    if is_pid(:global.whereis_name(name(callsign))) do
+      GenServer.call({:global, name(callsign)}, {:get_task, ship_symbol}, 20_000)
     else
       {:error, :callsign_not_found}
     end
   end
 
   def automaton(callsign, ship_symbol) do
-    if is_pid(:global.whereis_name(callsign)) do
-      GenServer.call({:global, callsign}, {:get_automaton, ship_symbol}, 20_000)
+    if is_pid(:global.whereis_name(name(callsign))) do
+      GenServer.call({:global, name(callsign)}, {:get_automaton, ship_symbol}, 20_000)
     else
       {:error, :callsign_not_found}
     end
   end
 
   def automaton(callsign) do
-    if is_pid(:global.whereis_name(callsign)) do
-      GenServer.call({:global, callsign}, :get_automaton, 20_000)
+    if is_pid(:global.whereis_name(name(callsign))) do
+      GenServer.call({:global, name(callsign)}, :get_automaton, 20_000)
     else
       {:error, :callsign_not_found}
     end
@@ -164,7 +166,9 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   defp assign_automatons(state) do
-    automaton = AgentAutomaton.new(state.game_state)
+    Logger.debug("assigning automata")
+    {:ok, game_state} = GameServer.game(state.agent_symbol)
+    automaton = AgentAutomaton.new(game_state)
 
     Map.put(state, :automaton, automaton)
   end
