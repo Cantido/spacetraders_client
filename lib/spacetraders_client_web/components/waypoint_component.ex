@@ -10,6 +10,13 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.ShipAutomaton
 
+  alias SpacetradersClient.Game.Waypoint
+  alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Game.Market
+  alias SpacetradersClient.Repo
+
+  import Ecto.Query, except: [update: 3]
+
   @pubsub SpacetradersClient.PubSub
 
   attr :waypoint_symbol, :string, required: true
@@ -81,7 +88,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             </div>
           </div>
 
-          <%= if Enum.find(waypoint.traits, fn trait -> trait == "MARKETPLACE" end) do %>
+          <%= if Enum.find(waypoint.traits, fn trait -> trait.symbol == "MARKETPLACE" end) do %>
             <a
               role="tab"
               class={if @waypoint_tab == "market", do: ["tab tab-active"], else: ["tab"]}
@@ -510,13 +517,12 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   def market_tab_content(assigns) do
     ~H"""
-    <.async_result :let={market} assign={@market}>
-      <%= if market do %>
+      <%= if @market do %>
         <div class="mb-8">
           <SpacetradersClientWeb.WaypointMarketComponent.imports_exports
-            market={market}
-            system_symbol={@waypoint["systemSymbol"]}
-            waypoint_symbol={@waypoint["symbol"]}
+            market={@market}
+            system_symbol={@waypoint.system.symbol}
+            waypoint_symbol={@waypoint.symbol}
           />
         </div>
       <% end %>
@@ -529,8 +535,8 @@ defmodule SpacetradersClientWeb.WaypointComponent do
         <form phx-change="select-ship">
           <select class="select select-border w-72" name="ship-symbol">
             <%= for ship <- @ships_at_waypoint do %>
-              <option value={ship["symbol"]}>
-                {ship["registration"]["name"]}
+              <option value={ship.symbol}>
+                {ship.symbol}
               </option>
             <% end %>
           </select>
@@ -569,7 +575,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
       <%= case @market_action do %>
         <% "sell" -> %>
           <div>
-            <%= if anything_to_sell?(@ships_at_waypoint, market) do %>
+            <%= if anything_to_sell?(@ships_at_waypoint, @market) do %>
               <table class="table table-zebra">
                 <thead>
                   <tr>
@@ -583,7 +589,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                 <tbody>
                   <%= for ship <- @ships_at_waypoint do %>
                     <%= for item <- ship["cargo"]["inventory"] do %>
-                      <% sell_value = cargo_sell_value(market, item) %>
+                      <% sell_value = cargo_sell_value(@market, item) %>
                       <%= if is_integer(sell_value) do %>
                         <tr>
                           <td>{ship["registration"]["name"]}</td>
@@ -615,14 +621,13 @@ defmodule SpacetradersClientWeb.WaypointComponent do
           </div>
         <% "buy" -> %>
           <div>
-            <%= if market do %>
-              <%= if items = market["tradeGoods"] do %>
+            <%= if @market do %>
+              <%= if items = @market.trade_goods do %>
                 <SpacetradersClientWeb.WaypointMarketComponent.item_table items={items} />
               <% end %>
             <% end %>
           </div>
       <% end %>
-    </.async_result>
     """
   end
 
@@ -995,8 +1000,8 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   defp cargo_sell_value(market, inventory_item) do
     if market do
       trade_good =
-        Enum.find(market["tradeGoods"], fn trade_good ->
-          trade_good["symbol"] == inventory_item["symbol"]
+        Enum.find(market.trade_goods, fn trade_good ->
+          trade_good.item.symbol == inventory_item["symbol"]
         end)
 
       if is_map(trade_good) do
@@ -1124,5 +1129,36 @@ defmodule SpacetradersClientWeb.WaypointComponent do
       :math.pow(wp_a.x_coordinate - wp_b.x_coordinate, 2) +
         :math.pow(wp_a.y_coordinate - wp_b.y_coordinate, 2)
     )
+  end
+
+  def update(assigns, socket) do
+    socket = assign(socket, assigns)
+
+    system =
+      Repo.get(System, socket.assigns.system_symbol)
+      |> Repo.preload(:waypoints)
+
+    waypoint =
+      Repo.get(Waypoint, socket.assigns.waypoint_symbol)
+      |> Repo.preload([:system, :modifiers, :traits])
+
+    market =
+      Repo.get(Market, socket.assigns.waypoint_symbol)
+      |> Repo.preload(
+        imports: [:item],
+        exports: [:item],
+        exchanges: [:item],
+        trade_goods: [:item]
+      )
+
+    socket =
+      socket
+      |> assign(%{
+        system: AsyncResult.ok(system),
+        market: market,
+        waypoint: AsyncResult.ok(waypoint)
+      })
+
+    {:ok, socket}
   end
 end

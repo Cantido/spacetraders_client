@@ -17,6 +17,8 @@ defmodule SpacetradersClientWeb.GameLoader do
   alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Game.Market
+  alias SpacetradersClient.Game.Item
 
   import Phoenix.LiveView
 
@@ -101,13 +103,68 @@ defmodule SpacetradersClientWeb.GameLoader do
             if is_nil(Repo.get(System, system_symbol)) do
               {:ok, %{body: body, status: 200}} = Systems.get_system(client, system_symbol)
 
-              %System{}
-              |> System.changeset(body["data"])
-              |> Repo.insert!(on_conflict: :nothing)
+              system =
+                %System{}
+                |> System.changeset(body["data"])
+                |> Repo.insert!(on_conflict: :nothing)
+
+              waypoints =
+                Stream.iterate(1, &(&1 + 1))
+                |> Stream.map(fn page ->
+                  Systems.list_waypoints(client, system_symbol, page: page)
+                end)
+                |> Stream.map(fn page ->
+                  {:ok, %{body: body, status: 200}} = page
+
+                  body
+                end)
+                |> Enum.reduce_while([], fn page, waypoints ->
+                  {:ok, new_waypoints} =
+                    Repo.transaction(fn ->
+                      Enum.map(page["data"], fn waypoint ->
+                        Ecto.build_assoc(system, :waypoints)
+                        |> Waypoint.changeset(waypoint)
+                        |> Repo.insert!(on_conflict: :replace_all)
+                      end)
+                    end)
+
+                  acc_waypoints = waypoints ++ new_waypoints
+
+                  if Enum.count(acc_waypoints) < page["meta"]["total"] do
+                    {:cont, acc_waypoints}
+                  else
+                    {:halt, acc_waypoints}
+                  end
+                end)
 
               Enum.each(body["data"]["waypoints"], fn wp ->
                 from(w in Waypoint, where: [symbol: ^wp["symbol"]])
                 |> Repo.update_all(set: [orbits_waypoint_symbol: wp["orbits"]])
+              end)
+
+              from(w in Waypoint,
+                join: t in assoc(w, :traits),
+                where: [system_symbol: ^system_symbol],
+                where: t.symbol == "MARKETPLACE",
+                select: w.symbol
+              )
+              |> Repo.all()
+              |> Enum.map(fn waypoint_symbol ->
+                {:ok, %{body: body, status: 200}} =
+                  Systems.get_market(client, system_symbol, waypoint_symbol)
+
+                body["data"]["exports"]
+                |> Enum.concat(body["data"]["imports"])
+                |> Enum.concat(body["data"]["exchange"])
+                |> Enum.each(fn e ->
+                  %Item{}
+                  |> Item.changeset(e)
+                  |> Repo.insert!(on_conflict: :nothing)
+                end)
+
+                %Market{symbol: waypoint_symbol}
+                |> Market.changeset(body["data"])
+                |> Repo.insert!()
               end)
             end
           end)

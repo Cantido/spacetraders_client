@@ -2,6 +2,8 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   use SpacetradersClientWeb, :live_component
 
   alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Game.Market
+  alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Repo
   alias SpacetradersClient.Systems
   alias Phoenix.LiveView.AsyncResult
@@ -11,6 +13,8 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   alias SpacetradersClient.Client
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.ShipAutomaton
+
+  import Ecto.Query, except: [update: 3]
 
   attr :system_symbol, :string, required: true
   attr :waypoint_symbol, :string, default: nil
@@ -93,7 +97,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading marketplaces.</:failed>
                     <span
-                      :if={Enum.any?(marketplaces, fn m -> m["symbol"] == waypoint_symbol end)}
+                      :if={Enum.any?(marketplaces, fn m -> m.symbol == waypoint_symbol end)}
                       class="tooltip tooltip-left tooltip-info"
                       data-tip="This waypoint has a marketplace"
                     >
@@ -286,6 +290,21 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
 
   def update(assigns, socket) do
     socket = assign(socket, assigns)
+
+    markets =
+      Repo.all(
+        from m in Market,
+          join: w in Waypoint,
+          on: m.symbol == w.symbol,
+          join: s in assoc(w, :system),
+          where: s.symbol == ^socket.assigns.system_symbol
+      )
+
+    socket =
+      socket
+      |> assign(%{
+        marketplaces: AsyncResult.ok(markets)
+      })
 
     # system =
     #   Repo.get(System, socket.assigns.system_symbol)

@@ -23,8 +23,8 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
       <div class="flex-1">
         <div class="text-center font-bold mb-8">Imports</div>
 
-        <%= if Enum.any?(@market["imports"]) do %>
-          <.item_list items={@market["imports"]} />
+        <%= if Enum.any?(@market.imports) do %>
+          <.item_list items={@market.imports} />
         <% else %>
           <div class="text-center mt-16">No imports</div>
         <% end %>
@@ -33,8 +33,8 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
       <div class="flex-1">
         <div class="text-center font-bold mb-8">Exchanges</div>
 
-        <%= if Enum.any?(@market["exchange"]) do %>
-          <.item_list items={@market["exchange"]} />
+        <%= if Enum.any?(@market.exchanges) do %>
+          <.item_list items={@market.exchanges} />
         <% else %>
           <div class="text-center mt-16">No exchanges</div>
         <% end %>
@@ -43,8 +43,8 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
       <div class="flex-1">
         <div class="text-center font-bold mb-8">Exports</div>
 
-        <%= if Enum.any?(@market["exports"]) do %>
-          <.item_list items={@market["exports"]} />
+        <%= if Enum.any?(@market.exports) do %>
+          <.item_list items={@market.exports} />
         <% else %>
           <div class="text-center mt-16">No exports</div>
         <% end %>
@@ -59,7 +59,7 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
       <tbody>
       <%= for item <- @items do %>
         <tr>
-          <td><%= item["name"] %></td>
+          <td><%= item.item_symbol %></td>
         </tr>
       <% end %>
       </tbody>
@@ -82,10 +82,10 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
         <tbody>
         <%= for item <- @items do %>
           <tr>
-            <td><%= item["symbol"] %></td>
-            <td class="text-right"><%= item["tradeVolume"] %></td>
-            <td class="text-right"><%= item["purchasePrice"] %></td>
-            <td class="text-right"><%= item["sellPrice"] %></td>
+            <td><%= item.item_symbol %></td>
+            <td class="text-right"><%= item.trade_volume %></td>
+            <td class="text-right"><%= item.purchase_price %></td>
+            <td class="text-right"><%= item.sell_price %></td>
             <td class="text-right flex flex-row">
               <div class="join">
                 <button class="btn btn-xs btn-error join-item">Buy</button>
