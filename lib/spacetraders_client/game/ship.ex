@@ -88,7 +88,8 @@ defmodule SpacetradersClient.Game.Ship do
       cooldown_expires_at: params["cooldown"]["expiration"],
       cargo_capacity: params["cargo"]["capacity"],
       cargo_items:
-        Enum.map(params["cargo"]["inventory"], fn item ->
+        get_in(params, [Access.key("cargo", %{}), Access.key("inventory", [])])
+        |> Enum.map(fn item ->
           %{
             item: %{
               symbol: item["symbol"],
@@ -276,22 +277,22 @@ defmodule SpacetradersClient.Game.Ship do
     end
   end
 
-  def has_mining_laser?(_ship) do
+  def has_mining_laser?(ship) do
     # TODO
     # Enum.map(ship["mounts"], fn m -> m["symbol"] end)
     # |> Enum.any?(fn mount ->
     #   mount in ~w(MOUNT_MINING_LASER_I MOUNT_MINING_LASER_II MOUNT_MINING_LASER_III)
     # end)
-    false
+    ship.registration_role == "EXCAVATOR"
   end
 
-  def has_gas_siphon?(_ship) do
+  def has_gas_siphon?(ship) do
     # TODO
     # Enum.map(ship["mounts"], fn m -> m["symbol"] end)
     # |> Enum.any?(fn mount ->
     #   mount in ~w(MOUNT_GAS_SIPHON_I MOUNT_GAS_SIPHON_II MOUNT_GAS_SIPHON_III)
     # end)
-    false
+    ship.registration_role == "COMMAND"
   end
 
   def has_cargo_capacity?(ship) do

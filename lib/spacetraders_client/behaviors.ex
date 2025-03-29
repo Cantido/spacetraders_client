@@ -195,7 +195,7 @@ defmodule SpacetradersClient.Behaviors do
             {:ok, %{status: 200, body: body}} ->
               ship =
                 Repo.get(Ship, state.ship_symbol)
-                |> Ship.changeset(body["data"])
+                |> Ship.nav_changeset(body["data"]["nav"])
                 |> Repo.update!()
 
               PubSub.broadcast(
@@ -243,7 +243,7 @@ defmodule SpacetradersClient.Behaviors do
           {:ok, %{status: 200, body: body}} ->
             ship =
               Repo.get(Ship, state.ship_symbol)
-              |> Ship.changeset(body["data"])
+              |> Ship.nav_changeset(body["data"]["nav"])
               |> Repo.update!()
 
             PubSub.broadcast(
@@ -268,7 +268,7 @@ defmodule SpacetradersClient.Behaviors do
         {:ok, %{status: 200, body: body}} ->
           ship =
             Repo.get(Ship, state.ship_symbol)
-            |> Ship.nav_changeset(body["data"])
+            |> Ship.nav_changeset(body["data"]["nav"])
             |> Repo.update!()
 
           PubSub.broadcast(
@@ -330,12 +330,12 @@ defmodule SpacetradersClient.Behaviors do
                   agent =
                     Repo.get(Agent, ship.agent_symbol)
                     |> Agent.changeset(body["data"]["agent"])
-                    |> Repo.insert!()
+                    |> Repo.update!()
 
                   ship =
                     ship
-                    |> Ship.changeset(Map.take(body["data"], "fuel"))
-                    |> Repo.insert!()
+                    |> Ship.fuel_changeset(body["data"]["fuel"])
+                    |> Repo.update!()
 
                   tx = body["data"]["transaction"]
                   {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
@@ -429,11 +429,11 @@ defmodule SpacetradersClient.Behaviors do
         Map.get(state, :fuel_markets, [])
         |> List.first()
 
-      case Fleet.navigate_ship(state.client, state.ship_symbol, fuel_wp["symbol"]) do
+      case Fleet.navigate_ship(state.client, state.ship_symbol, fuel_wp.symbol) do
         {:ok, %{status: 200, body: body}} ->
           ship =
             Repo.get(Ship, state.ship_symbol)
-            |> Ship.changeset(body["data"])
+            |> Ship.nav_changeset(body["data"]["nav"])
             |> Repo.update!()
 
           PubSub.broadcast(
@@ -865,12 +865,12 @@ defmodule SpacetradersClient.Behaviors do
                 ship =
                   Repo.get(Ship, state.ship_symbol)
                   |> Ship.cargo_changeset(body["data"]["cargo"])
-                  |> Repo.insert!()
+                  |> Repo.update!()
 
                 agent =
                   Repo.get(Agent, ship.agent_symbol)
                   |> Agent.changeset(body["data"]["agent"])
-                  |> Repo.insert!()
+                  |> Repo.update!()
 
                 # TODO: reload market
 

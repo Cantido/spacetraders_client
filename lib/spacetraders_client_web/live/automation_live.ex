@@ -59,24 +59,8 @@ defmodule SpacetradersClientWeb.AutomationLive do
   end
 
   def handle_event("stop-automation", _params, socket) do
-    :ok = AutomationServer.stop(socket.assigns.agent.result["symbol"])
+    :ok = AutomationServer.stop(socket.assigns.agent.result.symbol)
 
-    {:noreply, socket}
-  end
-
-  def handle_info({:automation_starting, _}, socket) do
-    {:noreply, assign(socket, :agent_automaton, AsyncResult.loading())}
-  end
-
-  def handle_info({:automaton_stopped, _automaton}, socket) do
     {:noreply, assign(socket, :agent_automaton, AsyncResult.ok(nil))}
-  end
-
-  def handle_info({:automation_started, automaton}, socket) do
-    {:noreply, assign(socket, :agent_automaton, AsyncResult.ok(automaton))}
-  end
-
-  def handle_info(_, socket) do
-    {:noreply, socket}
   end
 end

@@ -107,7 +107,7 @@ defmodule SpacetradersClient.AutomationServer do
       {:automation_started, state.automaton}
     )
 
-    timer = Process.send_after(self(), :reload_game, :timer.minutes(5))
+    timer = Process.send_after(self(), :reload_game, :timer.minutes(15))
 
     {:noreply, Map.put(state, :reload_timer, timer), {:continue, :schedule_tick}}
   end
@@ -164,7 +164,7 @@ defmodule SpacetradersClient.AutomationServer do
     PubSub.broadcast(
       @pubsub,
       "agent:#{state.agent_symbol}",
-      {:automation_stopped, state.automaton}
+      {:automation_stopped, state[:automaton]}
     )
 
     :ok

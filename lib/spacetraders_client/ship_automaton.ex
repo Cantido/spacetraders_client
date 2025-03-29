@@ -478,7 +478,7 @@ defmodule SpacetradersClient.ShipAutomaton do
       fuel_cost: fuel_cost,
       time_required: travel_time + @mining_cooldown
     })
-    |> ShipTask.add_condition(fn ship -> fuel_consumed < ship["fuel"]["capacity"] end)
+    |> ShipTask.add_condition(fn ship -> fuel_consumed < ship.fuel_capacity end)
   end
 
   defp estimate_costs(_struct, ship, %ShipTask{name: :siphon_resources} = task) do
@@ -497,7 +497,7 @@ defmodule SpacetradersClient.ShipAutomaton do
       fuel_cost: fuel_cost,
       time_required: travel_time + @mining_cooldown
     })
-    |> ShipTask.add_condition(fn ship -> fuel_consumed < ship["fuel"]["capacity"] end)
+    |> ShipTask.add_condition(fn ship -> fuel_consumed < ship.fuel_capacity end)
   end
 
   defp estimate_costs(_struct, ship, %ShipTask{name: :goto} = task) do

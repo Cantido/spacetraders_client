@@ -5,6 +5,7 @@ defmodule SpacetradersClientWeb.GameLoader do
 
   alias Phoenix.Component
   alias Phoenix.LiveView.AsyncResult
+  alias Phoenix.LiveView
   alias SpacetradersClient.Client
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Fleet
@@ -33,9 +34,6 @@ defmodule SpacetradersClientWeb.GameLoader do
       |> Agent.changeset(agent_body["data"])
       |> Repo.insert!(on_conflict: {:replace, [:credits]})
 
-    # {:ok, _} = GameServer.ensure_started(agent_symbol, token)
-    # :ok = SpacetradersClient.LedgerServer.ensure_started(agent_symbol)
-
     socket =
       socket
       |> Component.assign(%{
@@ -43,19 +41,19 @@ defmodule SpacetradersClientWeb.GameLoader do
         client: client,
         agent: AsyncResult.ok(agent),
         agent_symbol: agent.symbol,
-        agent_automaton: AsyncResult.loading(),
+        # agent_automaton: AsyncResult.loading(),
         ledger: AsyncResult.loading()
       })
+      |> LiveView.assign_async(:agent_automaton, fn ->
+        case SpacetradersClient.AutomationServer.automaton(agent.symbol) do
+          {:ok, agent_automaton} ->
+            {:ok, %{agent_automaton: agent_automaton}}
 
-    # |> LiveView.assign_async(:agent_automaton, fn ->
-    #   case SpacetradersClient.AutomationServer.automaton(agent_symbol) do
-    #     {:ok, agent_automaton} ->
-    #       {:ok, %{agent_automaton: agent_automaton}}
+          {:error, _reason} ->
+            {:ok, %{agent_automaton: nil}}
+        end
+      end)
 
-    #     {:error, _reason} ->
-    #       {:ok, %{agent_automaton: nil}}
-    #   end
-    # end)
     # |> LiveView.assign_async(:ledger, fn ->
     #   case SpacetradersClient.LedgerServer.ledger(agent_symbol) do
     #     {:ok, ledger} ->

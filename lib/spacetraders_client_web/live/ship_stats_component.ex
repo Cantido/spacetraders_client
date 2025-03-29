@@ -72,14 +72,14 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             Orbiting
             <.link
               class="link"
-              patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{@ship["nav"]["waypointSymbol"]}"}
+              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint_symbol}"}
             >
-              <%= get_in(@ship, ~w(nav waypointSymbol)) %>
+              <%= @ship.nav_waypoint_symbol %>
             </.link>
           </div>
           <div class="stat-actions">
             <button class="btn btn-neutral" disabled>Undock</button>
-            <button phx-click="dock-ship" phx-value-ship-symbol={@ship["symbol"]} class="btn btn-neutral">Dock</button>
+            <button phx-click="dock-ship" phx-value-ship-symbol={@ship.symbol} class="btn btn-neutral">Dock</button>
           </div>
         <% :docked -> %>
           <div class="stat-value">
