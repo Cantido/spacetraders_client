@@ -576,7 +576,7 @@ defmodule SpacetradersClientWeb.CoreComponents do
   attr :name, :string, required: true
   attr :hex, :string, default: "ffffff"
   attr :size, :integer, default: 32
-  attr :class, :string
+  attr :class, :string, default: nil
 
   def icon(%{name: "game-" <> name} = assigns) do
     assigns = assign(assigns, :game_icon, name)
