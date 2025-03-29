@@ -3,12 +3,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   alias SpacetradersClient.Systems
   alias Phoenix.LiveView.AsyncResult
-  alias Phoenix.PubSub
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.AutomationServer
-  alias SpacetradersClient.Client
-  alias SpacetradersClient.Fleet
-  alias SpacetradersClient.ShipAutomaton
 
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.System
@@ -18,8 +12,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   alias SpacetradersClient.Repo
 
   import Ecto.Query, except: [update: 3]
-
-  @pubsub SpacetradersClient.PubSub
 
   attr :waypoint_symbol, :string, required: true
   attr :contracts, :list, default: []
@@ -891,7 +883,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     waypoint_symbol = socket.assigns.waypoint_symbol
 
     socket =
-      socket =
       if body["data"]["isUnderConstruction"] do
         assign_async(socket, :construction_site, fn ->
           case Systems.get_construction_site(client, system_symbol, waypoint_symbol) do
@@ -952,7 +943,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     end
   end
 
-  defp condition_percentage(ship) do
+  defp condition_percentage(_ship) do
     # (ship["frame"]["condition"] +
     #    ship["reactor"]["condition"] +
     #    ship["engine"]["condition"])
@@ -971,21 +962,6 @@ defmodule SpacetradersClientWeb.WaypointComponent do
           delivery["destinationSymbol"] == waypoint_symbol
         end)
     end)
-  end
-
-  defp ships_with_deliverables(fleet, contracts) do
-    Enum.filter(fleet, fn ship ->
-      Enum.any?(contracts, fn contract ->
-        deliverables(ship, contract)
-      end)
-    end)
-  end
-
-  defp deliverables(ship, contract) do
-    Enum.map(contract["terms"]["deliver"], fn deliverable ->
-      cargo_item(ship, deliverable["tradeSymbol"])
-    end)
-    |> Enum.reject(&is_nil/1)
   end
 
   defp ships_with_cargo(fleet, item_symbol) do

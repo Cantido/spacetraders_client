@@ -11,21 +11,22 @@ defmodule SpacetradersClient.Actions.TradeGoods do
     :end_flight_mode
   ]
 
-
   defimpl SpacetradersClient.Action do
-    alias SpacetradersClient.Ship
+    alias SpacetradersClient.Game.Agent
+    alias SpacetradersClient.Game.Ship
     alias SpacetradersClient.Game
     alias SpacetradersClient.Actions.TradeGoods
+    alias SpacetradersClient.Repo
 
-    @average_fuel_price 2 # per fuel unit, not market unit!!
+    # per fuel unit, not market unit!!
+    @average_fuel_price 2
 
-    def customize(%TradeGoods{} = action, game, ship_symbol) do
-      ship = Game.ship(game, ship_symbol)
-
-      cargo_space = ship["cargo"]["capacity"] - ship["cargo"]["units"]
+    def customize(%TradeGoods{} = action, ship) do
+      cargo_space = ship.cargo_capacity - Ship.cargo_current(ship)
+      agent = Repo.get(Agent, ship.agent_symbol)
 
       units =
-        (max(game.agent["credits"] - 5_000, 0) / action.buy_price)
+        (max(agent.credits - 5_000, 0) / action.buy_price)
         |> min(cargo_space)
         |> min(action.market_volume)
         |> trunc()
@@ -33,27 +34,30 @@ defmodule SpacetradersClient.Actions.TradeGoods do
       %{action | units: units}
     end
 
-    def variations(%TradeGoods{} = action, _game, _ship_symbol) do
-      ~w(CRUISE DRIFT)
+    def variations(%TradeGoods{} = action, _ship) do
+      ~w(cruise drift)a
       |> Enum.flat_map(fn start_flight_mode ->
-        ~w(CRUISE DRIFT)
+        ~w(cruise drift)a
         |> Enum.map(fn end_flight_mode ->
           %{action | start_flight_mode: start_flight_mode, end_flight_mode: end_flight_mode}
         end)
       end)
     end
 
+    def decision_factors(%TradeGoods{} = action, %Ship{} = ship) do
+      distance_to_start =
+        Game.distance_between(ship.nav_waypoint_symbol, action.buy_waypoint_symbol)
 
-    def decision_factors(%TradeGoods{} = action, game, ship_symbol) do
-      ship = Game.ship(game, ship_symbol)
+      start_fuel_consumption =
+        Ship.fuel_cost(distance_to_start) |> Map.fetch!(action.start_flight_mode)
 
-      distance_to_start = Game.distance_between(game, ship["nav"]["waypointSymbol"], action.buy_waypoint_symbol)
-
-      start_fuel_consumption = Ship.fuel_cost(distance_to_start) |> Map.fetch!(action.start_flight_mode)
       start_fuel_cost = @average_fuel_price * start_fuel_consumption
-      start_leg_time = Ship.travel_time(ship, distance_to_start) |> Map.fetch!(action.start_flight_mode)
 
-      distance_to_end  = Game.distance_between(game, action.buy_waypoint_symbol, action.sell_waypoint_symbol)
+      start_leg_time =
+        Ship.travel_time(ship, distance_to_start) |> Map.fetch!(action.start_flight_mode)
+
+      distance_to_end =
+        Game.distance_between(action.buy_waypoint_symbol, action.sell_waypoint_symbol)
 
       end_fuel_consumption = Ship.fuel_cost(distance_to_end) |> Map.fetch!(action.end_flight_mode)
       end_fuel_cost = @average_fuel_price * end_fuel_consumption

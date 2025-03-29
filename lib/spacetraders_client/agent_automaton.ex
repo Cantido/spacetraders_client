@@ -1,20 +1,22 @@
 defmodule SpacetradersClient.AgentAutomaton do
   alias SpacetradersClient.ShipAutomaton
-  alias SpacetradersClient.Game
+  alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Repo
+
+  import Ecto.Query
 
   require Logger
 
-  defstruct [
-    ship_automata: %{}
-  ]
+  defstruct ship_automata: %{}
 
-  def new(%Game{} = game) do
+  def new(agent_symbol) do
     automata =
-      game.fleet
-      |> Enum.map(fn {ship_symbol, ship} ->
+      from(s in Ship, where: [agent_symbol: ^agent_symbol])
+      |> Repo.all()
+      |> Enum.map(fn ship ->
         automaton = ShipAutomaton.new(ship)
 
-        {ship_symbol, automaton}
+        {ship.symbol, automaton}
       end)
       |> Enum.reject(fn {_symbol, automaton} -> is_nil(automaton) end)
       |> Map.new()
@@ -24,9 +26,9 @@ defmodule SpacetradersClient.AgentAutomaton do
     }
   end
 
-  def tick(%__MODULE__{} = struct, %Game{} = game) do
-    Enum.reduce(struct.ship_automata, {struct, game}, fn {ship_symbol, automaton}, {struct, game} ->
-      {automaton, game} = ShipAutomaton.tick(automaton, game)
+  def tick(%__MODULE__{} = struct, client) do
+    Enum.reduce(struct.ship_automata, struct, fn {ship_symbol, automaton}, struct ->
+      automaton = ShipAutomaton.tick(automaton, client)
 
       struct =
         struct
@@ -34,7 +36,7 @@ defmodule SpacetradersClient.AgentAutomaton do
           Map.put(automata, ship_symbol, automaton)
         end)
 
-      {struct, game}
+      struct
     end)
   end
 
@@ -45,6 +47,7 @@ defmodule SpacetradersClient.AgentAutomaton do
 
         {ship_symbol, new_automaton}
       end)
+
     %{struct | ship_automata: automata}
   end
 end

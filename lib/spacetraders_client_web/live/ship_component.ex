@@ -1,10 +1,7 @@
 defmodule SpacetradersClientWeb.ShipComponent do
   use SpacetradersClientWeb, :live_component
 
-  alias Phoenix.LiveView.AsyncResult
-  alias SpacetradersClient.Systems
   alias SpacetradersClient.ShipAutomaton
-  alias SpacetradersClient.AutomationServer
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
   alias SpacetradersClientWeb.ShipStatsComponent

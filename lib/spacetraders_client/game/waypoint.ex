@@ -79,4 +79,11 @@ defmodule SpacetradersClient.Game.Waypoint do
     end)
     |> assoc_constraint(:orbits)
   end
+
+  def distance(%__MODULE__{} = a, %__MODULE__{} = b) do
+    :math.sqrt(
+      :math.pow(a.x_coordinate - b.x_coordinate, 2) +
+        :math.pow(a.y_coordinate - b.y_coordinate, 2)
+    )
+  end
 end

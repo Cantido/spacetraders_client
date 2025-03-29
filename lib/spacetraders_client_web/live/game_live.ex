@@ -1,14 +1,10 @@
 defmodule SpacetradersClientWeb.GameLive do
   use SpacetradersClientWeb, :live_view
 
-  alias SpacetradersClient.Cldr.Number
   alias SpacetradersClient.LedgerServer
   alias Phoenix.LiveView.Socket
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Fleet
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.Client
-  alias SpacetradersClient.Systems
   alias SpacetradersClient.Contracts
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Repo
@@ -67,7 +63,6 @@ defmodule SpacetradersClientWeb.GameLive do
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
   def mount(params, _session, socket) do
-    client = socket.assigns.client
     agent_symbol = socket.assigns.agent.result.symbol
 
     PubSub.subscribe(@pubsub, "agent:#{agent_symbol}")
@@ -81,7 +76,6 @@ defmodule SpacetradersClientWeb.GameLive do
 
     system_symbol = params["system_symbol"]
     waypoint_symbol = params["waypoint_symbol"]
-    ship_symbol = params["ship_symbol"]
 
     socket =
       socket
@@ -539,24 +533,6 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, socket}
   end
 
-  def handle_async(:load_waypoints, {:ok, results}, socket) do
-    socket =
-      Enum.reduce(results.data, socket, fn waypoint, socket ->
-        update(socket, :waypoints, fn waypoints ->
-          Map.put(waypoints, waypoint["symbol"], waypoint)
-        end)
-      end)
-
-    socket =
-      if Enum.count(socket.assigns.waypoints) < results.meta["total"] do
-        load_waypoints(socket, results.meta["page"] + 1)
-      else
-        socket
-      end
-
-    {:noreply, socket}
-  end
-
   def handle_info({:ledger_updated, ledger}, socket) do
     socket =
       assign(socket, :ledger, ledger)
@@ -673,47 +649,5 @@ defmodule SpacetradersClientWeb.GameLive do
     contracts = update_contract(socket.assigns.contracts, contract_id, contract_update_fn)
 
     assign(socket, :contracts, contracts)
-  end
-
-  defp load_waypoints(socket, page \\ 1) when is_integer(page) and page > 0 do
-    symbol = socket.assigns.system_symbol
-    client = socket.assigns.client
-
-    start_async(socket, :load_waypoints, fn ->
-      case Systems.list_waypoints(client, symbol, page: page) do
-        {:ok, %{status: 200, body: body}} ->
-          %{
-            meta: body["meta"],
-            data: body["data"]
-          }
-
-        {:ok, resp} ->
-          {:error, resp}
-
-        err ->
-          err
-      end
-    end)
-  end
-
-  defp load_contract(socket) do
-    id = socket.assigns.contract_id
-    client = socket.assigns.client
-
-    socket =
-      assign_async(socket, :contract, fn ->
-        case Contracts.get_contract(client, id) do
-          {:ok, %{status: 200, body: body}} ->
-            {:ok, %{contract: body["data"]}}
-
-          {:ok, resp} ->
-            {:error, resp}
-
-          err ->
-            err
-        end
-      end)
-
-    socket
   end
 end

@@ -2,7 +2,6 @@ defmodule SpacetradersClientWeb.FleetLive do
   use SpacetradersClientWeb, :live_view
 
   alias Phoenix.LiveView.AsyncResult
-  alias SpacetradersClient.Game
   alias SpacetradersClient.ShipAutomaton
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
@@ -112,10 +111,6 @@ defmodule SpacetradersClientWeb.FleetLive do
     ~H"""
     <span id={@id} phx-hook="Stopwatch" data-since={DateTime.to_iso8601(@start)}></span>
     """
-  end
-
-  defp format_time_part(n) do
-    Integer.to_string(n) |> String.pad_leading(2, "0")
   end
 
   defp current_automation_task(nil), do: nil

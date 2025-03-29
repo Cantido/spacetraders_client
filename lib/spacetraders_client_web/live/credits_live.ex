@@ -3,18 +3,8 @@ defmodule SpacetradersClientWeb.CreditsLive do
 
   alias Phoenix.LiveView.AsyncResult
   alias Phoenix.PubSub
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.Client
-  alias SpacetradersClient.Fleet
-  alias SpacetradersClient.AutomationServer
-  alias SpacetradersClient.AutomationSupervisor
-  alias SpacetradersClient.AgentAutomaton
-  alias SpacetradersClient.ShipAutomaton
-  alias SpacetradersClient.LedgerServer
   alias Motocho.Journal
-  alias SpacetradersClient.Cldr.Number
   alias Motocho.Statements
-  alias Motocho.Account
   alias Motocho.Ledger
 
   @pubsub SpacetradersClient.PubSub
@@ -399,7 +389,6 @@ defmodule SpacetradersClientWeb.CreditsLive do
     {:noreply, socket}
   end
 
-
   def money_ratio(%Money{} = numerator, %Money{} = denominator) do
     {:XST, numerator_int, _, _} = Money.to_integer_exp(numerator)
     {:XST, denominator_int, _, _} = Money.to_integer_exp(denominator)
@@ -427,8 +416,6 @@ defmodule SpacetradersClientWeb.CreditsLive do
       Enum.filter(ledger.accounts, fn {_id, account} ->
         account.type == type
       end)
-
-    account_ids = Enum.map(accounts, fn {id, _acct} -> id end)
 
     journals =
       ledger.transactions

@@ -4,9 +4,7 @@ defmodule SpacetradersClient.Utility do
   alias SpacetradersClient.ShipTask
 
   @derive Jason.Encoder
-  defstruct [
-    factors: []
-  ]
+  defstruct factors: []
 
   def new, do: %__MODULE__{}
 
@@ -25,7 +23,7 @@ defmodule SpacetradersClient.Utility do
     end
   end
 
-  def score(_game, _ship_symbol, %ShipTask{name: :buying} = task) do
+  def score(_ship, %ShipTask{name: :buying} = task) do
     if task.args.total_profit > 0 do
       new()
       |> DecisionFactors.profit(task.args.total_profit)
@@ -35,7 +33,7 @@ defmodule SpacetradersClient.Utility do
     end
   end
 
-  def score(_game, _ship_symbol, %ShipTask{name: :selling} = task) do
+  def score(_ship, %ShipTask{name: :selling} = task) do
     if task.args.total_profit > 0 do
       new()
       |> DecisionFactors.profit(task.args.total_profit)
@@ -46,13 +44,13 @@ defmodule SpacetradersClient.Utility do
     end
   end
 
-  def score(_game, _ship_symbol, %ShipTask{name: :deliver_construction_materials} = task) do
+  def score(_ship, %ShipTask{name: :deliver_construction_materials} = task) do
     new()
     |> DecisionFactors.time(task.args.time_required)
     |> DecisionFactors.construction_supply(task.args.units)
   end
 
-  def score(_game, _ship_symbol, %ShipTask{name: :trade} = task) do
+  def score(_ship, %ShipTask{name: :trade} = task) do
     if task.args.total_profit > 0 do
       new()
       |> DecisionFactors.profit(task.args.total_profit)
@@ -63,7 +61,7 @@ defmodule SpacetradersClient.Utility do
     end
   end
 
-  def score(_game, _ship_symbol, %ShipTask{name: :pickup} = task) do
+  def score(_ship, %ShipTask{name: :pickup} = task) do
     if task.args.total_profit > 0 do
       new()
       |> DecisionFactors.profit(task.args.total_profit)
@@ -75,10 +73,8 @@ defmodule SpacetradersClient.Utility do
     end
   end
 
-  def score(game, ship_symbol, %ShipTask{name: :mine} = task) do
-    ship = Game.ship(game, ship_symbol)
-
-    avg_value = Game.average_extraction_value(game, task.args.waypoint_symbol)
+  def score(ship, %ShipTask{name: :mine} = task) do
+    avg_value = Game.average_extraction_value(task.args.waypoint_symbol)
 
     if avg_value == 0 do
       new()
@@ -90,7 +86,7 @@ defmodule SpacetradersClient.Utility do
     |> DecisionFactors.time(task.args.time_required)
     |> DecisionFactors.fuel_consumed(task.args.fuel_consumed)
     |> then(fn df ->
-      if ship["registration"]["role"] == "EXCAVATOR" do
+      if ship.registration_role == "EXCAVATOR" do
         DecisionFactors.role_bonus(df)
       else
         df
@@ -98,16 +94,14 @@ defmodule SpacetradersClient.Utility do
     end)
   end
 
-  def score(_game, _ship_symbol, %ShipTask{name: :goto} = task) do
+  def score(_ship, %ShipTask{name: :goto} = task) do
     new()
     |> DecisionFactors.market_visibility_bonus()
     |> DecisionFactors.time(task.args.time_required)
   end
 
-  def score(game, ship_symbol, %ShipTask{name: :siphon_resources} = task) do
-    ship = Game.ship(game, ship_symbol)
-
-    avg_value = Game.average_extraction_value(game, task.args.waypoint_symbol)
+  def score(ship, %ShipTask{name: :siphon_resources} = task) do
+    avg_value = Game.average_extraction_value(task.args.waypoint_symbol)
 
     if avg_value == 0 do
       new()
@@ -119,7 +113,7 @@ defmodule SpacetradersClient.Utility do
     |> DecisionFactors.time(task.args.time_required)
     |> DecisionFactors.fuel_consumed(task.args.fuel_consumed)
     |> then(fn df ->
-      if ship["registration"]["role"] == "EXCAVATOR" do
+      if ship.registration_role == "EXCAVATOR" do
         DecisionFactors.role_bonus(df)
       else
         df

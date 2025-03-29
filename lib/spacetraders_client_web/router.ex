@@ -25,6 +25,7 @@ defmodule SpacetradersClientWeb.Router do
     live_session :default do
       live "/game", GameLive, :agent
       live "/game/loading", LoadingLive, :index
+      live "/game/contracts", ContractsLive, :index
       live "/game/agent", AgentLive, :index
       live "/game/credits", CreditsLive, :index
       live "/game/fleet", FleetLive, :index

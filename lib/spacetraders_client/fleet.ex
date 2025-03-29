@@ -1,8 +1,6 @@
 defmodule SpacetradersClient.Fleet do
   use Nebulex.Caching
 
-  alias SpacetradersClient.Cache
-
   def list_ships(client, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
     page = Keyword.get(opts, :page, 1)
@@ -26,7 +24,10 @@ defmodule SpacetradersClient.Fleet do
   end
 
   def purchase_cargo(client, ship_symbol, trade_symbol, units) do
-    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/purchase", %{symbol: trade_symbol, units: units})
+    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/purchase", %{
+      symbol: trade_symbol,
+      units: units
+    })
   end
 
   def sell_cargo(client, ship_symbol, trade_symbol, units) do
@@ -74,7 +75,10 @@ defmodule SpacetradersClient.Fleet do
   end
 
   def jettison_cargo(client, ship_symbol, item_symbol, units) do
-    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/jettison", %{symbol: item_symbol, units: units})
+    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/jettison", %{
+      symbol: item_symbol,
+      units: units
+    })
   end
 
   def transfer_cargo(client, source_ship_symbol, destination_ship_symbol, item_symbol, units) do

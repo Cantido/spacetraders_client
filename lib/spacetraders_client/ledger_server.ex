@@ -1,6 +1,7 @@
 defmodule SpacetradersClient.LedgerServer do
-  alias SpacetradersClient.GameServer
   alias SpacetradersClient.Game
+  alias SpacetradersClient.Game.Agent
+  alias SpacetradersClient.Repo
   alias Motocho.Account
   alias Motocho.Inventory
   alias Motocho.Ledger
@@ -34,28 +35,32 @@ defmodule SpacetradersClient.LedgerServer do
     GenServer.call(__MODULE__, {:get_ledger, agent_id}, 20_000)
   end
 
-  def post_journal(agent_id, date, description, debit_account, credit_account, amount) when is_integer(amount) do
+  def post_journal(agent_id, date, description, debit_account, credit_account, amount)
+      when is_integer(amount) do
     GenServer.call(
       __MODULE__,
       {:post_journal, agent_id, date, description, debit_account, credit_account, amount}
     )
   end
 
-  def purchase_inventory_by_unit(agent_id, trade_symbol, date, quantity, cost_per_unit) when is_integer(cost_per_unit) do
+  def purchase_inventory_by_unit(agent_id, trade_symbol, date, quantity, cost_per_unit)
+      when is_integer(cost_per_unit) do
     GenServer.call(
       __MODULE__,
       {:buy_inventory_unit, agent_id, trade_symbol, date, quantity, cost_per_unit}
     )
   end
 
-  def purchase_inventory_by_total(agent_id, trade_symbol, date, quantity, total_cost) when is_integer(total_cost) do
+  def purchase_inventory_by_total(agent_id, trade_symbol, date, quantity, total_cost)
+      when is_integer(total_cost) do
     GenServer.call(
       __MODULE__,
       {:buy_inventory_total, agent_id, trade_symbol, date, quantity, total_cost}
     )
   end
 
-  def sell_inventory(agent_id, trade_symbol, date, quantity, total_amount) when is_integer(total_amount) do
+  def sell_inventory(agent_id, trade_symbol, date, quantity, total_amount)
+      when is_integer(total_amount) do
     GenServer.call(
       __MODULE__,
       {:sell_inventory, agent_id, trade_symbol, date, quantity, total_amount}
@@ -109,7 +114,8 @@ defmodule SpacetradersClient.LedgerServer do
           dr_acct = Ledger.account(ledger, debit_account)
           cr_acct = Ledger.account(ledger, credit_account)
 
-          journal = Journal.simple(date, description, dr_acct.id, cr_acct.id, Money.new(:XST, amount))
+          journal =
+            Journal.simple(date, description, dr_acct.id, cr_acct.id, Money.new(:XST, amount))
 
           Ledger.post(ledger, journal)
         end)
@@ -134,7 +140,12 @@ defmodule SpacetradersClient.LedgerServer do
           Access.key(trade_symbol, Inventory.new(:XST))
         ],
         fn inventory ->
-          Inventory.purchase_inventory_by_unit(inventory, date, quantity, Money.new(:XST, cost_per_unit))
+          Inventory.purchase_inventory_by_unit(
+            inventory,
+            date,
+            quantity,
+            Money.new(:XST, cost_per_unit)
+          )
         end
       )
 
@@ -146,7 +157,6 @@ defmodule SpacetradersClient.LedgerServer do
         _from,
         state
       ) do
-
     state =
       update_in(
         state,
@@ -156,7 +166,12 @@ defmodule SpacetradersClient.LedgerServer do
           Access.key(trade_symbol, Inventory.new(:XST))
         ],
         fn inventory ->
-          Inventory.purchase_inventory_by_total(inventory, date, quantity, Money.new(:XST, total_cost))
+          Inventory.purchase_inventory_by_total(
+            inventory,
+            date,
+            quantity,
+            Money.new(:XST, total_cost)
+          )
         end
       )
 
@@ -168,7 +183,6 @@ defmodule SpacetradersClient.LedgerServer do
         _from,
         state
       ) do
-
     state =
       state
       |> update_in([:ledgers, agent_id], fn ledger ->
@@ -228,7 +242,8 @@ defmodule SpacetradersClient.LedgerServer do
         Ledger.post(ledger, journal)
       end)
 
-    {:reply, {:ok, get_in(state, [:inventories, agent_id, trade_symbol])}, state, {:continue, {:broadcast_update, agent_id}}}
+    {:reply, {:ok, get_in(state, [:inventories, agent_id, trade_symbol])}, state,
+     {:continue, {:broadcast_update, agent_id}}}
   end
 
   def handle_call(
@@ -236,7 +251,6 @@ defmodule SpacetradersClient.LedgerServer do
         _from,
         state
       ) do
-
     inventory =
       get_in(
         state,
@@ -278,15 +292,16 @@ defmodule SpacetradersClient.LedgerServer do
         Ledger.post(ledger, journal)
       end)
 
-    {:reply, {:ok, get_in(state, [:inventories, agent_id, trade_symbol])}, state, {:continue, {:broadcast_update, agent_id}}}
+    {:reply, {:ok, get_in(state, [:inventories, agent_id, trade_symbol])}, state,
+     {:continue, {:broadcast_update, agent_id}}}
   end
 
   def handle_continue({:start_ledger, agent_id}, state) do
-    {:ok, game} = GameServer.game(agent_id)
+    agent = Repo.get(Agent, agent_id)
 
-    starting_credits = game.agent["credits"]
-    starting_fleet = Game.fleet_value(game)
-    starting_merchandise = Game.merchandise_value(game)
+    starting_credits = agent["credits"]
+    starting_fleet = Game.fleet_value(agent_id)
+    starting_merchandise = Game.merchandise_value(agent_id)
 
     merch_value =
       Enum.map(starting_merchandise, fn m -> m.total_cost end)
@@ -325,7 +340,6 @@ defmodule SpacetradersClient.LedgerServer do
           )
         ]
         |> Enum.reduce(ledger, &Ledger.post(&2, &1))
-
       end)
 
     state =
@@ -350,7 +364,6 @@ defmodule SpacetradersClient.LedgerServer do
 
     {:noreply, state, {:continue, {:broadcast_update, agent_id}}}
   end
-
 
   def handle_continue({:broadcast_update, agent_id}, state) do
     if ledger = get_in(state, [:ledgers, agent_id]) do
@@ -377,8 +390,12 @@ defmodule SpacetradersClient.LedgerServer do
     |> Ledger.add_account(Account.new("Sales", :revenue, number: 4000))
     |> Ledger.add_account(Account.new("Natural Resources", :revenue, number: 4900))
     |> Ledger.add_account(Account.new("Starting Balances", :equity, number: 3900))
-    |> Ledger.add_account(Account.new("Cost of Merchandise Sold", :expenses, direct_cost: true, number: 5000))
-    |> Ledger.add_account(Account.new("Construction Site Supply", :expenses, direct_cost: true, number: 5100))
+    |> Ledger.add_account(
+      Account.new("Cost of Merchandise Sold", :expenses, direct_cost: true, number: 5000)
+    )
+    |> Ledger.add_account(
+      Account.new("Construction Site Supply", :expenses, direct_cost: true, number: 5100)
+    )
     |> Ledger.add_account(Account.new("Fuel", :expenses, number: 6000))
   end
 end

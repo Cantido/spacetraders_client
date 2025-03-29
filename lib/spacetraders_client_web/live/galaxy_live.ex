@@ -5,7 +5,6 @@ defmodule SpacetradersClientWeb.GalaxyLive do
   alias Phoenix.PubSub
   alias SpacetradersClient.AutomationServer
   alias SpacetradersClient.Agents
-  alias SpacetradersClient.Systems
   alias SpacetradersClient.Client
 
   @pubsub SpacetradersClient.PubSub

@@ -7,14 +7,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   alias SpacetradersClient.Game.Shipyard
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
-  alias SpacetradersClient.Systems
   alias Phoenix.LiveView.AsyncResult
-  alias Phoenix.PubSub
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.AutomationServer
-  alias SpacetradersClient.Client
-  alias SpacetradersClient.Fleet
-  alias SpacetradersClient.ShipAutomaton
 
   import Ecto.Query, except: [update: 3]
 
@@ -78,7 +71,6 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
               <.waypoint_item
                 symbol={waypoint_symbol}
                 type={Enum.find(system.waypoints, fn wp -> wp.symbol == waypoint_symbol end).type}
-                active={waypoint_symbol == @waypoint_symbol}
               >
                 <:indicator>
                   <.async_result :let={shipyards} assign={@shipyards}>

@@ -2,10 +2,6 @@ defmodule SpacetradersClientWeb.LoadingLive do
   use SpacetradersClientWeb, :live_view
 
   alias Phoenix.LiveView.AsyncResult
-  alias SpacetradersClient.Game.Agent
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.Fleet
-  alias SpacetradersClient.Repo
   alias SpacetradersClient.Client
 
   def render(assigns) do

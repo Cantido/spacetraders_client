@@ -4,13 +4,11 @@ defmodule SpacetradersClientWeb.GameLoader do
     router: SpacetradersClientWeb.Router
 
   alias Phoenix.Component
-  alias Phoenix.LiveView
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Client
   alias SpacetradersClient.Agents
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Systems
-  alias SpacetradersClient.GameServer
   alias SpacetradersClient.Repo
 
   alias SpacetradersClient.Game.Agent
@@ -29,7 +27,6 @@ defmodule SpacetradersClientWeb.GameLoader do
     client = Client.new(token)
 
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
-    agent_symbol = agent_body["data"]["symbol"]
 
     agent =
       %Agent{}
@@ -110,34 +107,33 @@ defmodule SpacetradersClientWeb.GameLoader do
                 |> System.changeset(body["data"])
                 |> Repo.insert!(on_conflict: :nothing)
 
-              waypoints =
-                Stream.iterate(1, &(&1 + 1))
-                |> Stream.map(fn page ->
-                  Systems.list_waypoints(client, system_symbol, page: page)
-                end)
-                |> Stream.map(fn page ->
-                  {:ok, %{body: body, status: 200}} = page
+              Stream.iterate(1, &(&1 + 1))
+              |> Stream.map(fn page ->
+                Systems.list_waypoints(client, system_symbol, page: page)
+              end)
+              |> Stream.map(fn page ->
+                {:ok, %{body: body, status: 200}} = page
 
-                  body
-                end)
-                |> Enum.reduce_while([], fn page, waypoints ->
-                  {:ok, new_waypoints} =
-                    Repo.transaction(fn ->
-                      Enum.map(page["data"], fn waypoint ->
-                        Ecto.build_assoc(system, :waypoints)
-                        |> Waypoint.changeset(waypoint)
-                        |> Repo.insert!(on_conflict: :replace_all)
-                      end)
+                body
+              end)
+              |> Enum.reduce_while([], fn page, waypoints ->
+                {:ok, new_waypoints} =
+                  Repo.transaction(fn ->
+                    Enum.map(page["data"], fn waypoint ->
+                      Ecto.build_assoc(system, :waypoints)
+                      |> Waypoint.changeset(waypoint)
+                      |> Repo.insert!(on_conflict: :replace_all)
                     end)
+                  end)
 
-                  acc_waypoints = waypoints ++ new_waypoints
+                acc_waypoints = waypoints ++ new_waypoints
 
-                  if Enum.count(acc_waypoints) < page["meta"]["total"] do
-                    {:cont, acc_waypoints}
-                  else
-                    {:halt, acc_waypoints}
-                  end
-                end)
+                if Enum.count(acc_waypoints) < page["meta"]["total"] do
+                  {:cont, acc_waypoints}
+                else
+                  {:halt, acc_waypoints}
+                end
+              end)
 
               Enum.each(body["data"]["waypoints"], fn wp ->
                 from(w in Waypoint, where: [symbol: ^wp["symbol"]])

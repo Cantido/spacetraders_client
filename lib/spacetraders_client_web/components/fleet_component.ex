@@ -3,35 +3,22 @@ defmodule SpacetradersClientWeb.FleetComponent do
   use Timex
 
   alias Phoenix.LiveView.AsyncResult
-  alias Phoenix.PubSub
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.AutomationServer
-  alias SpacetradersClient.Client
   alias SpacetradersClient.Fleet
-  alias SpacetradersClient.Systems
-  alias SpacetradersClient.ShipAutomaton
-
-  @pubsub SpacetradersClient.PubSub
 
   attr :ship_symbol, :string, required: true
 
   def render(assigns) do
     ~H"""
     <div class="p-4">
-      <.async_result :let={ship} assign={@ship}>
-        <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-        <:failed :let={_failure}>There was an error loading the ship.</:failed>
-
-          <div class="overflow-y-auto">
-            <.live_component
-              module={SpacetradersClientWeb.ShipComponent}
-              id={"ship-#{@ship_symbol}"}
-              ship_symbol={@ship_symbol}
-            />
-          </div>
-      </.async_result>
+      <div class="overflow-y-auto">
+        <.live_component
+          module={SpacetradersClientWeb.ShipComponent}
+          id={"ship-#{@ship_symbol}"}
+          ship_symbol={@ship_symbol}
+        />
+      </div>
     </div>
     """
   end

@@ -2,16 +2,9 @@ defmodule SpacetradersClientWeb.AutomationLive do
   use SpacetradersClientWeb, :live_view
 
   alias Phoenix.LiveView.AsyncResult
-  alias Phoenix.PubSub
-  alias SpacetradersClient.Agents
-  alias SpacetradersClient.Client
-  alias SpacetradersClient.Fleet
   alias SpacetradersClient.AutomationServer
   alias SpacetradersClient.AutomationSupervisor
   alias SpacetradersClient.AgentAutomaton
-  alias SpacetradersClient.ShipAutomaton
-
-  @pubsub SpacetradersClient.PubSub
 
   def render(assigns) do
     ~H"""
@@ -75,7 +68,7 @@ defmodule SpacetradersClientWeb.AutomationLive do
     {:noreply, assign(socket, :agent_automaton, AsyncResult.loading())}
   end
 
-  def handle_info({:automaton_stopped, automaton}, socket) do
+  def handle_info({:automaton_stopped, _automaton}, socket) do
     {:noreply, assign(socket, :agent_automaton, AsyncResult.ok(nil))}
   end
 

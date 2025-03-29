@@ -4,8 +4,6 @@ defmodule SpacetradersClient.AutomationServer do
   alias SpacetradersClient.AgentAutomaton
   alias SpacetradersClient.Client
   alias SpacetradersClient.Agents
-  alias SpacetradersClient.Game
-  alias SpacetradersClient.GameServer
 
   alias Phoenix.PubSub
 
@@ -36,8 +34,6 @@ defmodule SpacetradersClient.AutomationServer do
     token = Keyword.fetch!(opts, :token)
     client = SpacetradersClient.Client.new(token)
     callsign = Keyword.fetch!(opts, :callsign)
-
-    {:ok, _} = GameServer.ensure_started(callsign, token)
 
     PubSub.broadcast(
       @pubsub,
@@ -129,8 +125,7 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def handle_info(:tick_behaviors, state) do
-    {:ok, game_state} = GameServer.game(state.agent_symbol)
-    {automaton, game_state} = AgentAutomaton.tick(state.automaton, game_state)
+    automaton = AgentAutomaton.tick(state.automaton, state.client)
 
     PubSub.broadcast(
       @pubsub,
@@ -148,27 +143,19 @@ defmodule SpacetradersClient.AutomationServer do
   def handle_info(:reload_game, state) do
     state =
       state
-      |> load_game()
       |> assign_automatons()
 
     {:noreply, state, {:continue, :schedule_reload}}
   end
 
   def handle_info(msg, state) do
-    Logger.warning("Automation server received unknown info message: #{inspect msg}")
+    Logger.warning("Automation server received unknown info message: #{inspect(msg)}")
     {:noreply, state}
-  end
-
-  defp load_game(state) do
-    :ok = GameServer.reload(state.agent_symbol)
-
-    state
   end
 
   defp assign_automatons(state) do
     Logger.debug("assigning automata")
-    {:ok, game_state} = GameServer.game(state.agent_symbol)
-    automaton = AgentAutomaton.new(game_state)
+    automaton = AgentAutomaton.new(state.agent_symbol)
 
     Map.put(state, :automaton, automaton)
   end

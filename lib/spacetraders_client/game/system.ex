@@ -1,7 +1,6 @@
 defmodule SpacetradersClient.Game.System do
   use Ecto.Schema
 
-  alias SpacetradersClient.Game.Sector
   alias SpacetradersClient.Game.Waypoint
 
   import Ecto.Changeset

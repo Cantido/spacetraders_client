@@ -75,7 +75,7 @@ defmodule SpacetradersClientWeb.CoreComponents do
                   class="-m-3 flex-none p-3 opacity-20 hover:opacity-40"
                   aria-label={gettext("close")}
                 >
-                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+                  <Heroicons.x_mark solid class="h-5 w-5" />
                 </button>
               </div>
               <div id={"#{@id}-content"}>
@@ -413,7 +413,7 @@ defmodule SpacetradersClientWeb.CoreComponents do
   def error(assigns) do
     ~H"""
     <p class="mt-3 flex gap-3 text-sm leading-6 text-rose-600">
-      <.icon name="hero-exclamation-circle-mini" class="mt-0.5 h-5 w-5 flex-none" />
+      <Heroicons.exclamation_circle mini class="mt-0.5 h-5 w-5 flex-none" />
       <%= render_slot(@inner_block) %>
     </p>
     """
@@ -566,21 +566,23 @@ defmodule SpacetradersClientWeb.CoreComponents do
         navigate={@navigate}
         class="text-sm font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
       >
-        <.icon name="hero-arrow-left-solid" class="h-3 w-3" />
+        <Heroicons.arrow_left solid class="h-3 w-3" />
         <%= render_slot(@inner_block) %>
       </.link>
     </div>
     """
   end
 
+  attr :name, :string, required: true
   attr :hex, :string, default: "ffffff"
   attr :size, :integer, default: 32
+  attr :class, :string
 
   def icon(%{name: "game-" <> name} = assigns) do
     assigns = assign(assigns, :game_icon, name)
 
     ~H"""
-    <img src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={@size} height={@size} />
+    <img class={@class} src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={@size} height={@size} />
     """
   end
 
