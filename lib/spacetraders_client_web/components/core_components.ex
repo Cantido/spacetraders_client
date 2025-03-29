@@ -580,7 +580,7 @@ defmodule SpacetradersClientWeb.CoreComponents do
     assigns = assign(assigns, :game_icon, name)
 
     ~H"""
-    <img phx-track-static src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={@size} height={@size} />
+    <img src={"/images/game-icons/icons/#{@hex}/transparent/1x1/#{@game_icon}.svg"} width={@size} height={@size} />
     """
   end
 

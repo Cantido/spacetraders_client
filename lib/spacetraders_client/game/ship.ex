@@ -108,4 +108,8 @@ defmodule SpacetradersClient.Game.Ship do
     |> validate_required([:agent_symbol] ++ @required_params)
     |> assoc_constraint(:agent)
   end
+
+  def cargo_current(%__MODULE__{cargo_items: cargo_items} = ship) do
+    Enum.sum_by(cargo_items, fn item -> item.units end)
+  end
 end

@@ -4,6 +4,8 @@ defmodule SpacetradersClientWeb.FleetComponent do
 
   alias Phoenix.LiveView.AsyncResult
   alias Phoenix.PubSub
+  alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Repo
   alias SpacetradersClient.Agents
   alias SpacetradersClient.AutomationServer
   alias SpacetradersClient.Client
@@ -13,7 +15,7 @@ defmodule SpacetradersClientWeb.FleetComponent do
 
   @pubsub SpacetradersClient.PubSub
 
-  attr :ship_symbol, :string, default: nil
+  attr :ship_symbol, :string, required: true
 
   def render(assigns) do
     ~H"""
@@ -22,24 +24,31 @@ defmodule SpacetradersClientWeb.FleetComponent do
         <:loading><span class="loading loading-ring loading-lg"></span></:loading>
         <:failed :let={_failure}>There was an error loading the ship.</:failed>
 
-        <.async_result :let={agent_automaton} assign={@agent_automaton}>
-          <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-          <:failed :let={_failure}>There was an error loading the agent.</:failed>
-
-
           <div class="overflow-y-auto">
             <.live_component
               module={SpacetradersClientWeb.ShipComponent}
               id={"ship-#{@ship_symbol}"}
-              client={@client}
-              ship={ship}
-              automaton={get_in(agent_automaton, [Access.key(:ship_automata), @ship_symbol])}
+              ship_symbol={@ship_symbol}
             />
           </div>
-        </.async_result>
       </.async_result>
     </div>
     """
+  end
+
+  def update(%{ship_symbol: ship_symbol}, socket) do
+    ship =
+      Repo.get(Ship, ship_symbol)
+      |> Repo.preload([:nav_waypoint, :cargo_items])
+
+    socket =
+      socket
+      |> assign(%{
+        ship_symbol: ship_symbol,
+        ship: AsyncResult.ok(ship)
+      })
+
+    {:ok, socket}
   end
 
   def handle_event("dock-ship", %{"ship-symbol" => ship_symbol}, socket) do

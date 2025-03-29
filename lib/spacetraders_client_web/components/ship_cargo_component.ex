@@ -14,18 +14,18 @@ defmodule SpacetradersClientWeb.ShipCargoComponent do
         </tr>
       </thead>
       <tbody>
-        <%= for item <- @ship["cargo"]["inventory"] do %>
+        <%= for item <- @ship.cargo_items do %>
           <tr>
-            <td><%= item["name"] %></td>
-            <td><%= item["units"] %></td>
+            <td><%= item.item.name %></td>
+            <td><%= item.units %></td>
             <td>
               <button
                 class="btn btn-xs btn-error"
-                data-confirm={"Are you sure you want to jettison #{item["units"]} unit(s) of #{item["symbol"]}?"}
+                data-confirm={"Are you sure you want to jettison #{item.units} unit(s) of #{item.item.name}?"}
                 phx-click="jettison-cargo"
-                phx-value-ship-symbol={@ship["symbol"]}
-                phx-value-item-symbol={item["symbol"]}
-                phx-value-units={item["units"]}
+                phx-value-ship-symbol={@ship.symbol}
+                phx-value-item-symbol={item.item_symbol}
+                phx-value-units={item.units}
               >
                 Jettison
               </button>

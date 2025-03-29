@@ -19,6 +19,7 @@ defmodule SpacetradersClientWeb.GameLoader do
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.Market
   alias SpacetradersClient.Game.Item
+  alias SpacetradersClient.Game.Shipyard
 
   import Phoenix.LiveView
 
@@ -44,6 +45,7 @@ defmodule SpacetradersClientWeb.GameLoader do
         token: token,
         client: client,
         agent: AsyncResult.ok(agent),
+        agent_symbol: agent.symbol,
         agent_automaton: AsyncResult.loading(),
         ledger: AsyncResult.loading()
       })
@@ -164,6 +166,22 @@ defmodule SpacetradersClientWeb.GameLoader do
 
                 %Market{symbol: waypoint_symbol}
                 |> Market.changeset(body["data"])
+                |> Repo.insert!()
+              end)
+
+              from(w in Waypoint,
+                join: t in assoc(w, :traits),
+                where: [system_symbol: ^system_symbol],
+                where: t.symbol == "SHIPYARD",
+                select: w.symbol
+              )
+              |> Repo.all()
+              |> Enum.map(fn waypoint_symbol ->
+                {:ok, %{body: body, status: 200}} =
+                  Systems.get_shipyard(client, system_symbol, waypoint_symbol)
+
+                %Shipyard{symbol: waypoint_symbol}
+                |> Shipyard.changeset(body["data"])
                 |> Repo.insert!()
               end)
             end

@@ -5,6 +5,8 @@ defmodule SpacetradersClientWeb.ShipComponent do
   alias SpacetradersClient.Systems
   alias SpacetradersClient.ShipAutomaton
   alias SpacetradersClient.AutomationServer
+  alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Repo
   alias SpacetradersClientWeb.ShipStatsComponent
 
   attr :client, :map, required: true
@@ -16,7 +18,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
     ~H"""
     <section class="flex flex-col overflow-y-auto">
       <header class="mb-4 flex-none">
-        <h1 class="text-2xl font-bold"><%= @ship["registration"]["name"] %></h1>
+        <h1 class="text-2xl font-bold"><%= @ship.symbol %></h1>
       </header>
 
       <section class="stats mb-8 flex-none">
@@ -27,7 +29,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
             <button
               class="btn btn-neutral"
               phx-click="purchase-fuel"
-              phx-value-ship-symbol={@ship["symbol"]}
+              phx-value-ship-symbol={@ship.symbol}
             >
               Refuel
             </button>
@@ -68,12 +70,12 @@ defmodule SpacetradersClientWeb.ShipComponent do
                   Flight mode
                 </div>
 
-                <form phx-change="set-flight-mode" phx-value-ship-symbol={@ship["symbol"]}>
+                <form phx-change="set-flight-mode" phx-value-ship-symbol={@ship.symbol}>
                   <select class="select select-bordered w-full max-w-xs" name="flight-mode">
-                    <option value="BURN" selected={@ship["nav"]["flightMode"] == "BURN"}>Burn</option>
-                    <option value="CRUISE" selected={@ship["nav"]["flightMode"] == "CRUISE"}>Cruise</option>
-                    <option value="DRIFT" selected={@ship["nav"]["flightMode"] == "DRIFT"}>Drift</option>
-                    <option value="STEALTH" selected={@ship["nav"]["flightMode"] == "STEALTH"}>Stealth</option>
+                    <option value="BURN" selected={@ship.nav_flight_mode == :burn}>Burn</option>
+                    <option value="CRUISE" selected={@ship.nav_flight_mode == :cruise}>Cruise</option>
+                    <option value="DRIFT" selected={@ship.nav_flight_mode == :dift}>Drift</option>
+                    <option value="STEALTH" selected={@ship.nav_flight_mode == :stealth}>Stealth</option>
                   </select>
                 </form>
               </div>
@@ -83,45 +85,40 @@ defmodule SpacetradersClientWeb.ShipComponent do
               </div>
 
               <div class="">
-                <.async_result :let={system} assign={@system}>
-                  <:loading><span class="loading loading-ring loading-lg"></span></:loading>
-                  <:failed :let={_failure}>There was an error loading the system.</:failed>
-
-                  <table class="table table-zebra">
-                    <thead>
+                <table class="table table-zebra">
+                  <thead>
+                    <tr>
+                      <th>Symbol</th>
+                      <th>Type</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <%= for waypoint <- @ship.nav_waypoint.system.waypoints do %>
                       <tr>
-                        <th>Symbol</th>
-                        <th>Type</th>
-                        <th></th>
+                        <td><%= waypoint.symbol %></td>
+                        <td><%= waypoint.type %></td>
+                        <td>
+
+                          <% disabled = @ship.nav_status != :in_orbit %>
+
+                          <div {if disabled, do: %{"class" => "tooltip", "data-tip" => "Ship must be undocked to travel"}, else: %{}}>
+                            <button
+                              class="btn btn-sm btn-accent"
+                              phx-click="navigate-ship"
+                              phx-value-ship-symbol={@ship.symbol}
+                              phx-value-system-symbol={waypoint.system_symbol}
+                              phx-value-waypoint-symbol={waypoint.symbol}
+                              disabled={disabled}
+                            >
+                              Travel to
+                            </button>
+                          </div>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      <%= for waypoint <- system["waypoints"] do %>
-                        <tr>
-                          <td><%= waypoint["symbol"] %></td>
-                          <td><%= waypoint["type"] %></td>
-                          <td>
-
-                            <% disabled = @ship["nav"]["status"] != "IN_ORBIT" %>
-
-                            <div {if disabled, do: %{"class" => "tooltip", "data-tip" => "Ship must be undocked to travel"}, else: %{}}>
-                              <button
-                                class="btn btn-sm btn-accent"
-                                phx-click="navigate-ship"
-                                phx-value-ship-symbol={@ship["symbol"]}
-                                phx-value-system-symbol={waypoint["systemSymbol"]}
-                                phx-value-waypoint-symbol={waypoint["symbol"]}
-                                disabled={disabled}
-                              >
-                                Travel to
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      <% end %>
-                    </tbody>
-                  </table>
-                </.async_result>
+                    <% end %>
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -176,25 +173,26 @@ defmodule SpacetradersClientWeb.ShipComponent do
   def mount(socket) do
     {:ok,
      assign(socket, %{
-       tab: :cargo,
-       system: AsyncResult.loading()
+       tab: :cargo
      })}
   end
 
-  def update(assigns, socket) do
-    socket = assign(socket, assigns)
+  def update(%{ship_symbol: ship_symbol}, socket) do
+    ship =
+      Repo.get(Ship, ship_symbol)
+      |> Repo.preload([:cargo_items, nav_waypoint: [system: [:waypoints]]])
+
+    socket =
+      assign(socket, %{
+        ship_symbol: ship_symbol,
+        ship: ship
+      })
 
     socket =
       if socket.assigns[:ship] do
         socket
         |> assign(:cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns[:ship]))
         |> schedule_cooldown_update()
-      else
-        socket
-      end
-
-    socket =
-      if socket.assigns.tab == :navigate do
       else
         socket
       end
@@ -209,19 +207,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
           assign(socket, :tab, :cargo)
 
         "navigate" ->
-          socket = assign(socket, :tab, :navigate)
-          client = socket.assigns.client
-          system_symbol = socket.assigns.ship["nav"]["systemSymbol"]
-
-          assign_async(socket, :system, fn ->
-            case Systems.get_system(client, system_symbol) do
-              {:ok, %{status: 200, body: body}} ->
-                {:ok, %{system: body["data"]}}
-
-              err ->
-                err
-            end
-          end)
+          assign(socket, :tab, :navigate)
       end
 
     {:noreply, socket}
@@ -243,21 +229,17 @@ defmodule SpacetradersClientWeb.ShipComponent do
         :ok
       end)
     else
-      send(self(), {:travel_cooldown_expired, socket.assigns.ship["symbol"]})
+      send(self(), {:travel_cooldown_expired, socket.assigns.ship.symbol})
       socket
     end
   end
 
   defp seconds_til_cooldown_expiration(ship) do
-    if cooldown = ship["cooldown"]["expiration"] do
-      {:ok, exp_at, _} = DateTime.from_iso8601(cooldown)
-
+    if exp_at = ship.cooldown_expires_at do
       DateTime.diff(exp_at, DateTime.utc_now())
       |> max(0)
     else
-      if arrival_ts = ship["nav"]["route"]["arrival"] do
-        {:ok, arrive_at, _} = DateTime.from_iso8601(arrival_ts)
-
+      if arrive_at = ship.nav_route_arrival_at do
         DateTime.diff(arrive_at, DateTime.utc_now())
         |> max(0)
       else

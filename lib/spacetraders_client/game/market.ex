@@ -8,7 +8,8 @@ defmodule SpacetradersClient.Game.Market do
   @primary_key {:symbol, :string, autogenerate: false}
 
   schema "markets" do
-    has_many :trade_goods, MarketTradeGood
+    has_many :trade_goods, MarketTradeGood,
+      where: [purchase_price: {:not, nil}, sell_price: {:not, nil}]
 
     has_many :imports, MarketTradeGood, where: [type: :import]
     has_many :exports, MarketTradeGood, where: [type: :export]

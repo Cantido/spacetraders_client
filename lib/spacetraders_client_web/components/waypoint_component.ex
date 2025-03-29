@@ -13,6 +13,8 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Market
+  alias SpacetradersClient.Game.Shipyard
+  alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
 
   import Ecto.Query, except: [update: 3]
@@ -323,20 +325,20 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                   <.link
                     class="link-hover"
                     patch={
-                      ~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}/ships/#{ship["symbol"]}"
+                      ~p"/game/fleet/#{ship.symbol}"
                     }
                   >
-                    {ship["registration"]["name"]}
+                    {ship.symbol}
                   </.link>
                 </td>
-                <td>{ship["registration"]["role"]}</td>
+                <td>{ship.registration_role}</td>
                 <td>
-                  {ship["nav"]["status"]}
+                  {ship.nav_status}
                 </td>
                 <td>{condition_percentage(ship)}%</td>
                 <td>
-                  <%= if ship["fuel"]["capacity"] > 0 do %>
-                    {trunc(Float.round(ship["fuel"]["current"] / ship["fuel"]["capacity"] * 100))}%
+                  <%= if ship.fuel_capacity > 0 do %>
+                    {trunc(Float.round(ship.fuel_current / ship.fuel_capacity * 100))}%
                   <% else %>
                     <span class="opacity-50 italic">No fuel tank</span>
                   <% end %>
@@ -346,10 +348,10 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                   <button
                     class="btn btn-sm"
                     phx-click="purchase-fuel"
-                    phx-value-ship-symbol={ship["symbol"]}
+                    phx-value-ship-symbol={ship.symbol}
                     disabled={
-                      ship["nav"]["status"] != "DOCKED" || ship["fuel"]["capacity"] in [0, nil] ||
-                        ship["fuel"]["capacity"] == ship["fuel"]["current"]
+                      ship.nav_status != :docked || ship.fuel_capacity in [0, nil] ||
+                        ship.fuel_capacity == ship.fuel_current
                     }
                   >
                     Refuel
@@ -358,7 +360,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                   <button
                     class="btn btn-sm"
                     phx-click="show-repair-modal"
-                    disabled={ship["nav"]["status"] != "DOCKED" || condition_percentage(ship) == 100}
+                    disabled={ship.nav_status != :docked || condition_percentage(ship) == 100}
                   >
                     Repair
                   </button>
@@ -366,16 +368,16 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                     <button
                       class="btn btn-sm btn-accent join-item"
                       phx-click="orbit-ship"
-                      phx-value-ship-symbol={ship["symbol"]}
-                      disabled={ship["nav"]["status"] in ["IN_ORBIT", "IN_TRANSIT"]}
+                      phx-value-ship-symbol={ship.symbol}
+                      disabled={ship.nav_status in [:in_orbit, :in_transit]}
                     >
                       Undock
                     </button>
                     <button
                       class="btn btn-sm btn-accent join-item"
                       phx-click="dock-ship"
-                      phx-value-ship-symbol={ship["symbol"]}
-                      disabled={ship["nav"]["status"] in ["DOCKED", "IN_TRANSIT"]}
+                      phx-value-ship-symbol={ship.symbol}
+                      disabled={ship.nav_status in [:docked, :in_transit]}
                     >
                       Dock
                     </button>
@@ -823,79 +825,19 @@ defmodule SpacetradersClientWeb.WaypointComponent do
         <%= if Enum.any?(@ships_at_waypoint) && shipyard do %>
           <table class="table table-zebra">
             <tbody>
-              <%= for ship <- shipyard["ships"] do %>
+              <%= for ship <- shipyard.ships do %>
                 <tr>
-                  <td>{ship["name"]}</td>
+                  <td>{ship.name}</td>
                   <td>
-                    <p class="mb-2">{ship["description"]}</p>
-                    <div class="flex flex-row justify-between">
-                      <div>
-                        <div class="font-bold">Frame</div>
-                        <div>
-                          {ship["frame"]["name"]}
-                        </div>
-                        <div>
-                          Module slots: {ship["frame"]["moduleSlots"]}
-                        </div>
-                        <div>
-                          Mounting points: {ship["frame"]["mountingPoints"]}
-                        </div>
-                        <div>
-                          Fuel capacity: {ship["frame"]["fuelCapacity"]}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div class="font-bold">Engine</div>
-                        <div>
-                          {ship["engine"]["name"]}
-                        </div>
-                        <div>
-                          Speed: {ship["engine"]["speed"]}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div class="font-bold">Reactor</div>
-                        <div>
-                          {ship["reactor"]["name"]}
-                        </div>
-                        <div>
-                          Speed: {ship["reactor"]["powerOutput"]}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div class="font-bold">Modules</div>
-                        <ul class="list-disc">
-                          <%= for module <- ship["modules"] do %>
-                            <li class="ml-3">
-                              {module["name"]}
-                              <%= if module["capacity"] do %>
-                                (capacity: {module["capacity"]})
-                              <% end %>
-                            </li>
-                          <% end %>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <div class="font-bold">Mounts</div>
-                        <ul class="list-disc">
-                          <%= for module <- ship["mounts"] do %>
-                            <li class="ml-3">{module["name"]}</li>
-                          <% end %>
-                        </ul>
-                      </div>
-                    </div>
+                    <p class="mb-2">{ship.description}</p>
                   </td>
-                  <td>{ship["supply"]}</td>
-                  <td>{ship["purchasePrice"]}</td>
+                  <td>{ship.supply}</td>
+                  <td>{ship.purchase_price}</td>
                   <td>
                     <button
                       class="btn btn-error"
                       phx-click="purchase-ship"
-                      phx-value-ship-type={ship["type"]}
+                      phx-value-ship-type={ship.type}
                       phx-value-waypoint-symbol={@waypoint_symbol}
                     >
                       Buy
@@ -1151,12 +1093,24 @@ defmodule SpacetradersClientWeb.WaypointComponent do
         trade_goods: [:item]
       )
 
+    shipyard =
+      Repo.get(Shipyard, socket.assigns.waypoint_symbol)
+      |> Repo.preload([:ships])
+
+    ships_at_waypoint =
+      Repo.all(
+        from s in Ship,
+          where: [nav_waypoint_symbol: ^socket.assigns.waypoint_symbol]
+      )
+
     socket =
       socket
       |> assign(%{
         system: AsyncResult.ok(system),
         market: market,
-        waypoint: AsyncResult.ok(waypoint)
+        waypoint: AsyncResult.ok(waypoint),
+        shipyard: AsyncResult.ok(shipyard),
+        ships_at_waypoint: ships_at_waypoint
       })
 
     {:ok, socket}

@@ -1,10 +1,15 @@
 defmodule SpacetradersClientWeb.FleetLive do
   use SpacetradersClientWeb, :live_view
 
+  alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Game
   alias SpacetradersClient.ShipAutomaton
+  alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Repo
 
-  attr :fleet, :list, required: true
+  import Ecto.Query, except: [update: 3]
+
+  attr :agent_symbol, :string, required: true
   attr :fleet_automata, :map, default: %{}
 
   def render(assigns) do
@@ -27,16 +32,16 @@ defmodule SpacetradersClientWeb.FleetLive do
           <tr
             :for={ship <- fleet}
           >
-            <td><.link patch={~p"/game/fleet/#{ship["symbol"]}"} class="hover:link"><%= ship["symbol"] %></.link></td>
-            <td><%= ship["registration"]["role"] %></td>
+            <td><.link patch={~p"/game/fleet/#{ship.symbol}"} class="hover:link"><%= ship.symbol %></.link></td>
+            <td><%= ship.registration_role %></td>
             <td>
-              <.link patch={~p"/game/systems/#{ship["nav"]["systemSymbol"]}"} class="hover:link">
-                <%= ship["nav"]["systemSymbol"] %>
+              <.link patch={~p"/game/systems/#{ship.nav_waypoint.system_symbol}"} class="hover:link">
+                <%= ship.nav_waypoint.system_symbol %>
               </.link>
             </td>
             <td>
-              <.link patch={~p"/game/systems/#{ship["nav"]["systemSymbol"]}/waypoints/#{ship["nav"]["waypointSymbol"]}"} class="hover:link">
-                <%= ship["nav"]["waypointSymbol"] %>
+              <.link patch={~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
+                <%= ship.nav_waypoint_symbol %>
               </.link>
             </td>
 
@@ -50,7 +55,7 @@ defmodule SpacetradersClientWeb.FleetLive do
                 <td></td>
               </:failed>
 
-              <% ship_automaton = get_in(agent_automaton, [Access.key(:ship_automata), ship["symbol"]]) %>
+              <% ship_automaton = get_in(agent_automaton, [Access.key(:ship_automata), ship.symbol]) %>
 
               <td>
                 <%= if ship_automaton do %>
@@ -73,13 +78,19 @@ defmodule SpacetradersClientWeb.FleetLive do
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
   def mount(_params, _session, socket) do
+    fleet =
+      Repo.all(
+        from s in Ship,
+          where: [agent_symbol: ^socket.assigns.agent.result.symbol],
+          preload: [:nav_waypoint]
+      )
+
     socket =
       socket
       |> assign(%{
-        app_section: :fleet
+        app_section: :fleet,
+        fleet: AsyncResult.ok(fleet)
       })
-      |> SpacetradersClientWeb.GameLoader.load_fleet()
-      |> SpacetradersClientWeb.GameLoader.attach_params_handler()
 
     {:ok, socket}
   end

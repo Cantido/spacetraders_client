@@ -32,29 +32,17 @@ defmodule SpacetradersClientWeb.GameLive do
       <.live_component
         module={SpacetradersClientWeb.OrbitalsMenuComponent}
         id="orbitals"
-        client={@client}
+        agent_symbol={@agent.result.symbol}
         system_symbol={@system_symbol}
-        system={@system}
-        marketplaces={@marketplaces}
-        shipyards={@shipyards}
         waypoint_symbol={@waypoint_symbol}
-        fleet={@fleet}
       >
         <%= case @live_action do %>
           <% :ship -> %>
             <.live_component
               module={SpacetradersClientWeb.FleetComponent}
               id={"ship-#{@ship_symbol}"}
-              client={@client}
-              agent={@agent}
               ship_symbol={@ship_symbol}
-              ship={@ship}
-              fleet={@fleet}
-              agent_automaton={@agent_automaton}
             />
-
-
-
 
           <% :waypoint -> %>
             <.live_component
@@ -141,7 +129,38 @@ defmodule SpacetradersClientWeb.GameLive do
     {:ok, socket}
   end
 
-  def handle_params(_params, _uri, socket) do
+  def handle_params(%{"ship_symbol" => ship_symbol}, _uri, socket) do
+    {system_symbol, waypoint_symbol} =
+      Repo.one(
+        from s in Ship,
+          join: wp in assoc(s, :nav_waypoint),
+          where: [symbol: ^ship_symbol],
+          select: {wp.system_symbol, s.nav_waypoint_symbol}
+      )
+
+    socket =
+      socket
+      |> assign(%{
+        ship_symbol: ship_symbol,
+        system_symbol: system_symbol,
+        waypoint_symbol: waypoint_symbol
+      })
+
+    {:noreply, socket}
+  end
+
+  def handle_params(
+        %{"system_symbol" => system_symbol, "waypoint_symbol" => waypoint_symbol},
+        _uri,
+        socket
+      ) do
+    socket =
+      socket
+      |> assign(%{
+        system_symbol: system_symbol,
+        waypoint_symbol: waypoint_symbol
+      })
+
     {:noreply, socket}
   end
 

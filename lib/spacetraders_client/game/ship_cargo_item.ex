@@ -8,7 +8,7 @@ defmodule SpacetradersClient.Game.ShipCargoItem do
 
   @primary_key false
 
-  schema "items" do
+  schema "ship_cargo_items" do
     belongs_to :ship, Ship,
       foreign_key: :ship_symbol,
       references: :symbol,

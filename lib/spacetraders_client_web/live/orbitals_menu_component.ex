@@ -4,6 +4,8 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Market
   alias SpacetradersClient.Game.Waypoint
+  alias SpacetradersClient.Game.Shipyard
+  alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
   alias SpacetradersClient.Systems
   alias Phoenix.LiveView.AsyncResult
@@ -18,7 +20,6 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
 
   attr :system_symbol, :string, required: true
   attr :waypoint_symbol, :string, default: nil
-  attr :fleet, AsyncResult, required: true
 
   slot :inner_block
 
@@ -84,7 +85,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading shipyards.</:failed>
                     <span
-                      :if={Enum.any?(shipyards, fn s -> s["symbol"] == waypoint_symbol end)}
+                      :if={Enum.any?(shipyards, fn s -> s.symbol == waypoint_symbol end)}
                       class="tooltip tooltip-left tooltip-info"
                       data-tip="This waypoint has a shipyard"
                     >
@@ -300,21 +301,34 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
           where: s.symbol == ^socket.assigns.system_symbol
       )
 
+    shipyards =
+      Repo.all(
+        from s in Shipyard,
+          join: w in Waypoint,
+          on: s.symbol == w.symbol,
+          join: sys in assoc(w, :system),
+          where: sys.symbol == ^socket.assigns.system_symbol
+      )
+
+    system =
+      Repo.get(System, socket.assigns.system_symbol)
+      |> Repo.preload(waypoints: [:orbits, :orbitals])
+
+    fleet =
+      Repo.all(
+        from s in Ship,
+          where: [agent_symbol: ^socket.assigns.agent_symbol],
+          preload: [:nav_waypoint]
+      )
+
     socket =
       socket
       |> assign(%{
-        marketplaces: AsyncResult.ok(markets)
+        shipyards: AsyncResult.ok(shipyards),
+        marketplaces: AsyncResult.ok(markets),
+        system: AsyncResult.ok(system),
+        fleet: AsyncResult.ok(fleet)
       })
-
-    # system =
-    #   Repo.get(System, socket.assigns.system_symbol)
-    #   |> Repo.preload(waypoints: [:orbits, :orbitals])
-
-    # socket =
-    #   socket
-    #   |> assign(%{
-    #     system: AsyncResult.ok(system)
-    #   })
 
     {:ok, socket}
   end

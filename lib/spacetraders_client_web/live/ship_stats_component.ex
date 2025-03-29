@@ -1,13 +1,15 @@
 defmodule SpacetradersClientWeb.ShipStatsComponent do
   use SpacetradersClientWeb, :html
 
+  alias SpacetradersClient.Game.Ship
+
   attr :ship, :map, required: true
 
   def registration(assigns) do
     ~H"""
     <div class="stat">
       <h3 class="stat-title">Role</h3>
-      <div class="stat-value"><%= @ship["registration"]["role"] %></div>
+      <div class="stat-value"><%= @ship.registration_role %></div>
       <div class="stat-desc invisible"></div>
       <div class="stat-actions invisible">
         <button class="btn btn-neutral" disabled></button>
@@ -20,85 +22,85 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
   attr :cooldown_remaining, :integer, default: 0
 
   def navigation(assigns) do
-  ~H"""
-  <div class="stat">
-    <h3 class="stat-title">Navigation</h3>
-    <%= case @ship["nav"]["status"] do %>
-      <% "IN_TRANSIT" -> %>
-        <div class="stat-figure">
-          <div class="radial-progress" style={"--value:#{transit_complete_percentage(@ship, @cooldown_remaining)};"} role="progressbar">
-            <%
-              cooldown_hours = trunc(@cooldown_remaining / 3600)
-              cooldown_minutes = trunc((@cooldown_remaining - (cooldown_hours * 3600)) / 60)
-              cooldown_seconds = rem(@cooldown_remaining, 60)
-            %>
-            <div class="countdown font-mono text-xs">
+    ~H"""
+    <div class="stat">
+      <h3 class="stat-title">Navigation</h3>
+      <%= case @ship.nav_status do %>
+        <% :in_transit -> %>
+          <div class="stat-figure">
+            <div class="radial-progress" style={"--value:#{transit_complete_percentage(@ship, @cooldown_remaining)};"} role="progressbar">
+              <%
+                cooldown_hours = trunc(@cooldown_remaining / 3600)
+                cooldown_minutes = trunc((@cooldown_remaining - (cooldown_hours * 3600)) / 60)
+                cooldown_seconds = rem(@cooldown_remaining, 60)
+              %>
+              <div class="countdown font-mono text-xs">
 
 
-              <%= if cooldown_hours > 0 do %>
-              <span style={"--value:#{cooldown_hours};"}></span>
-              :
-              <% end %>
-              <span style={"--value:#{cooldown_minutes};"}></span>
-              :
-              <span style={"--value:#{cooldown_seconds};"}></span>
+                <%= if cooldown_hours > 0 do %>
+                <span style={"--value:#{cooldown_hours};"}></span>
+                :
+                <% end %>
+                <span style={"--value:#{cooldown_minutes};"}></span>
+                :
+                <span style={"--value:#{cooldown_seconds};"}></span>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="stat-value">
-          In transit
-        </div>
-        <div class="stat-desc">
-          <% waypoint_symbol = get_in(@ship, ~w(nav route destination symbol)) %>
-          <%= @ship["nav"]["flightMode"] %> to
-          <.link
-            class="link"
-            patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{waypoint_symbol}"}
-          >
-            <%= waypoint_symbol %>
-          </.link>
-        </div>
-        <div class="stat-actions">
-          <button class="btn btn-neutral" disabled>Undock</button>
-          <button class="btn btn-neutral" disabled>Dock</button>
-        </div>
-      <% "IN_ORBIT" -> %>
-        <div class="stat-value">
-          In orbit
-        </div>
-        <div class="stat-desc">
-          Orbiting
-          <.link
-            class="link"
-            patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{@ship["nav"]["waypointSymbol"]}"}
-          >
-            <%= get_in(@ship, ~w(nav waypointSymbol)) %>
-          </.link>
-        </div>
-        <div class="stat-actions">
-          <button class="btn btn-neutral" disabled>Undock</button>
-          <button phx-click="dock-ship" phx-value-ship-symbol={@ship["symbol"]} class="btn btn-neutral">Dock</button>
-        </div>
-      <% "DOCKED" -> %>
-        <div class="stat-value">
-          Docked
-        </div>
-        <div class="stat-desc">
-          Docked at
-          <.link
-            class="link"
-            patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{@ship["nav"]["waypointSymbol"]}"}
-          >
-            <%= get_in(@ship, ~w(nav waypointSymbol)) %>
-          </.link>
-        </div>
-        <div class="stat-actions">
-          <button phx-click="orbit-ship" phx-value-ship-symbol={@ship["symbol"]} class="btn btn-neutral">Undock</button>
-          <button class="btn btn-neutral" disabled>Dock</button>
-        </div>
-    <% end %>
-  </div>
-  """
+          <div class="stat-value">
+            In transit
+          </div>
+          <div class="stat-desc">
+            <% waypoint_symbol = get_in(@ship, ~w(nav route destination symbol)) %>
+            <%= @ship["nav"]["flightMode"] %> to
+            <.link
+              class="link"
+              patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{waypoint_symbol}"}
+            >
+              <%= waypoint_symbol %>
+            </.link>
+          </div>
+          <div class="stat-actions">
+            <button class="btn btn-neutral" disabled>Undock</button>
+            <button class="btn btn-neutral" disabled>Dock</button>
+          </div>
+        <% :in_orbit -> %>
+          <div class="stat-value">
+            In orbit
+          </div>
+          <div class="stat-desc">
+            Orbiting
+            <.link
+              class="link"
+              patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{@ship["nav"]["waypointSymbol"]}"}
+            >
+              <%= get_in(@ship, ~w(nav waypointSymbol)) %>
+            </.link>
+          </div>
+          <div class="stat-actions">
+            <button class="btn btn-neutral" disabled>Undock</button>
+            <button phx-click="dock-ship" phx-value-ship-symbol={@ship["symbol"]} class="btn btn-neutral">Dock</button>
+          </div>
+        <% :docked -> %>
+          <div class="stat-value">
+            Docked
+          </div>
+          <div class="stat-desc">
+            Docked at
+            <.link
+              class="link"
+              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint_symbol}"}
+            >
+              <%= @ship.nav_waypoint_symbol %>
+            </.link>
+          </div>
+          <div class="stat-actions">
+            <button phx-click="orbit-ship" phx-value-ship-symbol={@ship.symbol} class="btn btn-neutral">Undock</button>
+            <button class="btn btn-neutral" disabled>Dock</button>
+          </div>
+      <% end %>
+    </div>
+    """
   end
 
   attr :ship, :map, required: true
@@ -108,8 +110,8 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
     ~H"""
     <div class="stat">
       <%
-        fuel_current = @ship["fuel"]["current"]
-        fuel_capacity = @ship["fuel"]["capacity"]
+        fuel_current = @ship.fuel_current
+        fuel_capacity = @ship.fuel_capacity
         fuel_percent = if fuel_capacity > 0, do: trunc(Float.ceil(fuel_current / fuel_capacity * 100)), else: 100
       %>
 
@@ -137,8 +139,8 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
     ~H"""
     <div class="stat">
       <%
-        cargo_current = get_in(@ship, ~w(cargo units))
-        cargo_capacity = get_in(@ship, ~w(cargo capacity))
+        cargo_current = Ship.cargo_current(@ship)
+        cargo_capacity = @ship.cargo_capacity
         cargo_percent = if is_integer(cargo_capacity) && cargo_capacity > 0, do: trunc(Float.ceil(cargo_current / cargo_capacity * 100)), else: 0
       %>
       <h3 class="stat-title">Cargo</h3>
@@ -157,7 +159,6 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
     </div>
     """
   end
-
 
   def transit_complete_percentage(ship, _cooldown_remaining) do
     {:ok, departure, _} = DateTime.from_iso8601(ship["nav"]["route"]["departureTime"])
