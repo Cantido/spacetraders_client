@@ -31,6 +31,15 @@ config :spacetraders_client, SpacetradersClient.Repo,
     type: :utc_datetime
   ]
 
+config :spacetraders_client, Oban,
+  engine: Oban.Engines.Lite,
+  repo: SpacetradersClient.Repo,
+  notifier: Oban.Notifiers.PG,
+  queues: [
+    api: 1,
+    default: 10
+  ]
+
 config :ex_cldr,
   default_locale: "en",
   default_backend: SpacetradersClient.Cldr

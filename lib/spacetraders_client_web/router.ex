@@ -1,6 +1,8 @@
 defmodule SpacetradersClientWeb.Router do
   use SpacetradersClientWeb, :router
 
+  import Oban.Web.Router
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -18,6 +20,8 @@ defmodule SpacetradersClientWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    oban_dashboard("/oban")
 
     get "/login", SessionController, :index
     post "/login", SessionController, :log_in

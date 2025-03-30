@@ -13,6 +13,7 @@ defmodule SpacetradersClient.Application do
        query: Application.get_env(:spacetraders_client, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SpacetradersClient.PubSub},
       SpacetradersClient.Repo,
+      {Oban, Application.fetch_env!(:spacetraders_client, Oban)},
       {SpacetradersClient.Cache, []},
       {Task.Supervisor, name: SpacetradersClient.TaskSupervisor},
       Cldr.Currency,

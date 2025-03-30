@@ -38,6 +38,8 @@ defmodule SpacetradersClient.MixProject do
       {:ecto, "~> 3.12"},
       {:ecto_sql, "~> 3.0"},
       {:ecto_sqlite3, "~> 0.19"},
+      {:oban, "~> 2.19"},
+      {:oban_web, "~> 2.11"},
       {:phoenix_live_view, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},

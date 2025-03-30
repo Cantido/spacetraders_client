@@ -7,6 +7,7 @@ defmodule SpacetradersClientWeb.GameLive do
   alias SpacetradersClient.Contracts
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Repo
+  alias SpacetradersClient.Finance
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Waypoint
