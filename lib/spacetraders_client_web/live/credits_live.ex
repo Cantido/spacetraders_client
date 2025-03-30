@@ -237,14 +237,6 @@ defmodule SpacetradersClientWeb.CreditsLive do
     """
   end
 
-  defp account_txns(ledger, account_id) do
-    ledger.transactions
-    |> Enum.filter(fn txn ->
-      Journal.affects_account?(txn, account_id)
-    end)
-    |> Enum.sort_by(fn txn -> txn.date end, :desc)
-  end
-
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
   def mount(_params, _session, socket) do
