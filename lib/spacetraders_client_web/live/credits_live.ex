@@ -358,6 +358,5 @@ defmodule SpacetradersClientWeb.CreditsLive do
         fill: true
       }
     end)
-    |> dbg()
   end
 end

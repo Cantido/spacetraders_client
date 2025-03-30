@@ -1,7 +1,6 @@
 defmodule SpacetradersClientWeb.GameLive do
   use SpacetradersClientWeb, :live_view
 
-  alias SpacetradersClient.LedgerServer
   alias Phoenix.LiveView.Socket
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.Fleet
@@ -210,7 +209,7 @@ defmodule SpacetradersClientWeb.GameLive do
 
         if tx["units"] > 0 do
           {:ok, _ledger} =
-            LedgerServer.post_journal(
+            Finance.post_journal(
               body["data"]["agent"]["symbol"],
               ts,
               "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{waypoint_symbol}",
@@ -279,7 +278,7 @@ defmodule SpacetradersClientWeb.GameLive do
     {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
     {:ok, _ledger} =
-      LedgerServer.post_journal(
+      Finance.post_journal(
         tx["agentSymbol"],
         ts,
         "BUY #{tx["shipType"]} × 1 @ #{tx["price"]}/u @ #{tx["waypointSymbol"]}",
@@ -461,7 +460,7 @@ defmodule SpacetradersClientWeb.GameLive do
     {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
     {:ok, _ledger} =
-      LedgerServer.post_journal(
+      Finance.post_journal(
         body["data"]["agent"]["symbol"],
         ts,
         "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{tx["waypointSymbol"]}",
@@ -471,7 +470,7 @@ defmodule SpacetradersClientWeb.GameLive do
       )
 
     {:ok, _ledger} =
-      LedgerServer.post_journal(
+      Finance.post_journal(
         body["data"]["agent"]["symbol"],
         ts,
         "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{tx["waypointSymbol"]}",

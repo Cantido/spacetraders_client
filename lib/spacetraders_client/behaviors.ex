@@ -1,10 +1,10 @@
 defmodule SpacetradersClient.Behaviors do
   alias SpacetradersClient.Systems
-  alias SpacetradersClient.LedgerServer
   alias SpacetradersClient.ShipTask
   alias SpacetradersClient.Survey
   alias SpacetradersClient.Game
   alias SpacetradersClient.Fleet
+  alias SpacetradersClient.Finance
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
@@ -342,7 +342,7 @@ defmodule SpacetradersClient.Behaviors do
 
                   if tx["units"] > 0 do
                     {:ok, _ledger} =
-                      LedgerServer.post_journal(
+                      Finance.post_journal(
                         agent.symbol,
                         ts,
                         "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
@@ -528,7 +528,7 @@ defmodule SpacetradersClient.Behaviors do
             value_of_material = trunc(price * yield_units)
 
             {:ok, _ledger} =
-              LedgerServer.post_journal(
+              Finance.post_journal(
                 ship.agent_symbol,
                 DateTime.utc_now(),
                 "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
@@ -538,7 +538,7 @@ defmodule SpacetradersClient.Behaviors do
               )
 
             {:ok, _ledger} =
-              LedgerServer.purchase_inventory_by_total(
+              Finance.purchase_inventory_by_total(
                 ship.agent_symbol,
                 yield_symbol,
                 DateTime.utc_now(),
@@ -606,8 +606,8 @@ defmodule SpacetradersClient.Behaviors do
             value_of_material = trunc(price * yield_units)
 
             {:ok, _ledger} =
-              LedgerServer.post_journal(
-                state.game.agent["symbol"],
+              Finance.post_journal(
+                ship.agent_symbol,
                 DateTime.utc_now(),
                 "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
                 "Merchandise",
@@ -616,7 +616,7 @@ defmodule SpacetradersClient.Behaviors do
               )
 
             {:ok, _ledger} =
-              LedgerServer.purchase_inventory_by_total(
+              Finance.purchase_inventory_by_total(
                 ship.agent_symbol,
                 yield_symbol,
                 DateTime.utc_now(),
@@ -878,7 +878,7 @@ defmodule SpacetradersClient.Behaviors do
                 {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
                 {:ok, _ledger} =
-                  LedgerServer.sell_inventory(
+                  Finance.sell_inventory(
                     ship.agent_symbol,
                     trade_symbol,
                     ts,
@@ -1064,7 +1064,7 @@ defmodule SpacetradersClient.Behaviors do
             {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
 
             {:ok, _ledger} =
-              LedgerServer.purchase_inventory_by_total(
+              Finance.purchase_inventory_by_total(
                 agent.symbol,
                 trade_symbol,
                 ts,
@@ -1073,8 +1073,8 @@ defmodule SpacetradersClient.Behaviors do
               )
 
             {:ok, _ledger} =
-              LedgerServer.post_journal(
-                state.game.agent["symbol"],
+              Finance.post_journal(
+                agent.symbol,
                 ts,
                 "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
                 "Merchandise",
@@ -1134,7 +1134,7 @@ defmodule SpacetradersClient.Behaviors do
           Game.load_construction_site!(ship.nav_waypoint_symbol)
 
           {:ok, _ledger} =
-            LedgerServer.supply_construction_site(
+            Finance.supply_construction_site(
               ship.agent_symbol,
               trade_symbol,
               DateTime.utc_now(),

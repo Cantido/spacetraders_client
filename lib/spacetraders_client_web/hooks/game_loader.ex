@@ -57,17 +57,6 @@ defmodule SpacetradersClientWeb.GameLoader do
             end
           end)
 
-        # |> LiveView.assign_async(:ledger, fn ->
-        #   case SpacetradersClient.LedgerServer.ledger(agent_symbol) do
-        #     {:ok, ledger} ->
-        #       {:ok, %{ledger: ledger}}
-
-        #     {:error, reason} ->
-        #       dbg(reason)
-        #       {:error, reason}
-        #   end
-        # end)
-
         {:cont, socket}
     end
   end

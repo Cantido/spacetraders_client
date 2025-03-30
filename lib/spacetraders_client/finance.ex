@@ -106,6 +106,26 @@ defmodule SpacetradersClient.Finance do
     end)
   end
 
+  def post_journal(
+        agent_symbol,
+        timestamp,
+        description,
+        debit_account_name,
+        credit_account_name,
+        amount
+      ) do
+    debit_account = Repo.get_by(Account, agent_symbol: agent_symbol, name: debit_account_name)
+    credit_account = Repo.get_by(Account, agent_symbol: agent_symbol, name: credit_account_name)
+
+    post_journal(
+      timestamp,
+      description,
+      debit_account.id,
+      credit_account.id,
+      amount
+    )
+  end
+
   def post_journal(timestamp, description, debit_account_id, credit_account_id, amount) do
     Transaction.simple(
       timestamp,

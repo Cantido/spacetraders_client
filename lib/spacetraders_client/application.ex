@@ -16,7 +16,6 @@ defmodule SpacetradersClient.Application do
       {SpacetradersClient.Cache, []},
       {Task.Supervisor, name: SpacetradersClient.TaskSupervisor},
       Cldr.Currency,
-      {SpacetradersClient.LedgerServer, []},
       {DynamicSupervisor, name: SpacetradersClient.AutomationSupervisor},
       {DynamicSupervisor, name: SpacetradersClient.GameSupervisor},
       # Start the Finch HTTP client for sending emails
