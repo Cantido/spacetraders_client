@@ -66,6 +66,7 @@ defmodule SpacetradersClient.Game do
 
       {price, count}
     end)
+    |> Enum.reject(fn {price, _count} -> is_nil(price) end)
     |> Enum.map(fn {price, count} -> price * count end)
     |> Enum.sum()
   end

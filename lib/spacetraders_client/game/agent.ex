@@ -2,6 +2,7 @@ defmodule SpacetradersClient.Game.Agent do
   use Ecto.Schema
 
   alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Finance.Account
 
   import Ecto.Changeset
 
@@ -10,7 +11,8 @@ defmodule SpacetradersClient.Game.Agent do
   schema "agents" do
     field :credits, :integer
 
-    has_many :ships, Ship
+    has_many :ships, Ship, preload_order: [asc: :symbol]
+    has_many :accounts, Account, preload_order: [asc: :number]
 
     timestamps(type: :utc_datetime_usec)
   end

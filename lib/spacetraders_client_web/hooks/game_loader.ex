@@ -27,45 +27,49 @@ defmodule SpacetradersClientWeb.GameLoader do
   def on_mount(:agent, _params, %{"token" => token}, socket) do
     client = Client.new(token)
 
-    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
+    case Agents.my_agent(client) do
+      {:ok, %{status: 401}} ->
+        {:halt, redirect(socket, to: ~p"/login")}
 
-    agent =
-      %Agent{}
-      |> Agent.changeset(agent_body["data"])
-      |> Repo.insert!(on_conflict: {:replace, [:credits]})
+      {:ok, %{status: 200, body: agent_body}} ->
+        agent =
+          %Agent{}
+          |> Agent.changeset(agent_body["data"])
+          |> Repo.insert!(on_conflict: {:replace, [:credits]})
 
-    socket =
-      socket
-      |> Component.assign(%{
-        token: token,
-        client: client,
-        agent: AsyncResult.ok(agent),
-        agent_symbol: agent.symbol,
-        # agent_automaton: AsyncResult.loading(),
-        ledger: AsyncResult.loading()
-      })
-      |> LiveView.assign_async(:agent_automaton, fn ->
-        case SpacetradersClient.AutomationServer.automaton(agent.symbol) do
-          {:ok, agent_automaton} ->
-            {:ok, %{agent_automaton: agent_automaton}}
+        socket =
+          socket
+          |> Component.assign(%{
+            token: token,
+            client: client,
+            agent: AsyncResult.ok(agent),
+            agent_symbol: agent.symbol,
+            # agent_automaton: AsyncResult.loading(),
+            ledger: AsyncResult.loading()
+          })
+          |> LiveView.assign_async(:agent_automaton, fn ->
+            case SpacetradersClient.AutomationServer.automaton(agent.symbol) do
+              {:ok, agent_automaton} ->
+                {:ok, %{agent_automaton: agent_automaton}}
 
-          {:error, _reason} ->
-            {:ok, %{agent_automaton: nil}}
-        end
-      end)
+              {:error, _reason} ->
+                {:ok, %{agent_automaton: nil}}
+            end
+          end)
 
-    # |> LiveView.assign_async(:ledger, fn ->
-    #   case SpacetradersClient.LedgerServer.ledger(agent_symbol) do
-    #     {:ok, ledger} ->
-    #       {:ok, %{ledger: ledger}}
+        # |> LiveView.assign_async(:ledger, fn ->
+        #   case SpacetradersClient.LedgerServer.ledger(agent_symbol) do
+        #     {:ok, ledger} ->
+        #       {:ok, %{ledger: ledger}}
 
-    #     {:error, reason} ->
-    #       dbg(reason)
-    #       {:error, reason}
-    #   end
-    # end)
+        #     {:error, reason} ->
+        #       dbg(reason)
+        #       {:error, reason}
+        #   end
+        # end)
 
-    {:cont, socket}
+        {:cont, socket}
+    end
   end
 
   def mount(:agent, _params, _token, socket) do
@@ -115,13 +119,11 @@ defmodule SpacetradersClientWeb.GameLoader do
                 body
               end)
               |> Enum.reduce_while([], fn page, waypoints ->
-                {:ok, new_waypoints} =
-                  Repo.transaction(fn ->
-                    Enum.map(page["data"], fn waypoint ->
-                      Ecto.build_assoc(system, :waypoints)
-                      |> Waypoint.changeset(waypoint)
-                      |> Repo.insert!(on_conflict: :replace_all)
-                    end)
+                new_waypoints =
+                  Enum.map(page["data"], fn waypoint ->
+                    Ecto.build_assoc(system, :waypoints)
+                    |> Waypoint.changeset(waypoint)
+                    |> Repo.insert!(on_conflict: :replace_all)
                   end)
 
                 acc_waypoints = waypoints ++ new_waypoints
@@ -186,13 +188,11 @@ defmodule SpacetradersClientWeb.GameLoader do
         |> Enum.reduce_while([], fn page, ships ->
           case page do
             {:ok, %{body: body, status: 200}} ->
-              {:ok, new_ships} =
-                Repo.transaction(fn ->
-                  Enum.map(body["data"], fn ship ->
-                    Ecto.build_assoc(agent, :ships)
-                    |> Ship.changeset(ship)
-                    |> Repo.insert!(on_conflict: :replace_all)
-                  end)
+              new_ships =
+                Enum.map(body["data"], fn ship ->
+                  Ecto.build_assoc(agent, :ships)
+                  |> Ship.changeset(ship)
+                  |> Repo.insert!(on_conflict: :replace_all)
                 end)
 
               ship_count =
@@ -219,6 +219,8 @@ defmodule SpacetradersClientWeb.GameLoader do
               {:error, reason}
           end
         end)
+
+        SpacetradersClient.Finance.open_accounts(agent.symbol)
       end
     )
   end

@@ -299,7 +299,7 @@ defmodule SpacetradersClient.LedgerServer do
   def handle_continue({:start_ledger, agent_id}, state) do
     agent = Repo.get(Agent, agent_id)
 
-    starting_credits = agent["credits"]
+    starting_credits = agent.credits
     starting_fleet = Game.fleet_value(agent_id)
     starting_merchandise = Game.merchandise_value(agent_id)
 
