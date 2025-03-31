@@ -8,15 +8,18 @@ defmodule SpacetradersClient.Game.Market do
   @primary_key {:symbol, :string, autogenerate: false}
 
   schema "markets" do
-    has_many :trade_goods, MarketTradeGood, on_replace: :delete_if_exists
+    has_many :items, MarketTradeGood, on_replace: :delete_if_exists
 
-    has_many :imports, MarketTradeGood, where: [type: :import], on_replace: :delete_if_exists
-    has_many :exports, MarketTradeGood, where: [type: :export], on_replace: :delete_if_exists
-    has_many :exchanges, MarketTradeGood, where: [type: :exchange], on_replace: :delete_if_exists
+    has_many :trade_goods, MarketTradeGood,
+      where: [sell_price: {:not, nil}, purchase_price: {:not, nil}]
+
+    has_many :imports, MarketTradeGood, where: [type: :import]
+    has_many :exports, MarketTradeGood, where: [type: :export]
+    has_many :exchanges, MarketTradeGood, where: [type: :exchange]
   end
 
   def changeset(model, params) do
-    trade_goods =
+    items =
       if Enum.any?(Map.get(params, "tradeGoods", [])) do
         Enum.map(params["tradeGoods"], fn tg ->
           %{
@@ -48,7 +51,7 @@ defmodule SpacetradersClient.Game.Market do
         imports ++ exports ++ exchanges
       end
 
-    params = %{trade_goods: trade_goods}
+    params = %{items: items}
 
     model
     |> cast(params, [])

@@ -10,7 +10,7 @@ defmodule SpacetradersClient.ShipTask do
     :name,
     :utility,
     args: %{},
-    conditions: [],
+    conditions: []
   ]
 
   def new(name, args \\ %{}, conditions \\ []) do
@@ -22,14 +22,18 @@ defmodule SpacetradersClient.ShipTask do
     }
   end
 
-  def meets_conditions?(%__MODULE__{conditions: conditions},  ship) do
+  def meets_conditions?(%__MODULE__{conditions: conditions}, ship) do
     Enum.all?(conditions, fn condition ->
       condition.(ship)
     end)
   end
 
   def utility_score(%__MODULE__{} = task) do
-    Utility.score(task.utility)
+    if task.utility do
+      Utility.score(task.utility)
+    else
+      0.0
+    end
   end
 
   def put_utility(%__MODULE__{} = task, utility) do
@@ -62,7 +66,8 @@ defmodule SpacetradersClient.ShipTask do
 
   def variation(task, key_or_assigns, value_or_conditions \\ [])
 
-  def variation(%__MODULE__{} = task, args, conditions) when is_map(args) and is_list(conditions) do
+  def variation(%__MODULE__{} = task, args, conditions)
+      when is_map(args) and is_list(conditions) do
     assign(task, args)
     |> regenerate_id()
   end
@@ -71,5 +76,4 @@ defmodule SpacetradersClient.ShipTask do
     assign(task, key, value)
     |> regenerate_id()
   end
-
 end

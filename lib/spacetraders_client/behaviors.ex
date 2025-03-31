@@ -20,7 +20,7 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       wait_for_transit(),
       refuel(),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: :cruise)
+      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE")
     ])
   end
 
@@ -28,12 +28,19 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       wait_for_transit(),
       refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: task.args.flight_mode),
+      travel_to_waypoint(task.args.waypoint_symbol,
+        flight_mode: stringify_flight_mode(task.args.flight_mode)
+      ),
       wait_for_transit(),
       dock_ship(),
       sell_cargo_item(task.args.trade_symbol, task.args.units)
     ])
   end
+
+  defp stringify_flight_mode(:cruise), do: "CRUISE"
+  defp stringify_flight_mode(:drift), do: "DRIFT"
+  defp stringify_flight_mode(:burn), do: "BURN"
+  defp stringify_flight_mode(:stealth), do: "STEALTH"
 
   def for_task(%ShipTask{name: :trade} = task) do
     whole_volume_count = div(task.args.units, task.args.volume)
@@ -57,7 +64,7 @@ defmodule SpacetradersClient.Behaviors do
       wait_for_transit(),
       refuel(min_fuel: task.args.start_fuel_consumed),
       travel_to_waypoint(task.args.start_wp,
-        flight_mode: task.args.start_flight_mode,
+        flight_mode: stringify_flight_mode(task.args.start_flight_mode),
         fuel_min: task.args.start_fuel_consumed
       ),
       wait_for_transit(),
@@ -69,7 +76,7 @@ defmodule SpacetradersClient.Behaviors do
       ),
       refuel(min_fuel: task.args.end_fuel_consumed),
       travel_to_waypoint(task.args.end_wp,
-        flight_mode: task.args.end_flight_mode,
+        flight_mode: stringify_flight_mode(task.args.end_flight_mode),
         fuel_min: task.args.end_fuel_consumed
       ),
       wait_for_transit(),
@@ -84,7 +91,9 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       wait_for_transit(),
       refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.start_wp, flight_mode: task.args.start_flight_mode),
+      travel_to_waypoint(task.args.start_wp,
+        flight_mode: stringify_flight_mode(task.args.start_flight_mode)
+      ),
       wait_for_transit(),
       Node.sequence(
         Enum.map(task.args.ship_pickups, fn {pickup_ship_symbol, units} ->
@@ -123,7 +132,7 @@ defmodule SpacetradersClient.Behaviors do
   def for_task(%ShipTask{name: :mine} = task) do
     Node.sequence([
       refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: :cruise),
+      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE"),
       wait_for_transit(),
       wait_for_ship_cooldown(),
       extract_resources()
@@ -133,7 +142,7 @@ defmodule SpacetradersClient.Behaviors do
   def for_task(%ShipTask{name: :siphon_resources} = task) do
     Node.sequence([
       refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: :cruise),
+      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE"),
       wait_for_transit(),
       wait_for_ship_cooldown(),
       siphon_resources()
@@ -738,7 +747,7 @@ defmodule SpacetradersClient.Behaviors do
             {:ok, %{status: 200, body: body}} ->
               ship =
                 Repo.get(Ship, state.ship_symbol)
-                |> Ship.nav_changeset(body["data"])
+                |> Ship.nav_changeset(body["data"]["nav"])
                 |> Repo.update!()
 
               PubSub.broadcast(

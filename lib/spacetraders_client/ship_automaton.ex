@@ -6,7 +6,10 @@ defmodule SpacetradersClient.ShipAutomaton do
   alias SpacetradersClient.Utility
   alias SpacetradersClient.Behaviors
   alias SpacetradersClient.Game
+  alias SpacetradersClient.Automation.ShipAutomationTick
   alias SpacetradersClient.Repo
+
+  import Ecto.Query
 
   require Logger
 
@@ -34,8 +37,25 @@ defmodule SpacetradersClient.ShipAutomaton do
   end
 
   def tick(%__MODULE__{} = struct, client) do
+    previous_tick =
+      Repo.one(
+        from sat in ShipAutomationTick,
+          where: [ship_symbol: ^struct.ship_symbol],
+          order_by: [desc: :timestamp],
+          limit: 1
+      )
+      |> Repo.preload(:active_task)
+
     struct =
       if struct.tree do
+        %SpacetradersClient.Automation.ShipAutomationTick{
+          ship_symbol: struct.ship_symbol,
+          active_task: previous_tick.active_task,
+          alternative_tasks: previous_tick.alternative_tasks,
+          timestamp: DateTime.utc_now()
+        }
+        |> Repo.insert!()
+
         struct
       else
         ship =
@@ -57,6 +77,27 @@ defmodule SpacetradersClient.ShipAutomaton do
           |> Enum.filter(&ShipTask.meets_conditions?(&1, ship))
 
         struct = select_action(struct, ship, actions)
+
+        active_task =
+          struct.current_action
+          |> SpacetradersClient.Automation.ShipTask.from_legacy_task()
+          |> SpacetradersClient.Repo.insert!()
+
+        alternative_tasks =
+          struct.alternative_actions
+          |> Enum.map(fn task ->
+            task
+            |> SpacetradersClient.Automation.ShipTask.from_legacy_task()
+            |> SpacetradersClient.Repo.insert!()
+          end)
+
+        %SpacetradersClient.Automation.ShipAutomationTick{
+          ship_symbol: struct.ship_symbol,
+          active_task: active_task,
+          alternative_tasks: alternative_tasks,
+          timestamp: DateTime.utc_now()
+        }
+        |> Repo.insert!()
 
         tree = Behaviors.for_task(struct.current_action)
 
@@ -107,14 +148,17 @@ defmodule SpacetradersClient.ShipAutomaton do
       |> Enum.sort_by(&elem(&1, 1), :desc)
       |> Enum.take(10)
 
-    {best_task, _utility_score} =
+    {best_task, alternative_tasks} =
       best_actions
-      |> Enum.max_by(fn {_task, score} -> score end, fn -> {ShipTask.new(:idle), 0} end)
+      |> Enum.sort_by(fn {_task, score} -> score end, :desc)
+      |> Enum.take(10)
+      |> Enum.map(fn {task, _score} -> task end)
+      |> List.pop_at(0, ShipTask.new(:idle))
 
     %{
       struct
       | current_action: best_task,
-        alternative_actions: Enum.map(best_actions, &elem(&1, 0))
+        alternative_actions: alternative_tasks
     }
   end
 
