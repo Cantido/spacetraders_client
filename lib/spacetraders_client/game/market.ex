@@ -55,6 +55,6 @@ defmodule SpacetradersClient.Game.Market do
 
     model
     |> cast(params, [])
-    |> cast_assoc(:trade_goods)
+    |> cast_assoc(:items)
   end
 end
