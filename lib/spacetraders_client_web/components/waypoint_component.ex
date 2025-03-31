@@ -1052,13 +1052,10 @@ defmodule SpacetradersClientWeb.WaypointComponent do
   def update(assigns, socket) do
     socket = assign(socket, assigns)
 
-    system =
-      Repo.get(System, socket.assigns.system_symbol)
-      |> Repo.preload(:waypoints)
-
-    waypoint =
-      Repo.get(Waypoint, socket.assigns.waypoint_symbol)
-      |> Repo.preload([:system, :modifiers, :traits])
+    agent = socket.assigns.agent
+    agent_symbol = agent.symbol
+    system_symbol = socket.assigns.system_symbol
+    waypoint_symbol = socket.assigns.waypoint_symbol
 
     market =
       Repo.get(Market, socket.assigns.waypoint_symbol)
@@ -1076,18 +1073,47 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     ships_at_waypoint =
       Repo.all(
         from s in Ship,
-          where: [nav_waypoint_symbol: ^socket.assigns.waypoint_symbol]
+          where: [
+            agent_symbol: ^socket.assigns.agent_symbol,
+            nav_waypoint_symbol: ^socket.assigns.waypoint_symbol
+          ]
       )
+      |> Repo.preload(:nav_waypoint)
 
     socket =
       socket
       |> assign(%{
-        system: AsyncResult.ok(system),
         market: market,
-        waypoint: AsyncResult.ok(waypoint),
         shipyard: AsyncResult.ok(shipyard),
         ships_at_waypoint: ships_at_waypoint
       })
+      |> assign_async(:system, fn ->
+        system =
+          Repo.get(System, system_symbol)
+          |> Repo.preload(:waypoints)
+
+        {:ok, %{system: system}}
+      end)
+      |> assign_async(:waypoint, fn ->
+        waypoint =
+          Repo.get(Waypoint, waypoint_symbol)
+          |> Repo.preload([:system, :modifiers, :traits])
+
+        {:ok, %{waypoint: waypoint}}
+      end)
+      |> assign_async(:fleet, fn ->
+        fleet =
+          Repo.all(
+            from s in Ship,
+              where: [agent_symbol: ^agent_symbol]
+          )
+          |> Repo.preload(:nav_waypoint)
+
+        {:ok, %{fleet: fleet}}
+      end)
+      |> assign_async(:construction_site, fn ->
+        {:ok, %{construction_site: nil}}
+      end)
 
     {:ok, socket}
   end

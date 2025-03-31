@@ -31,6 +31,7 @@ defmodule SpacetradersClientWeb.GameLive do
         agent_symbol={@agent.result.symbol}
         system_symbol={@system_symbol}
         waypoint_symbol={@waypoint_symbol}
+        ship_symbol={@ship_symbol}
       >
         <%= case @live_action do %>
           <% :ship -> %>
@@ -44,7 +45,8 @@ defmodule SpacetradersClientWeb.GameLive do
             <.live_component
               id={@waypoint_symbol}
               module={SpacetradersClientWeb.WaypointComponent}
-              client={@client}
+              agent={@agent.result}
+              agent_symbol={@agent_symbol}
               waypoint_symbol={@waypoint_symbol}
               system_symbol={@system_symbol}
             />
@@ -68,15 +70,26 @@ defmodule SpacetradersClientWeb.GameLive do
         :ship -> :fleet
       end
 
-    system_symbol = params["system_symbol"]
-    waypoint_symbol = params["waypoint_symbol"]
+    ship_symbol = params["ship_symbol"]
+
+    {system_symbol, waypoint_symbol} =
+      if is_binary(ship_symbol) do
+        ship = Repo.get(Ship, ship_symbol) |> Repo.preload(:nav_waypoint)
+
+        {ship.nav_waypoint.system_symbol, ship.nav_waypoint_symbol}
+      else
+        system_symbol = params["system_symbol"]
+        waypoint_symbol = params["waypoint_symbol"]
+
+        {system_symbol, waypoint_symbol}
+      end
 
     socket =
       socket
       |> assign(%{
-        system_symbol: params["system_symbol"],
-        waypoint_symbol: params["waypoint_symbol"],
-        ship_symbol: params["ship_symbol"],
+        system_symbol: system_symbol,
+        waypoint_symbol: waypoint_symbol,
+        ship_symbol: ship_symbol,
         token_attempted?: false,
         token_valid?: AsyncResult.ok(false),
         surveys: [],
