@@ -8,6 +8,7 @@ defmodule SpacetradersClient.Repo.Migrations.AddSystems do
 
       add :name, :string, null: false
       add :type, :string, null: false
+      add :constellation, :string, null: false
       add :x_coordinate, :integer, null: false
       add :y_coordinate, :integer, null: false
     end

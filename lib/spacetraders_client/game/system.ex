@@ -13,6 +13,7 @@ defmodule SpacetradersClient.Game.System do
     field :sector_symbol, :string
     field :name, :string
     field :type, :string
+    field :constellation, :string
     field :x_coordinate, :integer
     field :y_coordinate, :integer
 
@@ -27,6 +28,7 @@ defmodule SpacetradersClient.Game.System do
       symbol: params["symbol"],
       name: params["name"],
       type: params["type"],
+      constellation: params["constellation"],
       sector_symbol: params["sectorSymbol"],
       x_coordinate: params["x"],
       y_coordinate: params["y"],
@@ -34,8 +36,24 @@ defmodule SpacetradersClient.Game.System do
     }
 
     model
-    |> cast(params, [:name, :symbol, :type, :sector_symbol, :x_coordinate, :y_coordinate])
+    |> cast(params, [
+      :name,
+      :symbol,
+      :type,
+      :constellation,
+      :sector_symbol,
+      :x_coordinate,
+      :y_coordinate
+    ])
     |> cast_assoc(:waypoints)
-    |> validate_required([:name, :symbol, :type, :sector_symbol, :x_coordinate, :y_coordinate])
+    |> validate_required([
+      :name,
+      :symbol,
+      :type,
+      :constellation,
+      :sector_symbol,
+      :x_coordinate,
+      :y_coordinate
+    ])
   end
 end

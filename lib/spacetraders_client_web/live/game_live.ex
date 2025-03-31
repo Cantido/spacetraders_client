@@ -51,6 +51,14 @@ defmodule SpacetradersClientWeb.GameLive do
               system_symbol={@system_symbol}
             />
 
+          <% :system -> %>
+            <.live_component
+              id={@system_symbol}
+              module={SpacetradersClientWeb.SystemComponent}
+              agent={@agent}
+              system_symbol={@system_symbol}
+            />
+
         <% end %>
       </.live_component>
     """
@@ -68,28 +76,15 @@ defmodule SpacetradersClientWeb.GameLive do
         :agent -> :agent
         :waypoint -> :galaxy
         :ship -> :fleet
-      end
-
-    ship_symbol = params["ship_symbol"]
-
-    {system_symbol, waypoint_symbol} =
-      if is_binary(ship_symbol) do
-        ship = Repo.get(Ship, ship_symbol) |> Repo.preload(:nav_waypoint)
-
-        {ship.nav_waypoint.system_symbol, ship.nav_waypoint_symbol}
-      else
-        system_symbol = params["system_symbol"]
-        waypoint_symbol = params["waypoint_symbol"]
-
-        {system_symbol, waypoint_symbol}
+        :system -> :galaxy
       end
 
     socket =
       socket
       |> assign(%{
-        system_symbol: system_symbol,
-        waypoint_symbol: waypoint_symbol,
-        ship_symbol: ship_symbol,
+        waypoint_symbol: nil,
+        system_symbol: nil,
+        ship_symbol: nil,
         token_attempted?: false,
         token_valid?: AsyncResult.ok(false),
         surveys: [],
@@ -109,21 +104,6 @@ defmodule SpacetradersClientWeb.GameLive do
            fleet:
              Repo.all(from s in Ship, where: [agent_symbol: ^agent_symbol])
              |> Repo.preload([:nav_waypoint])
-         }}
-      end)
-      |> assign_async(:system, fn ->
-        {:ok,
-         %{
-           system:
-             Repo.get(System, system_symbol)
-             |> Repo.preload(waypoints: [:orbits, :modifiers, :traits])
-         }}
-      end)
-      |> assign_async(:waypoint, fn ->
-        {:ok,
-         %{
-           waypoint:
-             Repo.get(Waypoint, waypoint_symbol) |> Repo.preload([:orbits, :modifiers, :traits])
          }}
       end)
 
@@ -160,6 +140,21 @@ defmodule SpacetradersClientWeb.GameLive do
       |> assign(%{
         system_symbol: system_symbol,
         waypoint_symbol: waypoint_symbol
+      })
+
+    {:noreply, socket}
+  end
+
+  def handle_params(
+        %{"system_symbol" => system_symbol},
+        _uri,
+        socket
+      ) do
+    socket =
+      socket
+      |> assign(%{
+        system_symbol: system_symbol,
+        waypoint_symbol: nil
       })
 
     {:noreply, socket}
