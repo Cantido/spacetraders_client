@@ -1,23 +1,167 @@
 defmodule SpacetradersClient.Game do
+  alias Phoenix.PubSub
   alias SpacetradersClient.ShipTask
+  alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.ShipCargoItem
   alias SpacetradersClient.Game.ShipyardShip
   alias SpacetradersClient.Game.MarketTradeGood
+  alias SpacetradersClient.Game.Shipyard
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.Market
+  alias SpacetradersClient.Systems
   alias SpacetradersClient.Repo
 
   import Ecto.Query
 
   require Logger
 
-  def load_construction_site!(_waypoint_symbol) do
+  @pubsub SpacetradersClient.PubSub
+
+  def load_waypoints!(client, system_symbol, load_events_topic \\ nil) do
+    if load_events_topic do
+      PubSub.broadcast!(
+        @pubsub,
+        load_events_topic,
+        {
+          :data_loading_progress,
+          :system_waypoints,
+          system_symbol,
+          0,
+          0
+        }
+      )
+    end
+
+    waypoints_data =
+      Stream.iterate(1, &(&1 + 1))
+      |> Stream.map(fn page ->
+        Systems.list_waypoints(client, system_symbol, page: page)
+      end)
+      |> Stream.map(fn page ->
+        {:ok, %{body: body, status: 200}} = page
+
+        body
+      end)
+      |> Enum.reduce_while([], fn page, waypoints ->
+        acc_waypoints = page["data"] ++ waypoints
+
+        if load_events_topic do
+          PubSub.broadcast!(
+            @pubsub,
+            load_events_topic,
+            {
+              :data_loading_progress,
+              :system_waypoints,
+              system_symbol,
+              Enum.count(acc_waypoints),
+              page["meta"]["total"]
+            }
+          )
+        end
+
+        if Enum.count(acc_waypoints) < page["meta"]["total"] do
+          {:cont, acc_waypoints}
+        else
+          {:halt, acc_waypoints}
+        end
+      end)
+
+    waypoints =
+      Enum.map(waypoints_data, fn waypoint_data ->
+        if waypoint = Repo.get(Waypoint, waypoint_data["symbol"]) do
+          Repo.preload(waypoint, [:modifiers, :traits])
+        else
+          %Waypoint{system_symbol: system_symbol}
+        end
+        |> Waypoint.changeset(waypoint_data)
+        |> Repo.insert!(on_conflict: :replace_all)
+      end)
+
+    Enum.each(waypoints_data, fn waypoint_data ->
+      if waypoint_data["orbits"] do
+        from(w in Waypoint, where: [symbol: ^waypoint_data["symbol"]])
+        |> Repo.update_all(set: [orbits_waypoint_symbol: waypoint_data["orbits"]])
+      end
+    end)
+
+    waypoints
+  end
+
+  def load_construction_site!(_client, _system_symbol, _waypoint_symbol, _topic \\ nil) do
     # TODO
   end
 
-  def load_market!(_waypoint_symbol) do
-    # TODO
+  def load_shipyard!(client, system_symbol, waypoint_symbol, load_events_topic \\ nil) do
+    if load_events_topic do
+      PubSub.broadcast!(
+        @pubsub,
+        load_events_topic,
+        {:data_loading, :shipyard, waypoint_symbol}
+      )
+    end
+
+    {:ok, %{body: body, status: 200}} =
+      Systems.get_shipyard(client, system_symbol, waypoint_symbol)
+
+    if shipyard = Repo.get(Shipyard, waypoint_symbol) do
+      shipyard
+    else
+      %Shipyard{symbol: waypoint_symbol}
+    end
+    |> Repo.preload(:ships)
+    |> Shipyard.changeset(body["data"])
+    |> Repo.insert!(on_conflict: :replace_all)
+
+    if load_events_topic do
+      PubSub.broadcast!(
+        @pubsub,
+        load_events_topic,
+        {:data_loaded, :shipyard, waypoint_symbol}
+      )
+    end
+  end
+
+  def load_market!(client, system_symbol, waypoint_symbol, load_events_topic \\ nil) do
+    if load_events_topic do
+      PubSub.broadcast!(
+        @pubsub,
+        load_events_topic,
+        {:data_loading, :market, waypoint_symbol}
+      )
+    end
+
+    {:ok, %{body: body, status: 200}} =
+      Systems.get_market(client, system_symbol, waypoint_symbol)
+
+    body["data"]["exports"]
+    |> Enum.concat(body["data"]["imports"])
+    |> Enum.concat(body["data"]["exchange"])
+    |> Enum.each(fn e ->
+      %Item{}
+      |> Item.changeset(e)
+      |> Repo.insert!(on_conflict: :nothing)
+    end)
+
+    market =
+      if market = Repo.get(Market, waypoint_symbol) do
+        market
+      else
+        %Market{symbol: waypoint_symbol}
+      end
+      |> Repo.preload(:trade_goods)
+      |> Market.changeset(body["data"])
+      |> Repo.insert!(on_conflict: :replace_all)
+
+    if load_events_topic do
+      PubSub.broadcast!(
+        @pubsub,
+        load_events_topic,
+        {:data_loaded, :market, waypoint_symbol}
+      )
+    end
+
+    market
   end
 
   def load_ship_cargo!(_ship_symbol) do

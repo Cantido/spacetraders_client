@@ -8,12 +8,11 @@ defmodule SpacetradersClient.Game.Market do
   @primary_key {:symbol, :string, autogenerate: false}
 
   schema "markets" do
-    has_many :trade_goods, MarketTradeGood,
-      where: [purchase_price: {:not, nil}, sell_price: {:not, nil}]
+    has_many :trade_goods, MarketTradeGood, on_replace: :delete_if_exists
 
-    has_many :imports, MarketTradeGood, where: [type: :import]
-    has_many :exports, MarketTradeGood, where: [type: :export]
-    has_many :exchanges, MarketTradeGood, where: [type: :exchange]
+    has_many :imports, MarketTradeGood, where: [type: :import], on_replace: :delete_if_exists
+    has_many :exports, MarketTradeGood, where: [type: :export], on_replace: :delete_if_exists
+    has_many :exchanges, MarketTradeGood, where: [type: :exchange], on_replace: :delete_if_exists
   end
 
   def changeset(model, params) do

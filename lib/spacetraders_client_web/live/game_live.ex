@@ -47,12 +47,6 @@ defmodule SpacetradersClientWeb.GameLive do
               client={@client}
               waypoint_symbol={@waypoint_symbol}
               system_symbol={@system_symbol}
-              system={@system}
-              waypoint={@waypoint}
-              fleet={@fleet}
-              market={@marketplace}
-              shipyard={@shipyard}
-              construction_site={@construction_site}
             />
 
         <% end %>

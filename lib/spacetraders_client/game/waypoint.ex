@@ -29,8 +29,15 @@ defmodule SpacetradersClient.Game.Waypoint do
       foreign_key: :orbits_waypoint_symbol,
       preload_order: [asc: :symbol]
 
-    has_many :modifiers, WaypointModifier, foreign_key: :waypoint_symbol, references: :symbol
-    has_many :traits, WaypointTrait, foreign_key: :waypoint_symbol, references: :symbol
+    has_many :modifiers, WaypointModifier,
+      foreign_key: :waypoint_symbol,
+      references: :symbol,
+      on_replace: :delete_if_exists
+
+    has_many :traits, WaypointTrait,
+      foreign_key: :waypoint_symbol,
+      references: :symbol,
+      on_replace: :delete_if_exists
 
     timestamps()
   end

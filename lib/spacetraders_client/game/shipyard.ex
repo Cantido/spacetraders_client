@@ -8,7 +8,7 @@ defmodule SpacetradersClient.Game.Shipyard do
   @primary_key {:symbol, :string, autogenerate: false}
 
   schema "shipyards" do
-    has_many :ships, ShipyardShip
+    has_many :ships, ShipyardShip, on_replace: :delete_if_exists
 
     field :modification_fee, :integer
   end

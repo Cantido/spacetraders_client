@@ -1102,9 +1102,9 @@ defmodule SpacetradersClient.Behaviors do
         end
       end),
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol)
+        ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
-        Game.load_market!(ship.nav_waypoint_symbol)
+        Game.load_market!(state.client, ship.nav_waypoint.system_symbol, ship.nav_waypoint_symbol)
 
         {:success, state}
       end)
@@ -1131,7 +1131,11 @@ defmodule SpacetradersClient.Behaviors do
             |> Ship.cargo_changeset(body["data"]["cargo"])
             |> Repo.update!()
 
-          Game.load_construction_site!(ship.nav_waypoint_symbol)
+          Game.load_construction_site!(
+            state.client,
+            ship.nav_waypoint.system_symbol,
+            ship.nav_waypoint_symbol
+          )
 
           {:ok, _ledger} =
             Finance.supply_construction_site(

@@ -21,6 +21,8 @@ defmodule SpacetradersClient.Repo.Migrations.AddWaypointOptions do
       add :activity, :string
       add :purchase_price, :integer
       add :sell_price, :integer
+
+      timestamps()
     end
   end
 end

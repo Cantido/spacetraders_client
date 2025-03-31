@@ -38,6 +38,8 @@ defmodule SpacetradersClient.Game.MarketTradeGood do
 
     field :purchase_price, :integer
     field :sell_price, :integer
+
+    timestamps(type: :utc_datetime_usec)
   end
 
   def changeset(model, params) do
@@ -54,5 +56,9 @@ defmodule SpacetradersClient.Game.MarketTradeGood do
     |> assoc_constraint(:market)
     |> assoc_constraint(:item)
     |> validate_required([:type, :item_symbol])
+    |> unique_constraint([:item_symbol, :market_symbol],
+      name: "market_trade_goods_market_symbol_item_symbol_index",
+      message: "market is already selling this item"
+    )
   end
 end
