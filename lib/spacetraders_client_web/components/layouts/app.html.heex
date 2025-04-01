@@ -62,15 +62,15 @@
               <span>
                 Automation
 
-                <.async_result :let={automaton} assign={@agent_automaton}>
+                <.async_result :let={agent} assign={@agent}>
                   <:loading>
                     <div aria-label="status" class="status status-accent"></div>
                   </:loading>
                   <:failed :let={_failure}>
                     <div aria-label="status" class="status status-error"></div>
                   </:failed>
-                  <div :if={is_nil(automaton)} aria-label="status" class="status status-neutral"></div>
-                  <div :if={is_struct(automaton)} aria-label="status" class="status status-success"></div>
+                  <div :if={!agent.automation_enabled} aria-label="status" class="status status-neutral"></div>
+                  <div :if={agent.automation_enabled} aria-label="status" class="status status-success"></div>
                 </.async_result>
               </span>
             </.link>

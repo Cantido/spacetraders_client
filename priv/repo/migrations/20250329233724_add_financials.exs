@@ -19,7 +19,7 @@ defmodule SpacetradersClient.Repo.Migrations.AddFinancials do
 
     create table(:transactions) do
       add :description, :string
-      add :timestamp, :utc_datetime_usec, null: false
+      add :timestamp, :utc_datetime, null: false
     end
 
     create table(:transaction_line_items) do
@@ -53,7 +53,7 @@ defmodule SpacetradersClient.Repo.Migrations.AddFinancials do
           references(:inventories, on_update: :update_all, on_delete: :delete_all),
           null: false
 
-      add :timestamp, :utc_datetime_usec, null: false
+      add :timestamp, :utc_datetime, null: false
       add :quantity, :integer, null: false
       add :cost_per_unit, :integer, null: false
       add :total_cost, :integer, null: false

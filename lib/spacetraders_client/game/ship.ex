@@ -91,11 +91,7 @@ defmodule SpacetradersClient.Game.Ship do
         get_in(params, [Access.key("cargo", %{}), Access.key("inventory", [])])
         |> Enum.map(fn item ->
           %{
-            item: %{
-              symbol: item["symbol"],
-              name: item["name"],
-              description: item["description"]
-            },
+            item_symbol: item["symbol"],
             units: item["units"]
           }
         end),
@@ -105,7 +101,7 @@ defmodule SpacetradersClient.Game.Ship do
 
     model
     |> cast(params, @allowed_params)
-    # |> cast_assoc(:cargo_items)
+    |> cast_assoc(:cargo_items)
     |> validate_required([:agent_symbol] ++ @required_params)
     |> assoc_constraint(:agent)
   end

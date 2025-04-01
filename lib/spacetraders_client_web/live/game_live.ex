@@ -8,9 +8,9 @@ defmodule SpacetradersClientWeb.GameLive do
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Repo
   alias SpacetradersClient.Finance
+  alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Ship
-  alias SpacetradersClient.Game.System
-  alias SpacetradersClient.Game.Waypoint
+  alias SpacetradersClient.Game.ShipLoadWorker
 
   alias Phoenix.PubSub
 
@@ -36,9 +36,9 @@ defmodule SpacetradersClientWeb.GameLive do
         <%= case @live_action do %>
           <% :ship -> %>
             <.live_component
-              module={SpacetradersClientWeb.FleetComponent}
+              module={SpacetradersClientWeb.ShipComponent}
               id={"ship-#{@ship_symbol}"}
-              ship_symbol={@ship_symbol}
+              ship={@ship}
             />
 
           <% :waypoint -> %>
@@ -66,7 +66,7 @@ defmodule SpacetradersClientWeb.GameLive do
 
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
-  def mount(params, _session, socket) do
+  def mount(_params, _session, socket) do
     agent_symbol = socket.assigns.agent.result.symbol
 
     PubSub.subscribe(@pubsub, "agent:#{agent_symbol}")
@@ -111,20 +111,17 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   def handle_params(%{"ship_symbol" => ship_symbol}, _uri, socket) do
-    {system_symbol, waypoint_symbol} =
-      Repo.one(
-        from s in Ship,
-          join: wp in assoc(s, :nav_waypoint),
-          where: [symbol: ^ship_symbol],
-          select: {wp.system_symbol, s.nav_waypoint_symbol}
-      )
+    ship =
+      Repo.get!(Ship, ship_symbol)
+      |> Repo.preload(:nav_waypoint)
 
     socket =
       socket
       |> assign(%{
-        ship_symbol: ship_symbol,
-        system_symbol: system_symbol,
-        waypoint_symbol: waypoint_symbol
+        ship_symbol: ship.symbol,
+        ship: ship,
+        system_symbol: ship.nav_waypoint.system_symbol,
+        waypoint_symbol: ship.nav_waypoint_symbol
       })
 
     {:noreply, socket}
@@ -260,39 +257,149 @@ defmodule SpacetradersClientWeb.GameLive do
         %{"waypoint-symbol" => waypoint_symbol, "ship-type" => ship_type},
         socket
       ) do
-    {:ok, %{status: 201, body: body}} =
-      Fleet.purchase_ship(socket.assigns.client, waypoint_symbol, ship_type)
+    case Fleet.purchase_ship(socket.assigns.client, waypoint_symbol, ship_type) do
+      {:ok, %{status: 201, body: body}} ->
+        agent =
+          socket.assigns.agent.result
+          |> Agent.changeset(body["data"]["agent"])
+          |> Repo.update!()
 
-    ship = body["data"]["ship"]
-    agent = body["data"]["agent"]
+        ship =
+          Ecto.build_assoc(agent, :ships)
+          |> Ship.changeset(body["data"]["ship"])
+          |> Repo.insert!()
 
-    new_fleet =
-      [ship | socket.assigns.fleet.result]
-      |> Enum.sort_by(fn s -> s["symbol"] end)
+        PubSub.broadcast(@pubsub, "agent:" <> agent.symbol, :fleet_updated)
+
+        socket =
+          socket
+          |> assign(:agent, AsyncResult.ok(agent))
+          |> put_flash(:success, "Ship #{ship.symbol} has been purchased")
+
+        tx = body["data"]["transaction"]
+
+        {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
+
+        {:ok, _ledger} =
+          Finance.post_journal(
+            tx["agentSymbol"],
+            ts,
+            "BUY #{tx["shipType"]} × 1 @ #{tx["price"]}/u @ #{tx["waypointSymbol"]}",
+            "Fleet",
+            "Cash",
+            tx["price"]
+          )
+
+        {:noreply, socket}
+
+      {:ok, %{status: 400, body: body}} ->
+        socket =
+          socket
+          |> put_flash(:error, body["error"]["message"])
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("orbit-ship", %{"ship-symbol" => ship_symbol}, socket) do
+    {:ok, %{status: 200, body: body}} = Fleet.orbit_ship(socket.assigns.client, ship_symbol)
+
+    ship =
+      Repo.get!(Ship, ship_symbol)
+      |> Ship.nav_changeset(body["data"]["nav"])
+      |> Repo.update!()
+
+    PubSub.broadcast(@pubsub, "agent:" <> ship.agent_symbol, {:ship_updated, ship.symbol})
 
     socket =
       socket
-      |> assign(:fleet, AsyncResult.ok(new_fleet))
-      |> assign(:agent, AsyncResult.ok(agent))
-      |> put_flash(:success, "Ship #{ship["symbol"]} has been purchased")
-
-    tx = body["data"]["transaction"]
-
-    {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
-
-    {:ok, _ledger} =
-      Finance.post_journal(
-        tx["agentSymbol"],
-        ts,
-        "BUY #{tx["shipType"]} × 1 @ #{tx["price"]}/u @ #{tx["waypointSymbol"]}",
-        "Fleet",
-        "Cash",
-        tx["price"]
-      )
-
-    PubSub.broadcast(@pubsub, "agent:" <> body["data"]["agent"]["symbol"], :fleet_updated)
+      |> assign(:ship, ship)
+      |> put_flash(:info, "Ship #{ship_symbol} undocked successfully")
 
     {:noreply, socket}
+  end
+
+  def handle_event("dock-ship", %{"ship-symbol" => ship_symbol}, socket) do
+    {:ok, %{status: 200, body: body}} = Fleet.dock_ship(socket.assigns.client, ship_symbol)
+
+    ship =
+      Repo.get!(Ship, ship_symbol)
+      |> Ship.nav_changeset(body["data"]["nav"])
+      |> Repo.update!()
+
+    PubSub.broadcast(@pubsub, "agent:" <> ship.agent_symbol, {:ship_updated, ship.symbol})
+
+    socket =
+      socket
+      |> assign(:ship, ship)
+      |> put_flash(:info, "Ship #{ship_symbol} docked successfully")
+
+    {:noreply, socket}
+  end
+
+  def handle_event(
+        "navigate-ship",
+        %{"ship-symbol" => ship_symbol, "waypoint-symbol" => waypoint_symbol} = params,
+        socket
+      ) do
+    flight_mode = Map.get(params, "flight-mode", "CRUISE")
+
+    flight_mode_atom =
+      case flight_mode do
+        "CRUISE" -> :cruise
+        "BURN" -> :burn
+        "DRIFT" -> :drift
+        "STEALTH" -> :stealth
+      end
+
+    ship = socket.assigns.ship
+
+    socket =
+      if ship.nav_flight_mode != flight_mode_atom do
+        {:ok, %{status: 200, body: body}} =
+          Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode)
+
+        ship =
+          ship
+          |> Ship.nav_changeset(body["data"]["nav"])
+          |> Repo.update!()
+
+        socket
+        |> assign(:ship, ship)
+      else
+        socket
+      end
+
+    case Fleet.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
+      {:ok, %{status: 200, body: body}} ->
+        ship =
+          socket.assigns.ship
+          |> Ship.nav_changeset(body["data"]["nav"])
+          |> Repo.update!()
+
+        %{
+          token: socket.assigns.token,
+          ship_symbol: ship.symbol
+        }
+        |> ShipLoadWorker.new(scheduled_at: ship.nav_route_arrival_at)
+        |> Oban.insert!()
+
+        socket =
+          socket
+          |> assign(:ship, ship)
+
+        {:noreply, socket}
+
+      {:ok, %{status: 400, body: %{"error" => %{"code" => 4203, "data" => data}}}} ->
+        socket =
+          put_flash(
+            socket,
+            :error,
+            "Not enough fuel, #{data["fuelRequired"]} fuel is required, but only #{data["fuelAvailable"]} is available"
+          )
+
+        {:noreply, socket}
+    end
   end
 
   def handle_event(
@@ -549,66 +656,36 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, socket}
   end
 
-  def handle_info({:ship_updated, ship_symbol, updated_ship}, %Socket{} = socket) do
+  def handle_info(:fleet_updated, %Socket{} = socket) do
+    old_fleet = Map.get(socket.assigns, :fleet, [])
+    new_fleet = Repo.all(from s in Ship, where: [agent_symbol: ^socket.assigns.agent_symbol])
+
+    new_ships_count = Enum.count(new_fleet) - Enum.count(old_fleet)
+
     socket =
-      update_ship(socket, ship_symbol, fn _ship ->
-        updated_ship
-      end)
+      cond do
+        new_ships_count == 1 ->
+          socket
+          |> put_flash(:info, "Discovered 1 more ship in your fleet")
+
+        new_ships_count > 1 ->
+          socket
+          |> put_flash(:info, "Discovered #{new_ships_count} more ships in your fleet")
+
+        true ->
+          socket
+      end
 
     {:noreply, socket}
   end
 
-  def handle_info({:ship_nav_updated, ship_symbol, nav}, socket) do
-    socket =
-      update_ship(socket, ship_symbol, fn ship ->
-        Map.put(ship, "nav", nav)
-      end)
-
-    {:noreply, socket}
-  end
-
-  def handle_info({:ship_fuel_updated, ship_symbol, fuel}, socket) do
-    socket =
-      update_ship(socket, ship_symbol, fn ship ->
-        Map.put(ship, "fuel", fuel)
-      end)
-
-    {:noreply, socket}
-  end
-
-  def handle_info({:ship_cargo_updated, ship_symbol, cargo}, socket) do
-    socket =
-      update_ship(socket, ship_symbol, fn ship ->
-        Map.put(ship, "cargo", cargo)
-      end)
-
-    {:noreply, socket}
-  end
-
-  def handle_info({:ship_cooldown_updated, ship_symbol, cooldown}, socket) do
-    socket =
-      update_ship(socket, ship_symbol, fn ship ->
-        Map.put(ship, "cooldown", cooldown)
-      end)
-
-    {:noreply, socket}
-  end
-
-  # def handle_info({:travel_cooldown_expired, ship_symbol}, socket) do
-  #   client = socket.assigns.client
-
-  #   socket =
-  #     start_async(socket, :load_ship, fn ->
-  #       {:ok, result} = Fleet.get_ship(client, ship_symbol)
-
-  #       %{data: result.body["data"]}
-  #     end)
-
-  #   {:noreply, socket}
-  # end
-
-  def handle_info({:automaton_updated, automaton}, socket) do
-    {:noreply, assign(socket, :agent_automaton, AsyncResult.ok(automaton))}
+  def handle_info({:ship_updated, ship_symbol}, %Socket{} = socket) do
+    if ship_symbol == socket.assigns.ship_symbol do
+      ship = Repo.get!(Ship, ship_symbol)
+      {:noreply, assign(socket, :ship, ship)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_info(_, socket) do
@@ -618,7 +695,7 @@ defmodule SpacetradersClientWeb.GameLive do
   defp update_ship(fleet, ship_symbol, ship_update_fn) when is_list(fleet) do
     i =
       Enum.find_index(fleet, fn ship ->
-        ship["symbol"] == ship_symbol
+        ship.symbol == ship_symbol
       end)
 
     if is_integer(i) do

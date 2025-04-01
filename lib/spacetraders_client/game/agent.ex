@@ -10,6 +10,8 @@ defmodule SpacetradersClient.Game.Agent do
 
   schema "agents" do
     field :credits, :integer
+    field :token, :string
+    field :automation_enabled, :boolean
 
     has_many :ships, Ship, preload_order: [asc: :symbol]
     has_many :accounts, Account, preload_order: [asc: :number]
@@ -19,7 +21,7 @@ defmodule SpacetradersClient.Game.Agent do
 
   def changeset(model, params) do
     model
-    |> cast(params, [:symbol, :credits])
+    |> cast(params, [:symbol, :credits, :token])
     |> validate_required([:symbol, :credits])
     |> validate_number(:credits, greater_than_or_equal_to: 0)
   end

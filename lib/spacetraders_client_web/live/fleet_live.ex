@@ -3,6 +3,7 @@ defmodule SpacetradersClientWeb.FleetLive do
 
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.ShipAutomaton
+  alias SpacetradersClient.Automation.ShipAutomationTick
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
 
@@ -31,42 +32,32 @@ defmodule SpacetradersClientWeb.FleetLive do
           <tr
             :for={ship <- fleet}
           >
-            <td><.link patch={~p"/game/fleet/#{ship.symbol}"} class="hover:link"><%= ship.symbol %></.link></td>
+            <td><.link navigate={~p"/game/fleet/#{ship.symbol}"} class="hover:link"><%= ship.symbol %></.link></td>
             <td><%= ship.registration_role %></td>
             <td>
-              <.link patch={~p"/game/systems/#{ship.nav_waypoint.system_symbol}"} class="hover:link">
+              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system_symbol}"} class="hover:link">
                 <%= ship.nav_waypoint.system_symbol %>
               </.link>
             </td>
             <td>
-              <.link patch={~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
+              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
                 <%= ship.nav_waypoint_symbol %>
               </.link>
             </td>
 
-            <.async_result :let={agent_automaton} assign={@agent_automaton}>
-              <:loading>
-                <td></td>
-                <td></td>
-              </:loading>
-              <:failed :let={_failure}>
-                <td></td>
-                <td></td>
-              </:failed>
 
-              <% ship_automaton = get_in(agent_automaton, [Access.key(:ship_automata), ship.symbol]) %>
+            <% automation_tick = @automation_ticks[ship.symbol] %>
 
-              <td>
-                <%= if ship_automaton do %>
-                  <%= current_automation_task(ship_automaton) %>
-                <% end %>
-              </td>
-              <td>
-                <%= if ship_automaton do %>
-                  <.action_runtime automaton={ship_automaton} />
-                <% end %>
-              </td>
-            </.async_result>
+            <td>
+              <%= if automation_tick do %>
+                <%= automation_tick.active_task.name %>
+              <% end %>
+            </td>
+            <td>
+              <%= if automation_tick do %>
+                <.action_runtime automation_tick={automation_tick} />
+              <% end %>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -77,6 +68,8 @@ defmodule SpacetradersClientWeb.FleetLive do
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
   def mount(_params, _session, socket) do
+    agent_symbol = socket.assigns.agent.result.symbol
+
     fleet =
       Repo.all(
         from s in Ship,
@@ -84,23 +77,33 @@ defmodule SpacetradersClientWeb.FleetLive do
           preload: [:nav_waypoint]
       )
 
+    fleet_automation_ticks =
+      Repo.all(
+        from sat in ShipAutomationTick,
+          join: s in assoc(sat, :ship),
+          where: s.agent_symbol == ^agent_symbol
+      )
+      |> Repo.preload(active_task: :active_automation_ticks)
+      |> Map.new(fn tick ->
+        {tick.ship_symbol, tick}
+      end)
+
     socket =
       socket
       |> assign(%{
         app_section: :fleet,
-        fleet: AsyncResult.ok(fleet)
+        fleet: AsyncResult.ok(fleet),
+        automation_ticks: fleet_automation_ticks
       })
 
     {:ok, socket}
   end
 
-  attr :automaton, ShipAutomaton, required: true
+  attr :automation_tick, ShipAutomationTick, required: true
 
   defp action_runtime(assigns) do
     ~H"""
-    <%= if @automaton.current_action_started_at do %>
-      <.stopwatch id={@automaton.ship_symbol <> "-task-duration"} start={@automaton.current_action_started_at} />
-    <% end %>
+    <.stopwatch id={@automation_tick.ship_symbol <> "-task-duration"} start={List.first(@automation_tick.active_task.active_automation_ticks).timestamp} />
     """
   end
 
@@ -111,13 +114,5 @@ defmodule SpacetradersClientWeb.FleetLive do
     ~H"""
     <span id={@id} phx-hook="Stopwatch" data-since={DateTime.to_iso8601(@start)}></span>
     """
-  end
-
-  defp current_automation_task(nil), do: nil
-
-  defp current_automation_task(automaton) do
-    if task = automaton.current_action do
-      task.name
-    end
   end
 end

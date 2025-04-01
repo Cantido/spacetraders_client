@@ -22,9 +22,13 @@ defmodule SpacetradersClientWeb.GameLoader do
 
       {:ok, %{status: 200, body: agent_body}} ->
         agent =
-          %Agent{}
+          if agent = Repo.get(Agent, agent_body["data"]["symbol"]) do
+            agent
+          else
+            %Agent{token: token}
+          end
           |> Agent.changeset(agent_body["data"])
-          |> Repo.insert!(on_conflict: {:replace, [:credits]})
+          |> Repo.insert_or_update!(on_conflict: {:replace, [:credits]})
 
         socket =
           socket
@@ -33,18 +37,8 @@ defmodule SpacetradersClientWeb.GameLoader do
             client: client,
             agent: AsyncResult.ok(agent),
             agent_symbol: agent.symbol,
-            # agent_automaton: AsyncResult.loading(),
             ledger: AsyncResult.loading()
           })
-          |> LiveView.assign_async(:agent_automaton, fn ->
-            case SpacetradersClient.AutomationServer.automaton(agent.symbol) do
-              {:ok, agent_automaton} ->
-                {:ok, %{agent_automaton: agent_automaton}}
-
-              {:error, _reason} ->
-                {:ok, %{agent_automaton: nil}}
-            end
-          end)
 
         {:cont, socket}
     end

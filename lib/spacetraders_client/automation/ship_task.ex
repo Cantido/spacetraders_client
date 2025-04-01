@@ -2,6 +2,7 @@ defmodule SpacetradersClient.Automation.ShipTask do
   use Ecto.Schema
 
   alias SpacetradersClient.Automation.DecisionFactor
+  alias SpacetradersClient.Automation.ShipAutomationTick
   alias SpacetradersClient.Automation.ShipTaskFloatArg
   alias SpacetradersClient.Automation.ShipTaskStringArg
   alias SpacetradersClient.Automation.ShipTaskCondition
@@ -10,6 +11,8 @@ defmodule SpacetradersClient.Automation.ShipTask do
   import Ecto.Changeset
 
   schema "ship_tasks" do
+    has_many :active_automation_ticks, ShipAutomationTick, foreign_key: :active_task_id, preload_order: [asc: :timestamp]
+
     field :name, :string
     field :utility, :float
 
@@ -56,11 +59,18 @@ defmodule SpacetradersClient.Automation.ShipTask do
     |> put_assoc(:decision_factors, decision_factors)
   end
 
+  def args(%__MODULE__{} = task) do
+    (task.float_args ++ task.string_args)
+    |> Map.new(fn arg ->
+      {arg.name, arg.value}
+    end)
+  end
+
   def arg(task, name) do
     task = change(task)
 
     float_args = get_field(task, :float_args, [])
-    string_args = get_field(task, :float_args, [])
+    string_args = get_field(task, :string_args, [])
 
     if arg = Enum.find(float_args, fn a -> a.name == name end) do
       arg.value

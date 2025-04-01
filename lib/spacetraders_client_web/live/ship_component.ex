@@ -3,8 +3,11 @@ defmodule SpacetradersClientWeb.ShipComponent do
 
   alias SpacetradersClient.ShipAutomaton
   alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Automation.ShipAutomationTick
   alias SpacetradersClient.Repo
   alias SpacetradersClientWeb.ShipStatsComponent
+
+  import Ecto.Query, except: [update: 3]
 
   attr :client, :map, required: true
   attr :ship, :map, required: true
@@ -13,7 +16,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
 
   def render(assigns) do
     ~H"""
-    <section class="flex flex-col overflow-y-auto">
+    <section class="flex flex-col overflow-y-auto p-4">
       <header class="mb-4 flex-none">
         <h1 class="text-2xl font-bold"><%= @ship.symbol %></h1>
       </header>
@@ -36,11 +39,11 @@ defmodule SpacetradersClientWeb.ShipComponent do
       </section>
 
 
-      <%= if @automaton do %>
+      <%= if @previous_automation_tick do %>
         <.live_component
           module={SpacetradersClientWeb.AutomatonComponent}
-          id="automaton-#{@automaton.ship_symbol}"
-          automaton={@automaton}
+          id="automaton-#{@ship_symbol}"
+          ship_automation_tick={@previous_automation_tick}
         />
       <% end %>
 
@@ -174,15 +177,32 @@ defmodule SpacetradersClientWeb.ShipComponent do
      })}
   end
 
-  def update(%{ship_symbol: ship_symbol}, socket) do
+  def update(%{ship: ship}, socket) do
     ship =
-      Repo.get(Ship, ship_symbol)
-      |> Repo.preload([:cargo_items, nav_waypoint: [system: [:waypoints]]])
+      Repo.preload(ship, cargo_items: [:item], nav_waypoint: [system: [:waypoints]])
+
+    ship_symbol = ship.symbol
+
+    previous_automation_tick =
+      Repo.one(
+        from sat in ShipAutomationTick,
+          where: [ship_symbol: ^ship_symbol],
+          order_by: [desc: :timestamp],
+          limit: 1,
+          preload: [
+            :ship,
+            [
+              active_task: [:float_args, :string_args, :decision_factors],
+              alternative_tasks: [:float_args, :string_args, :decision_factors]
+            ]
+          ]
+      )
 
     socket =
       assign(socket, %{
         ship_symbol: ship_symbol,
-        ship: ship
+        ship: ship,
+        previous_automation_tick: previous_automation_tick
       })
 
     socket =

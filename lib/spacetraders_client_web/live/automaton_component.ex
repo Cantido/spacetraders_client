@@ -1,9 +1,14 @@
 defmodule SpacetradersClientWeb.AutomatonComponent do
-  alias SpacetradersClient.ShipAutomaton
-  alias SpacetradersClient.Utility
   use SpacetradersClientWeb, :live_component
 
-  attr :automaton, ShipAutomaton, required: true
+  alias SpacetradersClient.ShipAutomaton
+  alias SpacetradersClient.Utility
+  alias SpacetradersClient.Automation.ShipAutomationTick
+  alias SpacetradersClient.Repo
+
+  import Ecto.Query, except: [update: 3]
+
+  attr :ship_automation_tick, ShipAutomationTick, required: true
 
   def render(assigns) do
     ~H"""
@@ -13,114 +18,88 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
           <Heroicons.cog class="w-12 h-12" />
           <div>
             <div class="font-bold text-xl">
-              <%= cond do %>
-                <% @latest_action && @latest_action.name == :idle -> %>
-                  Automaton idling
-                <% @task_finished? -> %>
-                  Automation task completed
-                <% true -> %>
-                  Automation task in progress
-              <% end %>
+              Automation task in progress
             </div>
           </div>
         </h2>
-        <div class="flex flex-row gap-8 bg-base-200 rounded-box p-8">
+        <div class="flex flex-row gap-8 bg-base-200 rounded-box p-4">
           <div>
             <p class="mb-4 font-bold text-lg">Tasks evaluated</p>
             <ul class="menu w-56">
-              <%= for action <- Enum.reject(@automaton.alternative_actions, &is_nil/1) do %>
+              <%= for action <- [@ship_automation_tick.active_task | @ship_automation_tick.alternative_tasks] do %>
                 <li class="mb-1">
                   <a
-                    class={[@selected_action && action.id == @selected_action.id]}
+                    class={if @selected_task.id == action.id, do: ["menu-active"], else: []}
                     phx-click="select-action"
                     phx-value-action-id={action.id}
                     phx-target={@myself}
                   >
-                    <%= if @latest_action && action.id == @latest_action.id do %>
+                    <%= if action.id == @ship_automation_tick.active_task.id do %>
                       <span class="tooltip" data-tip="The ship chose to perform this action">
                         <Heroicons.chevron_right class="w-4 h-4" />
                       </span>
-                    <% else %>
-                      <span></span>
                     <% end %>
-                    <span>{action.name}</span>
-                    <span><.number value={Float.round(Utility.score(action.utility), 3)} /></span>
+                    <span class="me-2">{action.name}</span>
+                    <span>{:erlang.float_to_binary(action.utility, decimals: 3)}</span>
                   </a>
                 </li>
               <% end %>
             </ul>
           </div>
-          <div class="divider divider-horizontal"></div>
 
-          <%= if @selected_action do %>
-            <div class="grow flex flex-row justify-between">
-              <div class="basis-1/2">
-                <p class="mb-4 font-bold text-lg">Parameters</p>
-                <table class="table table-sm">
-                  <thead>
-                    <tr>
-                      <th class="w-1/2">Parameter</th>
-                      <th class="w-1/2">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <%= for {key, val} <- @selected_action.args do %>
-                      <tr>
-                        <td class="font-mono">{key}</td>
-                        <td class="font-mono">{inspect(val)}</td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
-              </div>
+          <div class="basis-1/2">
+            <p class="mb-4 font-bold text-lg">Parameters</p>
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th class="w-1/2">Parameter</th>
+                  <th class="w-1/2">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for arg <- @selected_task.float_args do %>
+                  <tr>
+                    <td class="font-mono">{arg.name}</td>
+                    <td class="font-mono">{:erlang.float_to_binary(arg.value, decimals: 3)}</td>
+                  </tr>
+                <% end %>
+                <%= for arg <- @selected_task.string_args do %>
+                  <tr>
+                    <td class="font-mono">{arg.name}</td>
+                    <td class="font-mono">{inspect(arg.value)}</td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
 
-              <%= if @selected_action.utility do %>
-                <div class="basis-1/2">
-                  <p class="mb-4 font-bold text-lg">Decision factors</p>
-                  <table class="table table-sm">
-                    <thead>
-                      <tr>
-                        <th class="w-1/3">Factor</th>
-                        <th class="w-1/6">Input</th>
-                        <th class="w-1/6">Output</th>
-                        <th class="w-1/6">Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <%= for factor <- @selected_action.utility.factors do %>
-                        <tr>
-                          <td class="font-mono">{factor.name}</td>
-                          <td class="font-mono"><.number value={factor.input} /></td>
-                          <td class="font-mono"><.number value={factor.output} /></td>
-                          <td class="font-mono"><.number value={Map.get(factor, :weight, 1)} /></td>
-                        </tr>
-                      <% end %>
-                    </tbody>
-                  </table>
-                </div>
-              <% end %>
-            </div>
-          <% end %>
+          <div class="basis-1/2">
+            <p class="mb-4 font-bold text-lg">Decision factors</p>
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th class="w-1/3">Factor</th>
+                  <th class="w-1/6">Input</th>
+                  <th class="w-1/6">Output</th>
+                  <th class="w-1/6">Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for factor <- @selected_task.decision_factors do %>
+                  <tr>
+                    <td class="font-mono">{factor.name}</td>
+                    <td class="font-mono text-right tabular-nums">{:erlang.float_to_binary(factor.input_value, decimals: 3)}</td>
+                    <td class="font-mono text-right tabular-nums">{:erlang.float_to_binary(factor.output_value, decimals: 3)}</td>
+                    <td class="font-mono text-right tabular-nums">{:erlang.float_to_binary(factor.weight, decimals: 3)}</td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
     """
-  end
-
-  defp number(assigns) do
-    ~H"""
-    {format_number(@value)}
-    """
-  end
-
-  def format_number(n) do
-    if is_float(n) do
-      Float.round(n, 3)
-      |> to_string()
-      |> String.pad_trailing(5, "0")
-    else
-      to_string(n)
-    end
   end
 
   def mount(socket) do
@@ -129,6 +108,8 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
 
   def update(assigns, socket) do
     socket = assign(socket, assigns)
+
+    socket = assign(socket, :selected_task, assigns.ship_automation_tick.active_task)
 
     socket =
       if assigns[:automaton] do
@@ -167,17 +148,15 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
   end
 
   def handle_event("select-action", %{"action-id" => action_id}, socket) do
-    automaton = socket.assigns.automaton
+    ship_automation_tick = socket.assigns.ship_automation_tick
 
-    selected_action =
-      Enum.find(automaton.alternative_actions, fn action ->
-        action.id == action_id
+    selected_task =
+      Enum.find(ship_automation_tick.alternative_tasks, fn task ->
+        task.id == action_id
       end)
 
-    if selected_action do
-      {:noreply, assign(socket, :selected_action, selected_action)}
-    else
-      {:noreply, socket}
-    end
+    socket = assign(socket, :selected_task, selected_task)
+
+    {:noreply, socket}
   end
 end

@@ -6,17 +6,20 @@ defmodule SpacetradersClient.Finance.Transaction do
   import Ecto.Changeset
 
   schema "transactions" do
-    field :timestamp, :utc_datetime_usec
+    field :timestamp, :utc_datetime
     field :description, :string
 
     has_many :line_items, TransactionLineItem
   end
 
   def simple(timestamp, description, debit_account_id, credit_account_id, amount) do
-    %__MODULE__{
+    params = %{
       timestamp: timestamp,
       description: description
     }
+
+    %__MODULE__{}
+    |> cast(params, [:timestamp, :description])
     |> add_debit(amount, debit_account_id, description)
     |> add_credit(amount, credit_account_id, description)
   end
@@ -27,13 +30,13 @@ defmodule SpacetradersClient.Finance.Transaction do
         type: :debit,
         account_id: account_id,
         description: description,
-        amount: amount
+        amount: trunc(amount)
       }
       |> change()
 
-    tx
-    |> change()
-    |> put_assoc(:line_items, [line | get_field(change(tx), :line_items)])
+    tx = change(tx)
+
+    put_assoc(tx, :line_items, [line | get_field(tx, :line_items)])
   end
 
   def add_credit(tx, amount, account_id, description) do
@@ -42,13 +45,13 @@ defmodule SpacetradersClient.Finance.Transaction do
         type: :credit,
         account_id: account_id,
         description: description,
-        amount: amount
+        amount: trunc(amount)
       }
       |> change()
 
-    tx
-    |> change()
-    |> put_assoc(:line_items, [line | get_field(change(tx), :line_items)])
+    tx = change(tx)
+
+    put_assoc(tx, :line_items, [line | get_field(tx, :line_items)])
   end
 
   def validate_balanced(changeset) do

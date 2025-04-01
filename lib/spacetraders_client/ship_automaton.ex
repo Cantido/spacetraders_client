@@ -18,12 +18,7 @@ defmodule SpacetradersClient.ShipAutomaton do
   ]
   defstruct [
     :ship_symbol,
-    :tree,
-    :current_action,
-    :current_action_started_at,
-    :current_action_finished_at,
-    alternative_actions: [],
-    action_history: []
+    :tree
   ]
 
   # per fuel unit, not market unit!!
@@ -37,17 +32,17 @@ defmodule SpacetradersClient.ShipAutomaton do
   end
 
   def tick(%__MODULE__{} = struct, client) do
-    previous_tick =
-      Repo.one(
-        from sat in ShipAutomationTick,
-          where: [ship_symbol: ^struct.ship_symbol],
-          order_by: [desc: :timestamp],
-          limit: 1
-      )
-      |> Repo.preload(:active_task)
-
     struct =
       if struct.tree do
+        previous_tick =
+          Repo.one(
+            from sat in ShipAutomationTick,
+              where: [ship_symbol: ^struct.ship_symbol],
+              order_by: [desc: :timestamp],
+              limit: 1
+          )
+          |> Repo.preload(:active_task)
+
         %SpacetradersClient.Automation.ShipAutomationTick{
           ship_symbol: struct.ship_symbol,
           active_task: previous_tick.active_task,
@@ -67,7 +62,7 @@ defmodule SpacetradersClient.ShipAutomaton do
 
         ship_actions = ship_actions(struct)
 
-        actions =
+        {best_task, alternative_tasks} =
           (game_actions ++ ship_actions)
           |> Enum.map(&customize_action(struct, ship, &1))
           |> Enum.reject(&is_nil/1)
@@ -75,16 +70,27 @@ defmodule SpacetradersClient.ShipAutomaton do
           |> Enum.map(&estimate_costs(struct, ship, &1))
           |> Enum.reject(&is_nil/1)
           |> Enum.filter(&ShipTask.meets_conditions?(&1, ship))
+          |> Enum.map(fn task ->
+            util = Utility.score(ship, task)
+            task = ShipTask.put_utility(task, util)
+            score = ShipTask.utility_score(task)
 
-        struct = select_action(struct, ship, actions)
+            {task, score}
+          end)
+          |> Enum.sort_by(&elem(&1, 1), :desc)
+          |> Enum.take(10)
+          |> Enum.sort_by(fn {_task, score} -> score end, :desc)
+          |> Enum.take(10)
+          |> Enum.map(fn {task, _score} -> task end)
+          |> List.pop_at(0, ShipTask.new(:idle))
 
         active_task =
-          struct.current_action
+          best_task
           |> SpacetradersClient.Automation.ShipTask.from_legacy_task()
           |> SpacetradersClient.Repo.insert!()
 
         alternative_tasks =
-          struct.alternative_actions
+          alternative_tasks
           |> Enum.map(fn task ->
             task
             |> SpacetradersClient.Automation.ShipTask.from_legacy_task()
@@ -99,9 +105,9 @@ defmodule SpacetradersClient.ShipAutomaton do
         }
         |> Repo.insert!()
 
-        tree = Behaviors.for_task(struct.current_action)
+        tree = Behaviors.for_task(active_task)
 
-        %{struct | tree: tree, current_action_started_at: DateTime.utc_now()}
+        %{struct | tree: tree}
       end
 
     {result, tree, _} =
@@ -118,48 +124,18 @@ defmodule SpacetradersClient.ShipAutomaton do
 
         struct =
           struct
-          |> Map.update!(:action_history, fn history ->
-            Enum.take([struct.current_action | history], 10)
-          end)
           |> Map.put(:tree, nil)
-          |> Map.put(:current_action_finished_at, DateTime.utc_now())
 
         struct
     end
   end
 
-  defp select_action(%__MODULE__{} = struct, ship, actions) when is_list(actions) do
-    best_actions =
-      actions
-      |> Enum.map(fn task ->
-        util = Utility.score(ship, task)
-        task = ShipTask.put_utility(task, util)
-        score = ShipTask.utility_score(task)
+  def terminate(%__MODULE__{} = struct) do
+    if struct.tree do
+      Taido.BehaviorTree.terminate(struct.tree)
+    end
 
-        {task, score}
-      end)
-      # |> tap(fn actions ->
-      #   Enum.filter(actions, fn {action, _} ->
-      #     if action.name == :deliver_construction_materials do
-      #       dbg(action)
-      #     end
-      #   end)
-      # end)
-      |> Enum.sort_by(&elem(&1, 1), :desc)
-      |> Enum.take(10)
-
-    {best_task, alternative_tasks} =
-      best_actions
-      |> Enum.sort_by(fn {_task, score} -> score end, :desc)
-      |> Enum.take(10)
-      |> Enum.map(fn {task, _score} -> task end)
-      |> List.pop_at(0, ShipTask.new(:idle))
-
-    %{
-      struct
-      | current_action: best_task,
-        alternative_actions: alternative_tasks
-    }
+    :ok
   end
 
   defp customize_action(_struct, ship, %ShipTask{name: :pickup} = pickup_task) do

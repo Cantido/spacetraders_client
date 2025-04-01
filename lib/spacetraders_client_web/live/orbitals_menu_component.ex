@@ -8,8 +8,11 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
   alias Phoenix.LiveView.AsyncResult
+  alias Phoenix.PubSub
 
   import Ecto.Query, except: [update: 3]
+
+  @pubsub SpacetradersClient.PubSub
 
   attr :system_symbol, :string, required: true
   attr :waypoint_symbol, :string, default: nil
@@ -284,6 +287,8 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   def update(assigns, socket) do
     socket = assign(socket, assigns)
 
+    PubSub.subscribe(@pubsub, "agent:#{socket.assigns.agent_symbol}")
+
     markets =
       Repo.all(
         from m in Market,
@@ -323,5 +328,43 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
       })
 
     {:ok, socket}
+  end
+
+  def handle_info(:fleet_updated, socket) do
+    fleet =
+      Repo.all(
+        from s in Ship,
+          where: [agent_symbol: ^socket.assigns.agent_symbol],
+          preload: [:nav_waypoint]
+      )
+
+    socket =
+      socket
+      |> assign(%{
+        fleet: AsyncResult.ok(fleet)
+      })
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:ship_updated, _symbol}, socket) do
+    fleet =
+      Repo.all(
+        from s in Ship,
+          where: [agent_symbol: ^socket.assigns.agent_symbol],
+          preload: [:nav_waypoint]
+      )
+
+    socket =
+      socket
+      |> assign(%{
+        fleet: AsyncResult.ok(fleet)
+      })
+
+    {:noreply, socket}
+  end
+
+  def handle_info(_, socket) do
+    {:noreply, socket}
   end
 end

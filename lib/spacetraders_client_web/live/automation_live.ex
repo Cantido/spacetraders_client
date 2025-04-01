@@ -5,10 +5,11 @@ defmodule SpacetradersClientWeb.AutomationLive do
   alias SpacetradersClient.AutomationServer
   alias SpacetradersClient.AutomationSupervisor
   alias SpacetradersClient.AgentAutomaton
+  alias SpacetradersClient.Repo
 
   def render(assigns) do
     ~H"""
-    <.async_result :let={automaton} assign={@agent_automaton}>
+    <.async_result :let={agent} assign={@agent}>
       <:loading>
       <button name="enable-automation" class="btn btn-neutral" phx-click="start-automation" disabled="true">
         <span class="loading loading-ring loading-lg"></span>
@@ -18,7 +19,7 @@ defmodule SpacetradersClientWeb.AutomationLive do
       <:failed :let={_failure}>
         There was an error fetching automation data.
       </:failed>
-      <%= if is_struct(automaton, AgentAutomaton) do %>
+      <%= if agent.automation_enabled do %>
         <button class="btn btn-error" phx-click="stop-automation">
           Stop game automation
         </button>
@@ -49,18 +50,20 @@ defmodule SpacetradersClientWeb.AutomationLive do
   end
 
   def handle_event("start-automation", _params, socket) do
-    {:ok, _pid} =
-      DynamicSupervisor.start_child(
-        AutomationSupervisor,
-        {AutomationServer, token: socket.assigns.token}
-      )
+    agent =
+      socket.assigns.agent.result
+      |> Ecto.Changeset.change(%{automation_enabled: true})
+      |> Repo.update!()
 
-    {:noreply, socket}
+    {:noreply, assign(socket, :agent, AsyncResult.ok(agent))}
   end
 
   def handle_event("stop-automation", _params, socket) do
-    :ok = AutomationServer.stop(socket.assigns.agent.result.symbol)
+    agent =
+      socket.assigns.agent.result
+      |> Ecto.Changeset.change(%{automation_enabled: false})
+      |> Repo.update!()
 
-    {:noreply, assign(socket, :agent_automaton, AsyncResult.ok(nil))}
+    {:noreply, assign(socket, :agent, AsyncResult.ok(agent))}
   end
 end

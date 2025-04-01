@@ -819,7 +819,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             <tbody>
               <%= for ship <- shipyard.ships do %>
                 <tr>
-                  <td>{ship.name}</td>
+                  <td>{ship.name || ship.type}</td>
                   <td>
                     <p class="mb-2">{ship.description}</p>
                   </td>

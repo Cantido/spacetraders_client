@@ -7,6 +7,8 @@ defmodule SpacetradersClient.Application do
 
   @impl true
   def start(_type, _args) do
+    :ok = SpacetradersClient.ObanLogger.attach_logger()
+
     children = [
       SpacetradersClientWeb.Telemetry,
       {DNSCluster,
@@ -23,6 +25,7 @@ defmodule SpacetradersClient.Application do
       {Finch, name: SpacetradersClient.Finch},
       # Start a worker by calling: SpacetradersClient.Worker.start_link(arg)
       # {SpacetradersClient.Worker, arg},
+      SpacetradersClient.AutomationServer,
       # Start to serve requests, typically the last entry
       SpacetradersClientWeb.Endpoint
     ]

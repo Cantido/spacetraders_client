@@ -10,6 +10,8 @@ defmodule SpacetradersClient.Game do
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.Market
   alias SpacetradersClient.Systems
+  alias SpacetradersClient.Agents
+  alias SpacetradersClient.Fleet
   alias SpacetradersClient.Repo
 
   import Ecto.Query
@@ -149,7 +151,7 @@ defmodule SpacetradersClient.Game do
       else
         %Market{symbol: waypoint_symbol}
       end
-      |> Repo.preload(:trade_goods)
+      |> Repo.preload(:items)
       |> Market.changeset(body["data"])
       |> Repo.insert!(on_conflict: :replace_all)
 
@@ -162,6 +164,31 @@ defmodule SpacetradersClient.Game do
     end
 
     market
+  end
+
+  def load_ship!(client, ship_symbol) do
+    {:ok, %{body: ship_body, status: 200}} = Fleet.get_ship(client, ship_symbol)
+
+    ship =
+      if ship = Repo.get(Ship, ship_symbol) do
+        ship
+      else
+        {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
+
+        agent = Repo.get!(Agent, agent_body["data"]["symbol"])
+
+        Ecto.build_assoc(agent, :ships)
+      end
+      |> Ship.changeset(ship_body["data"])
+      |> Repo.insert_or_update!()
+
+    PubSub.broadcast!(
+      @pubsub,
+      "agent:" <> ship.agent_symbol,
+      {:ship_updated, ship.symbol}
+    )
+
+    ship
   end
 
   def load_ship_cargo!(_ship_symbol) do
@@ -228,7 +255,7 @@ defmodule SpacetradersClient.Game do
     |> Repo.all()
     |> Enum.map(fn cargo_item ->
       price_per_unit =
-        average_selling_price(cargo_item.item_symbol)
+        average_selling_price(cargo_item.item_symbol) || 0
 
       %{
         trade_symbol: cargo_item.item_symbol,
@@ -496,6 +523,28 @@ defmodule SpacetradersClient.Game do
   def best_purchase_market_price(trade_symbol) do
     purchase_markets(trade_symbol)
     |> Enum.sort_by(fn {_, price} -> price end, :asc)
+    |> List.first()
+  end
+
+  def nearest_fuel_waypoint(waypoint_symbol) do
+    waypoint = Repo.get(Waypoint, waypoint_symbol)
+
+    from(
+      m in Market,
+      join: w in Waypoint,
+      on: m.symbol == w.symbol,
+      join: mtg in assoc(m, :items),
+      where: mtg.item_symbol == "FUEL",
+      where: w.system_symbol == ^waypoint.system_symbol,
+      select: w
+    )
+    |> Repo.all()
+    |> Enum.sort_by(
+      fn market_waypoint ->
+        Waypoint.distance(waypoint, market_waypoint)
+      end,
+      :asc
+    )
     |> List.first()
   end
 

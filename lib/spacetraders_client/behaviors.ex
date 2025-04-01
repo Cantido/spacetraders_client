@@ -1,6 +1,6 @@
 defmodule SpacetradersClient.Behaviors do
   alias SpacetradersClient.Systems
-  alias SpacetradersClient.ShipTask
+  alias SpacetradersClient.Automation.ShipTask
   alias SpacetradersClient.Survey
   alias SpacetradersClient.Game
   alias SpacetradersClient.Fleet
@@ -16,38 +16,33 @@ defmodule SpacetradersClient.Behaviors do
 
   @pubsub SpacetradersClient.PubSub
 
-  def for_task(%ShipTask{name: :goto} = task) do
+  def for_task(%ShipTask{name: "goto"} = task) do
     Node.sequence([
       wait_for_transit(),
       refuel(),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE")
+      travel_to_waypoint(ShipTask.arg(task, "waypoint_symbol"), flight_mode: "CRUISE")
     ])
   end
 
-  def for_task(%ShipTask{name: :selling} = task) do
+  def for_task(%ShipTask{name: "selling"} = task) do
     Node.sequence([
       wait_for_transit(),
-      refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.waypoint_symbol,
-        flight_mode: stringify_flight_mode(task.args.flight_mode)
+      refuel(min_fuel: ShipTask.arg(task, "fuel_consumed")),
+      travel_to_waypoint(ShipTask.arg(task, "waypoint_symbol"),
+        flight_mode: stringify_flight_mode(ShipTask.arg(task, "flight_mode"))
       ),
       wait_for_transit(),
       dock_ship(),
-      sell_cargo_item(task.args.trade_symbol, task.args.units)
+      sell_cargo_item(ShipTask.arg(task, "trade_symbol"), ShipTask.arg(task, "units"))
     ])
   end
 
-  defp stringify_flight_mode(:cruise), do: "CRUISE"
-  defp stringify_flight_mode(:drift), do: "DRIFT"
-  defp stringify_flight_mode(:burn), do: "BURN"
-  defp stringify_flight_mode(:stealth), do: "STEALTH"
-
-  def for_task(%ShipTask{name: :trade} = task) do
-    whole_volume_count = div(task.args.units, task.args.volume)
-    units_in_last_volume = rem(task.args.units, task.args.volume)
+  def for_task(%ShipTask{name: "trade"} = task) do
+    whole_volume_count = div(ShipTask.arg(task, "units"), ShipTask.arg(task, "volume"))
+    units_in_last_volume = rem(ShipTask.arg(task, "units"), ShipTask.arg(task, "volume"))
 
     whole_volume_amounts =
-      Stream.repeatedly(fn -> task.args.volume end)
+      Stream.repeatedly(fn -> ShipTask.arg(task, "volume") end)
       |> Stream.take(whole_volume_count)
       |> Enum.to_list()
 
@@ -62,96 +57,115 @@ defmodule SpacetradersClient.Behaviors do
 
     Node.sequence([
       wait_for_transit(),
-      refuel(min_fuel: task.args.start_fuel_consumed),
-      travel_to_waypoint(task.args.start_wp,
-        flight_mode: stringify_flight_mode(task.args.start_flight_mode),
-        fuel_min: task.args.start_fuel_consumed
+      refuel(min_fuel: ShipTask.arg(task, "start_fuel_consumed")),
+      travel_to_waypoint(ShipTask.arg(task, "start_wp"),
+        flight_mode: stringify_flight_mode(ShipTask.arg(task, "start_flight_mode")),
+        fuel_min: ShipTask.arg(task, "start_fuel_consumed")
       ),
       wait_for_transit(),
       dock_ship(),
       Node.sequence(
         Enum.map(volume_amounts_to_trade, fn units ->
-          buy_cargo(task.args.trade_symbol, units, max_price: task.args.max_purchase_price)
+          buy_cargo(ShipTask.arg(task, "trade_symbol"), units,
+            max_price: ShipTask.arg(task, "max_purchase_price")
+          )
         end)
       ),
-      refuel(min_fuel: task.args.end_fuel_consumed),
-      travel_to_waypoint(task.args.end_wp,
-        flight_mode: stringify_flight_mode(task.args.end_flight_mode),
-        fuel_min: task.args.end_fuel_consumed
+      refuel(min_fuel: ShipTask.arg(task, "end_fuel_consumed")),
+      travel_to_waypoint(ShipTask.arg(task, "end_wp"),
+        flight_mode: stringify_flight_mode(ShipTask.arg(task, "end_flight_mode")),
+        fuel_min: ShipTask.arg(task, "end_fuel_consumed")
       ),
       wait_for_transit(),
       dock_ship(),
-      sell_cargo_item(task.args.trade_symbol, task.args.units,
-        min_price: task.args.min_sell_price
+      sell_cargo_item(ShipTask.arg(task, "trade_symbol"), ShipTask.arg(task, "units"),
+        min_price: ShipTask.arg(task, "min_sell_price")
       )
     ])
   end
 
-  def for_task(%ShipTask{name: :pickup} = task) do
+  def for_task(%ShipTask{name: "pickup"} = task) do
     Node.sequence([
       wait_for_transit(),
-      refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.start_wp,
-        flight_mode: stringify_flight_mode(task.args.start_flight_mode)
+      refuel(min_fuel: ShipTask.arg(task, "fuel_consumed")),
+      travel_to_waypoint(ShipTask.arg(task, "start_wp"),
+        flight_mode: stringify_flight_mode(ShipTask.arg(task, "start_flight_mode"))
       ),
       wait_for_transit(),
       Node.sequence(
-        Enum.map(task.args.ship_pickups, fn {pickup_ship_symbol, units} ->
-          pickup_cargo(pickup_ship_symbol, task.args.trade_symbol, units)
+        ShipTask.arg(task, "ship_pickups")
+        |> Jason.decode!()
+        |> Enum.map(fn {pickup_ship_symbol, units} ->
+          pickup_cargo(pickup_ship_symbol, ShipTask.arg(task, "trade_symbol"), units)
         end)
       )
     ])
   end
 
-  def for_task(%ShipTask{name: :deliver_construction_materials} = task) do
-    if task.args.direct_delivery? do
+  def for_task(%ShipTask{name: "deliver_construction_materials"} = task) do
+    if ShipTask.arg(task, "direct_delivery?") == "true" do
       Node.sequence([
-        refuel(min_fuel: task.args.ship_to_site_fuel_consumed),
-        travel_to_waypoint(task.args.waypoint_symbol),
+        refuel(min_fuel: ShipTask.arg(task, "ship_to_site_fuel_consumed")),
+        travel_to_waypoint(ShipTask.arg(task, "waypoint_symbol")),
         wait_for_transit(),
         dock_ship(),
-        deliver_construction_materials(task.args.trade_symbol, task.args.units)
+        deliver_construction_materials(
+          ShipTask.arg(task, "trade_symbol"),
+          ShipTask.arg(task, "units")
+        )
       ])
     else
       Node.sequence([
         wait_for_transit(),
-        refuel(min_fuel: task.args.ship_to_market_fuel_consumed),
-        travel_to_waypoint(task.args.market_waypoint),
+        refuel(min_fuel: ShipTask.arg(task, "ship_to_market_fuel_consumed")),
+        travel_to_waypoint(ShipTask.arg(task, "market_waypoint")),
         wait_for_transit(),
         dock_ship(),
-        buy_cargo(task.args.trade_symbol, task.args.units),
-        refuel(min_fuel: task.args.market_to_site_fuel_consumed),
-        travel_to_waypoint(task.args.waypoint_symbol),
+        buy_cargo(ShipTask.arg(task, "trade_symbol"), ShipTask.arg(task, "units")),
+        refuel(min_fuel: ShipTask.arg(task, "market_to_site_fuel_consumed")),
+        travel_to_waypoint(ShipTask.arg(task, "waypoint_symbol")),
         wait_for_transit(),
         dock_ship(),
-        deliver_construction_materials(task.args.trade_symbol, task.args.units)
+        deliver_construction_materials(
+          ShipTask.arg(task, "trade_symbol"),
+          ShipTask.arg(task, "units")
+        )
       ])
     end
   end
 
-  def for_task(%ShipTask{name: :mine} = task) do
+  def for_task(%ShipTask{name: "mine"} = task) do
     Node.sequence([
-      refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE"),
+      refuel(min_fuel: ShipTask.arg(task, "fuel_consumed")),
+      travel_to_waypoint(ShipTask.arg(task, "waypoint_symbol"), flight_mode: "CRUISE"),
       wait_for_transit(),
       wait_for_ship_cooldown(),
       extract_resources()
     ])
   end
 
-  def for_task(%ShipTask{name: :siphon_resources} = task) do
+  def for_task(%ShipTask{name: "siphon_resources"} = task) do
     Node.sequence([
-      refuel(min_fuel: task.args.fuel_consumed),
-      travel_to_waypoint(task.args.waypoint_symbol, flight_mode: "CRUISE"),
+      refuel(min_fuel: ShipTask.arg(task, "fuel_consumed")),
+      travel_to_waypoint(ShipTask.arg(task, "waypoint_symbol"), flight_mode: "CRUISE"),
       wait_for_transit(),
       wait_for_ship_cooldown(),
       siphon_resources()
     ])
   end
 
-  def for_task(%ShipTask{name: :idle}) do
+  def for_task(%ShipTask{name: "idle"}) do
     Node.action(fn _ -> :success end)
   end
+
+  defp stringify_flight_mode(:cruise), do: "CRUISE"
+  defp stringify_flight_mode(:drift), do: "DRIFT"
+  defp stringify_flight_mode(:burn), do: "BURN"
+  defp stringify_flight_mode(:stealth), do: "STEALTH"
+  defp stringify_flight_mode("cruise"), do: "CRUISE"
+  defp stringify_flight_mode("drift"), do: "DRIFT"
+  defp stringify_flight_mode("burn"), do: "BURN"
+  defp stringify_flight_mode("stealth"), do: "STEALTH"
 
   def enter_orbit(ship_symbol) do
     Node.select([
@@ -390,7 +404,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def travel_to_nearest_fuel do
     Node.sequence([
-      fetch_fuel_markets(),
+      fetch_nearest_fuel(),
       Node.select([
         at_fuel_market?(),
         Node.sequence([
@@ -408,17 +422,17 @@ defmodule SpacetradersClient.Behaviors do
     ])
   end
 
-  def fetch_fuel_markets do
+  def fetch_nearest_fuel do
     Node.action(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:nav_waypoint)
+      ship = Repo.get(Ship, state.ship_symbol)
 
-      fuel_markets =
-        Game.purchase_markets(ship.nav_waypoint.system_symbol, "FUEL")
-        |> Enum.sort_by(fn {market, _price} ->
-          Game.distance_between(ship.nav_waypoint_symbol, market.symbol)
-        end)
+      fuel_wp = Game.nearest_fuel_waypoint(ship.nav_waypoint_symbol)
 
-      {:success, Map.put(state, :fuel_markets, fuel_markets)}
+      if is_nil(fuel_wp) do
+        raise "No fuel markets found in market data"
+      end
+
+      {:success, Map.put(state, :fuel_market, fuel_wp)}
     end)
   end
 
@@ -426,19 +440,13 @@ defmodule SpacetradersClient.Behaviors do
     Node.condition(fn state ->
       ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
-      Enum.any?(Map.get(state, :fuel_markets, []), fn {market, _price} ->
-        market.symbol == ship.nav_waypoint_symbol
-      end)
+      state.fuel_market.symbol == ship.nav_waypoint_symbol
     end)
   end
 
   def navigate_ship_to_fuel_market do
     Node.action(fn state ->
-      {fuel_wp, _price} =
-        Map.get(state, :fuel_markets, [])
-        |> List.first()
-
-      case Fleet.navigate_ship(state.client, state.ship_symbol, fuel_wp.symbol) do
+      case Fleet.navigate_ship(state.client, state.ship_symbol, state.fuel_market.symbol) do
         {:ok, %{status: 200, body: body}} ->
           ship =
             Repo.get(Ship, state.ship_symbol)

@@ -51,11 +51,11 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             In transit
           </div>
           <div class="stat-desc">
-            <% waypoint_symbol = get_in(@ship, ~w(nav route destination symbol)) %>
-            <%= @ship["nav"]["flightMode"] %> to
+            <% waypoint_symbol = @ship.nav_waypoint_symbol %>
+            <%= @ship.nav_flight_mode %> to
             <.link
               class="link"
-              patch={~p"/game/systems/#{@ship["nav"]["systemSymbol"]}/waypoints/#{waypoint_symbol}"}
+              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{waypoint_symbol}"}
             >
               <%= waypoint_symbol %>
             </.link>
@@ -161,12 +161,10 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
   end
 
   def transit_complete_percentage(ship, _cooldown_remaining) do
-    {:ok, departure, _} = DateTime.from_iso8601(ship["nav"]["route"]["departureTime"])
-    {:ok, arrival, _} = DateTime.from_iso8601(ship["nav"]["route"]["arrival"])
     now = DateTime.utc_now()
 
-    total_duration = DateTime.diff(arrival, departure)
-    remaining_duration = DateTime.diff(arrival, now)
+    total_duration = DateTime.diff(ship.nav_route_arrival_at, ship.nav_route_departure_at)
+    remaining_duration = DateTime.diff(ship.nav_route_arrival_at, now)
 
     if remaining_duration >= 0 do
       remaining_duration / total_duration * 100

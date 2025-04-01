@@ -12,9 +12,12 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Repo
 
   import Ecto.Query
+
+  require Logger
 
   @pubsub SpacetradersClient.PubSub
 
@@ -24,8 +27,14 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
 
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
 
+    Logger.info("Loading data for agent #{agent_body["symbol"]}")
+
     agent =
-      %Agent{}
+      if agent = Repo.get(Agent, agent_body["data"]["symbol"]) do
+        agent
+      else
+        %Agent{token: token}
+      end
       |> Agent.changeset(agent_body["data"])
       |> Repo.insert!(on_conflict: {:replace, [:credits]})
 
@@ -50,6 +59,20 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
       end)
 
     ships_count = Enum.count(ship_data)
+
+    Enum.each(ship_data, fn ship ->
+      dbg(ship)
+
+      Map.get(ship, "cargo", %{})
+      |> Map.get("inventory", [])
+      |> Enum.each(fn item ->
+        if !Repo.exists?(from i in Item, where: [symbol: ^item["symbol"]]) do
+          %Item{}
+          |> Item.changeset(item)
+          |> Repo.insert!()
+        end
+      end)
+    end)
 
     system_ships =
       Enum.group_by(ship_data, fn ship ->

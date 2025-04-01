@@ -4,7 +4,9 @@ defmodule SpacetradersClient.Repo.Migrations.AddFleet do
   def change do
     create table(:agents, primary_key: false) do
       add :symbol, :string, primary_key: true
+      add :token, :string, null: false
       add :credits, :integer, null: false
+      add :automation_enabled, :boolean, default: false
 
       timestamps()
     end
@@ -57,11 +59,11 @@ defmodule SpacetradersClient.Repo.Migrations.AddFleet do
     create table(:ship_cargo_items, primary_key: false) do
       add :ship_symbol,
           references(:ships, column: :symbol, on_update: :update_all, on_delete: :delete_all),
-          null: false
+          primary_key: true
 
       add :item_symbol,
           references(:items, column: :symbol, on_update: :update_all, on_delete: :delete_all),
-          null: false
+          primary_key: true
 
       add :units, :integer, null: false
 

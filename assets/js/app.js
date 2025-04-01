@@ -35,7 +35,7 @@ let Hooks = {};
 
 Hooks.Stopwatch = {
   since() { return this.el.dataset.since; },
-  inverval: null,
+  interval: null,
 
   mounted() {
     this.updateStopwatch(this.el, this.since());
@@ -47,8 +47,8 @@ Hooks.Stopwatch = {
   },
 
   destroyed() {
-    if (interval != null) {
-      clearInterval(interval);
+    if (this.interval != null) {
+      clearInterval(this.interval);
     }
   },
 

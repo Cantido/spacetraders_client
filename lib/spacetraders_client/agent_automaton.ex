@@ -40,6 +40,12 @@ defmodule SpacetradersClient.AgentAutomaton do
     end)
   end
 
+  def terminate(%__MODULE__{} = struct) do
+    Enum.each(struct.ship_automata, fn {_symbol, automaton} ->
+      ShipAutomaton.terminate(automaton)
+    end)
+  end
+
   def handle_message(%__MODULE__{} = struct, msg) do
     automata =
       Map.new(struct.ship_automata, fn {ship_symbol, automaton} ->

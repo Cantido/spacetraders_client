@@ -28,7 +28,7 @@ defmodule SpacetradersClient.Game.ShipCargoItem do
 
   def changeset(model, params) do
     model
-    |> cast(params, [:units])
+    |> cast(params, [:item_symbol, :units])
     |> cast_assoc(:item)
     |> assoc_constraint(:ship)
     |> assoc_constraint(:item)
