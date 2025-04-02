@@ -364,6 +364,23 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
     {:noreply, socket}
   end
 
+  def handle_info({:ship_updated, _symbol, _ship}, socket) do
+    fleet =
+      Repo.all(
+        from s in Ship,
+          where: [agent_symbol: ^socket.assigns.agent_symbol],
+          preload: [:nav_waypoint]
+      )
+
+    socket =
+      socket
+      |> assign(%{
+        fleet: AsyncResult.ok(fleet)
+      })
+
+    {:noreply, socket}
+  end
+
   def handle_info(_, socket) do
     {:noreply, socket}
   end

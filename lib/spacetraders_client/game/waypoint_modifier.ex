@@ -6,6 +6,7 @@ defmodule SpacetradersClient.Game.WaypointModifier do
   import Ecto.Changeset
 
   @primary_key false
+  @derive {Jason.Encoder, except: [:__meta__, :__struct__, :waypoint]}
 
   schema "waypoint_modifiers" do
     belongs_to :waypoint, Waypoint,

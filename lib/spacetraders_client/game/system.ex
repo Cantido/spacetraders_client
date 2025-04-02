@@ -8,6 +8,7 @@ defmodule SpacetradersClient.Game.System do
   @primary_key {:symbol, :string, autogenerate: false}
 
   @derive {Inspect, only: [:symbol]}
+  @derive {Jason.Encoder, except: [:__meta__, :__struct__]}
 
   schema "systems" do
     field :sector_symbol, :string

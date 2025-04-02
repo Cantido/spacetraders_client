@@ -4,12 +4,13 @@ defmodule SpacetradersClientWeb.SystemComponent do
   alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Repo
+  alias SpacetradersClientWeb.MapComponent
 
   import Ecto.Query, except: [update: 3]
 
   def render(assigns) do
     ~H"""
-    <div class="p-4">
+    <div class="p-4 h-144">
       <header class="mb-8">
         <h1 class="text-2xl font-bold">
           <span>{@system.name}</span>
@@ -44,6 +45,12 @@ defmodule SpacetradersClientWeb.SystemComponent do
           </div>
         </div>
       </div>
+
+        <.live_component
+          module={MapComponent}
+          id={"system-map-#{@system_symbol}"}
+          system={@system}
+        />
     </div>
     """
   end

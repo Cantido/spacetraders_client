@@ -688,6 +688,14 @@ defmodule SpacetradersClientWeb.GameLive do
     end
   end
 
+  def handle_info({:ship_updated, ship_symbol, ship}, %Socket{} = socket) do
+    if ship_symbol == socket.assigns.ship_symbol do
+      {:noreply, assign(socket, :ship, ship)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_, socket) do
     {:noreply, socket}
   end

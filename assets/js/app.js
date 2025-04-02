@@ -214,8 +214,8 @@ Hooks.SystemMap = {
         const planetGeometry = new THREE.SphereGeometry(0.05, 16, 16);
         const planetMaterial = new THREE.MeshBasicMaterial( { color: 0x4444ff });
         const planetSphere = new THREE.Mesh(planetGeometry, planetMaterial);
-        planetSphere.position.x = waypoint.x / 50;
-        planetSphere.position.z = waypoint.y / 50;
+        planetSphere.position.x = waypoint.x_coordinate / 50;
+        planetSphere.position.z = waypoint.y_coordinate / 50;
         planetSphere.layers.enable(1);
         planetSphere.name = waypoint.symbol;
 
@@ -233,7 +233,7 @@ Hooks.SystemMap = {
         planetLabel.visible = false;
         planetSphere.add(planetLabel);
 
-        const orbitalRadius = Math.sqrt(Math.pow(waypoint.x / 50, 2) + Math.pow(waypoint.y / 50, 2));
+        const orbitalRadius = Math.sqrt(Math.pow(waypoint.x_coordinate / 50, 2) + Math.pow(waypoint.y_coordinate / 50, 2));
 
         const orbitCurve =
           new THREE.EllipseCurve(
@@ -255,8 +255,8 @@ Hooks.SystemMap = {
         const asteroidGeometry = new THREE.SphereGeometry(0.05, 16, 16);
         const asteroidMaterial = new THREE.MeshBasicMaterial( { color: 0x999999 });
         const asteroidSphere = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
-        asteroidSphere.position.x = waypoint.x / 50;
-        asteroidSphere.position.z = waypoint.y / 50;
+        asteroidSphere.position.x = waypoint.x_coordinate / 50;
+        asteroidSphere.position.z = waypoint.y_coordinate / 50;
         asteroidSphere.name = waypoint.symbol;
         asteroidSphere.layers.enable(1);
 

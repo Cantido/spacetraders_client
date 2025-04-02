@@ -11,6 +11,7 @@ defmodule SpacetradersClient.Game.Waypoint do
   @timestamps_opts [type: :utc_datetime_usec]
 
   @derive {Inspect, only: [:symbol]}
+  @derive {Jason.Encoder, except: [:__meta__, :__struct__, :system, :orbitals, :orbits]}
 
   schema "waypoints" do
     belongs_to :system, System, foreign_key: :system_symbol, references: :symbol, type: :string
