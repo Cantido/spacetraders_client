@@ -110,11 +110,7 @@ defmodule SpacetradersClientWeb.LoadingLive do
   on_mount {SpacetradersClientWeb.GameLoader, :agent}
 
   def mount(_params, _session, socket) do
-    %{
-      token: socket.assigns.token,
-      topic: "agent:#{socket.assigns.agent_symbol}"
-    }
-    |> SpacetradersClient.Game.AgentLoadWorker.new()
+    SpacetradersClient.Game.AgentLoadWorker.new(%{})
     |> Oban.insert!()
 
     PubSub.subscribe(@pubsub, "agent:#{socket.assigns.agent_symbol}")

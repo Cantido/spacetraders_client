@@ -35,6 +35,12 @@ config :spacetraders_client, Oban,
   engine: Oban.Engines.Lite,
   repo: SpacetradersClient.Repo,
   notifier: Oban.Notifiers.PG,
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"* * * * */5", SpacetradersClient.Game.AgentLoadWorker}
+     ]}
+  ],
   queues: [
     api: 1,
     default: 10

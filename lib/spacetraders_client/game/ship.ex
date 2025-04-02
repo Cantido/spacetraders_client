@@ -87,21 +87,22 @@ defmodule SpacetradersClient.Game.Ship do
       cooldown_total_seconds: params["cooldown"]["totalSeconds"],
       cooldown_expires_at: params["cooldown"]["expiration"],
       cargo_capacity: params["cargo"]["capacity"],
-      cargo_items:
-        get_in(params, [Access.key("cargo", %{}), Access.key("inventory", [])])
-        |> Enum.map(fn item ->
-          %{
-            item_symbol: item["symbol"],
-            units: item["units"]
-          }
-        end),
       fuel_capacity: params["fuel"]["capacity"],
       fuel_current: params["fuel"]["current"]
     }
 
+    cargo_items =
+      get_in(params, [Access.key("cargo", %{}), Access.key("inventory", [])])
+      |> Enum.map(fn item ->
+        %{
+          item_symbol: item["symbol"],
+          units: item["units"]
+        }
+      end)
+
     model
     |> cast(params, @allowed_params)
-    |> cast_assoc(:cargo_items)
+    |> put_assoc(:cargo_items, cargo_items)
     |> validate_required([:agent_symbol] ++ @required_params)
     |> assoc_constraint(:agent)
   end

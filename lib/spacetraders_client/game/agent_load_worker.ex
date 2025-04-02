@@ -1,7 +1,6 @@
 defmodule SpacetradersClient.Game.AgentLoadWorker do
   use Oban.Worker,
-    queue: :api,
-    unique: true
+    queue: :api
 
   alias SpacetradersClient.Game
   alias Phoenix.PubSub
@@ -12,7 +11,6 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.System
-  alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Repo
 
   import Ecto.Query
@@ -22,8 +20,11 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
   @pubsub SpacetradersClient.PubSub
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"token" => token, "topic" => topic}}) do
+  def perform(%Oban.Job{args: args}) do
+    agent = Repo.one(Agent)
+    token = agent.token
     client = Client.new(token)
+    topic = args["topic"]
 
     {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
 
@@ -60,20 +61,6 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
 
     ships_count = Enum.count(ship_data)
 
-    Enum.each(ship_data, fn ship ->
-      dbg(ship)
-
-      Map.get(ship, "cargo", %{})
-      |> Map.get("inventory", [])
-      |> Enum.each(fn item ->
-        if !Repo.exists?(from i in Item, where: [symbol: ^item["symbol"]]) do
-          %Item{}
-          |> Item.changeset(item)
-          |> Repo.insert!()
-        end
-      end)
-    end)
-
     system_ships =
       Enum.group_by(ship_data, fn ship ->
         ship["nav"]["systemSymbol"]
@@ -103,11 +90,13 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
     |> Stream.map(fn {:ok, count} -> count end)
     |> Stream.scan(&(&1 + &2))
     |> Enum.each(fn ships_loaded_count ->
-      PubSub.broadcast!(
-        @pubsub,
-        topic,
-        {:data_loaded, :fleet, ships_loaded_count, ships_count}
-      )
+      if args["topic"] do
+        PubSub.broadcast!(
+          @pubsub,
+          topic,
+          {:data_loaded, :fleet, ships_loaded_count, ships_count}
+        )
+      end
     end)
 
     Map.keys(system_ships)
