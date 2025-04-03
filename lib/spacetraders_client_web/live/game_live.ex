@@ -68,6 +68,7 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def mount(_params, _session, socket) do
     agent_symbol = socket.assigns.agent.result.symbol
+    agent_id = socket.assigns.agent.result.id
 
     PubSub.subscribe(@pubsub, "agent:#{agent_symbol}")
 
@@ -102,8 +103,8 @@ defmodule SpacetradersClientWeb.GameLive do
         {:ok,
          %{
            fleet:
-             Repo.all(from s in Ship, where: [agent_symbol: ^agent_symbol])
-             |> Repo.preload([:nav_waypoint])
+             Repo.all(from s in Ship, where: [agent_id: ^agent_id])
+             |> Repo.preload(nav_waypoint: :system)
          }}
       end)
 
@@ -113,14 +114,14 @@ defmodule SpacetradersClientWeb.GameLive do
   def handle_params(%{"ship_symbol" => ship_symbol}, _uri, socket) do
     ship =
       Repo.get_by!(Ship, symbol: ship_symbol)
-      |> Repo.preload(:nav_waypoint)
+      |> Repo.preload(nav_waypoint: :system)
 
     socket =
       socket
       |> assign(%{
         ship_symbol: ship.symbol,
         ship: ship,
-        system_symbol: ship.nav_waypoint.system_symbol,
+        system_symbol: ship.nav_waypoint.system.symbol,
         waypoint_symbol: ship.nav_waypoint.symbol
       })
 

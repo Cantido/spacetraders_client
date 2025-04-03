@@ -7,10 +7,7 @@ defmodule SpacetradersClient.Automation.ShipAutomationTick do
   schema "ship_automation_ticks" do
     field :timestamp, :utc_datetime_usec
 
-    belongs_to :ship, Ship,
-      foreign_key: :ship_symbol,
-      references: :symbol,
-      type: :string
+    belongs_to :ship, Ship
 
     belongs_to :active_task, ShipTask
 

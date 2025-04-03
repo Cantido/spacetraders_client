@@ -26,7 +26,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
         <ShipStatsComponent.fuel ship={@ship}>
           <div class="stat-actions">
             <button
-              class="btn btn-neutral"
+              class="btn btn-neutral btn-xs"
               phx-click="purchase-fuel"
               phx-value-ship-symbol={@ship.symbol}
             >
@@ -46,25 +46,14 @@ defmodule SpacetradersClientWeb.ShipComponent do
         />
       <% end %>
 
-      <.tablist
-        active_tab_id={@tab}
-        target={@myself}
-        tabs={[
-          cargo: "Cargo",
-          navigate: "Navigate",
-          subsystems: "Subsystems",
-          registration: "Registration"
-        ]}
-      />
-
-
-      <section class="flex flex-col">
-        <%= case @tab do %>
-          <% :cargo -> %>
+      <div>
+        <.radio_tablist name="ship-tabs-#{@ship.symbol}" class="tabs-lift">
+          <:tab label="Cargo" active={true} class="border-base-300">
             <SpacetradersClientWeb.ShipCargoComponent.cargo ship={@ship} />
-          <% :navigate -> %>
-            <div>
-              <div class="mb-8">
+          </:tab>
+          <:tab label="Navigate" class="border-base-300">
+            <div class="">
+              <div class="mb-8 p-4">
                 <div class="font-bold text-lg mb-4">
                   Flight mode
                 </div>
@@ -79,7 +68,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
                 </form>
               </div>
 
-              <div class="font-bold text-lg mb-4">
+              <div class="font-bold text-lg mb-4 p-4">
                 Waypoints in this system
               </div>
 
@@ -94,6 +83,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
                   </thead>
                   <tbody>
                     <%= for waypoint <- @ship.nav_waypoint.system.waypoints do %>
+                      <% waypoint = Repo.preload(waypoint, :system) %>
                       <tr>
                         <td><%= waypoint.symbol %></td>
                         <td><%= waypoint.type %></td>
@@ -106,7 +96,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
                               class="btn btn-sm btn-accent"
                               phx-click="navigate-ship"
                               phx-value-ship-symbol={@ship.symbol}
-                              phx-value-system-symbol={waypoint.system_symbol}
+                              phx-value-system-symbol={waypoint.system.symbol}
                               phx-value-waypoint-symbol={waypoint.symbol}
                               disabled={disabled}
                             >
@@ -120,51 +110,15 @@ defmodule SpacetradersClientWeb.ShipComponent do
                 </table>
               </div>
             </div>
-
-          <% :subsystems -> %>
-            <div>
-              Modules installed:
-              <ul>
-                <%= for module <- @ship["modules"] do %>
-                  <li>
-                    <p>
-                      <%= module["name"] %>
-                    </p>
-                    <p class="text-sm">
-                      <%= module["description"] %>
-                    </p>
-                  </li>
-                <% end %>
-              </ul>
-
-              Mounts installed:
-              <ul>
-                <%= for mount <- @ship["mounts"] do %>
-                  <li>
-                    <p>
-                      <%= mount["name"] %>
-                    </p>
-                    <div class="text-sm">
-                      <p>
-                        <%= mount["description"] %>
-                      </p>
-                      <%= if mount["deposits"] do %>
-                        <p>Detects the following goods:</p>
-                        <ul>
-                          <%= for deposit <- mount["deposits"] do %>
-                            <li><%= deposit %></li>
-                          <% end %>
-                        </ul>
-                      <% end %>
-                    </div>
-                  </li>
-                <% end %>
-              </ul>
-            </div>
-          <% :registration -> %>
-            <span>Registration here</span>
-        <% end %>
-      </section>
+          </:tab>
+          <:tab label="Subsystems" class="border-base-300">
+            <div class="p-2">Subsystems here</div>
+          </:tab>
+          <:tab label="Registration" class="border-base-300">
+            <div class="p-2">Registration here</div>
+          </:tab>
+        </.radio_tablist>
+      </div>
     </section>
     """
   end
@@ -185,7 +139,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
     previous_automation_tick =
       Repo.one(
         from sat in ShipAutomationTick,
-          where: [ship_symbol: ^ship_symbol],
+          where: [ship_id: ^ship.id],
           order_by: [desc: :timestamp],
           limit: 1,
           preload: [

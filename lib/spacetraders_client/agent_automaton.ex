@@ -11,7 +11,10 @@ defmodule SpacetradersClient.AgentAutomaton do
 
   def new(agent_symbol) do
     automata =
-      from(s in Ship, where: [agent_symbol: ^agent_symbol])
+      from(s in Ship,
+        join: a in assoc(s, :agent),
+        where: a.symbol == ^agent_symbol
+      )
       |> Repo.all()
       |> Enum.map(fn ship ->
         automaton = ShipAutomaton.new(ship)

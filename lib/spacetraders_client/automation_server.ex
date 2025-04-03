@@ -56,7 +56,7 @@ defmodule SpacetradersClient.AutomationServer do
         end
       end)
       |> Map.new(fn {agent_symbol, automaton} ->
-        agent = Repo.get(Agent, agent_symbol)
+        agent = Repo.get_by!(Agent, symbol: agent_symbol)
         client = Client.new(agent.token)
 
         automaton = AgentAutomaton.tick(automaton, client)
@@ -66,5 +66,4 @@ defmodule SpacetradersClient.AutomationServer do
 
     {:noreply, %{automata: automata}, @interval}
   end
-
 end

@@ -224,11 +224,13 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   end
 
   defp get_primary_satellites(system) do
-    Enum.filter(system.waypoints, fn wp -> is_nil(wp.orbits) end)
+    Enum.filter(system.waypoints, fn wp -> is_nil(wp.orbits_waypoint) end)
   end
 
   defp get_satellites(system, waypoint_symbol) do
-    Enum.filter(system.waypoints, fn wp -> wp.orbits_waypoint.symbol == waypoint_symbol end)
+    Enum.filter(system.waypoints, fn wp ->
+      wp.orbits_waypoint && wp.orbits_waypoint.symbol == waypoint_symbol
+    end)
   end
 
   attr :type, :string, required: true
@@ -309,13 +311,14 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
 
     system =
       Repo.get_by(System, symbol: socket.assigns.system_symbol)
-      |> Repo.preload(waypoints: [:orbits, :orbitals])
+      |> Repo.preload(waypoints: [:orbits_waypoint, :orbitals])
 
     fleet =
       Repo.all(
         from s in Ship,
-          where: [agent_symbol: ^socket.assigns.agent_symbol],
-          preload: [:nav_waypoint]
+          join: a in assoc(s, :agent),
+          where: a.symbol == ^socket.assigns.agent_symbol,
+          preload: [nav_waypoint: :system]
       )
 
     socket =

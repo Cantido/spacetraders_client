@@ -1,6 +1,10 @@
 defmodule SpacetradersClient.Game.AgentLoadWorker do
   use Oban.Worker,
-    queue: :api
+    queue: :api,
+    unique: [
+      period: {5, :minutes},
+      fields: [:worker, :args]
+    ]
 
   alias SpacetradersClient.Game
   alias Phoenix.PubSub
@@ -81,59 +85,7 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
         end
 
         Enum.each(ships_in_system, fn ship_data ->
-          nav_waypoint =
-            Repo.get_by!(Waypoint, symbol: ship_data["nav"]["waypointSymbol"])
-
-          nav_dest =
-            Repo.get_by!(Waypoint, symbol: ship_data["nav"]["route"]["destination"]["symbol"])
-
-          nav_orig =
-            Repo.get_by!(Waypoint, symbol: ship_data["nav"]["route"]["origin"]["symbol"])
-
-          cargo_items =
-            Enum.map(ship_data["cargo"]["inventory"], fn item_data ->
-              item =
-                if item = Repo.get_by(Item, symbol: item_data["symbol"]) do
-                  item
-                else
-                  %Item{
-                    symbol: item_data["symbol"],
-                    name: item_data["name"],
-                    description: item_data["description"]
-                  }
-                  |> Repo.insert!()
-                end
-
-              %ShipCargoItem{
-                item: item,
-                units: item_data["units"]
-              }
-            end)
-
-          ship =
-            if ship = Repo.get_by(Ship, symbol: ship_data["symbol"]) do
-              ship
-              |> Repo.preload([
-                :cargo_items,
-                :nav_waypoint,
-                :nav_route_origin_waypoint,
-                :nav_route_destination_waypoint
-              ])
-              |> Ship.changeset(ship_data)
-              |> Ecto.Changeset.put_assoc(:nav_waypoint, nav_waypoint)
-              |> Ecto.Changeset.put_assoc(:nav_route_destination_waypoint, nav_dest)
-              |> Ecto.Changeset.put_assoc(:nav_route_origin_waypoint, nav_orig)
-              |> Ecto.Changeset.put_assoc(:cargo_items, cargo_items)
-              |> Repo.update!()
-            else
-              Ecto.build_assoc(agent, :ships)
-              |> Ship.changeset(ship_data)
-              |> Ecto.Changeset.put_assoc(:nav_waypoint, nav_waypoint)
-              |> Ecto.Changeset.put_assoc(:nav_route_destination_waypoint, nav_dest)
-              |> Ecto.Changeset.put_assoc(:nav_route_origin_waypoint, nav_orig)
-              |> Ecto.Changeset.put_assoc(:cargo_items, cargo_items)
-              |> Repo.insert!()
-            end
+          Game.save_ship!(agent.symbol, ship_data)
         end)
 
         Enum.count(ships_in_system)

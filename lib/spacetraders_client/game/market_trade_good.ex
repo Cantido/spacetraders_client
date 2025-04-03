@@ -36,7 +36,6 @@ defmodule SpacetradersClient.Game.MarketTradeGood do
     model
     |> cast(params, [
       :type,
-      :item_symbol,
       :trade_volume,
       :supply,
       :activity,
@@ -45,9 +44,9 @@ defmodule SpacetradersClient.Game.MarketTradeGood do
     ])
     |> assoc_constraint(:market)
     |> assoc_constraint(:item)
-    |> validate_required([:type, :item_symbol])
-    |> unique_constraint([:item_symbol, :market_symbol],
-      name: "market_trade_goods_market_symbol_item_symbol_index",
+    |> validate_required([:type])
+    |> unique_constraint([:item_id, :market_id],
+      name: "market_trade_goods_market_id_item_id_index",
       message: "market is already selling this item"
     )
   end

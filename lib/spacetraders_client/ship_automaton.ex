@@ -2,6 +2,7 @@ defmodule SpacetradersClient.ShipAutomaton do
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Game.ShipCargoItem
   alias SpacetradersClient.ShipTask
   alias SpacetradersClient.Utility
   alias SpacetradersClient.Behaviors
@@ -43,8 +44,12 @@ defmodule SpacetradersClient.ShipAutomaton do
           )
           |> Repo.preload(:active_task)
 
+        ship =
+          Repo.get_by!(Ship, symbol: struct.ship_symbol)
+          |> Repo.preload([:nav_waypoint, :cargo_items])
+
         %SpacetradersClient.Automation.ShipAutomationTick{
-          ship_symbol: struct.ship_symbol,
+          ship: ship,
           active_task: previous_tick.active_task,
           alternative_tasks: previous_tick.alternative_tasks,
           timestamp: DateTime.utc_now()
@@ -55,10 +60,10 @@ defmodule SpacetradersClient.ShipAutomaton do
       else
         ship =
           Repo.get_by!(Ship, symbol: struct.ship_symbol)
-          |> Repo.preload([:nav_waypoint, :cargo_items])
+          |> Repo.preload([:agent, :nav_waypoint, :cargo_items])
 
         game_actions =
-          Game.actions(ship.agent_symbol)
+          Game.actions(ship.agent.symbol)
 
         ship_actions = ship_actions(struct)
 
@@ -98,7 +103,7 @@ defmodule SpacetradersClient.ShipAutomaton do
           end)
 
         %SpacetradersClient.Automation.ShipAutomationTick{
-          ship_symbol: struct.ship_symbol,
+          ship: ship,
           active_task: active_task,
           alternative_tasks: alternative_tasks,
           timestamp: DateTime.utc_now()
@@ -263,7 +268,7 @@ defmodule SpacetradersClient.ShipAutomaton do
   end
 
   defp action_variations(_struct, ship, %ShipTask{name: :trade} = trade_task) do
-    agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
+    agent = Repo.get!(Agent, ship.agent_id)
     cargo_space = ship.cargo_capacity - Ship.cargo_current(ship)
 
     max_units =
@@ -321,7 +326,7 @@ defmodule SpacetradersClient.ShipAutomaton do
       # Don't spend more than 20% of my money
       # I chose 20% because it is possible multiple ships might evaluate many trade tasks,
       # so they might spend all my money if I set this higher
-      agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
+      agent = Repo.get!(Agent, ship.agent_id)
 
       task.args.expense > agent.credits * 0.20
     end)
@@ -426,7 +431,7 @@ defmodule SpacetradersClient.ShipAutomaton do
         ship.fuel_capacity > ship_to_site_fuel_consumed
       end)
     else
-      agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
+      agent = Repo.get!(Agent, ship.agent_id)
       maximum_spend = max(agent.credits - 500_000, 0)
       cargo_space = ship.cargo_capacity - Ship.cargo_current(ship)
 
@@ -557,11 +562,16 @@ defmodule SpacetradersClient.ShipAutomaton do
   defp ship_actions(%__MODULE__{} = struct) do
     ship =
       Repo.get_by!(Ship, symbol: struct.ship_symbol)
-      |> Repo.preload([:cargo_items, :nav_waypoint])
+      |> Repo.preload(cargo_items: :item, nav_waypoint: :system)
 
-    Enum.flat_map(ship.cargo_items, fn item ->
-      Game.selling_markets(ship.nav_waypoint.system_symbol, item.item_symbol)
+    Enum.flat_map(ship.cargo_items, fn %ShipCargoItem{} = item ->
+      item = Repo.preload(item, :item)
+
+      Game.selling_markets(ship.nav_waypoint.system.symbol, item.item.symbol)
       |> Enum.flat_map(fn {market, price} ->
+        market = Repo.preload(market, trade_goods: :item)
+        dbg(market)
+
         distance =
           Waypoint.distance(ship.nav_waypoint, Repo.get_by(Waypoint, symbol: market.symbol))
 
@@ -572,7 +582,7 @@ defmodule SpacetradersClient.ShipAutomaton do
             |> Repo.preload(:trade_goods)
             |> Map.fetch!(:trade_goods)
             |> Enum.filter(fn t -> is_integer(t.trade_volume) end)
-            |> Enum.find(fn t -> t.item_symbol == item.item_symbol end)
+            |> Enum.find(fn t -> t.item_id == item.item_id end)
             |> Map.fetch!(:trade_volume)
             |> min(item.units)
 
@@ -585,14 +595,14 @@ defmodule SpacetradersClient.ShipAutomaton do
           profit_over_time = total_profit / travel_time
 
           avg_price =
-            Game.average_selling_price(ship.nav_waypoint.system_symbol, item.item_symbol)
+            Game.average_selling_price(ship.nav_waypoint.system.symbol, item.item.symbol)
 
           ShipTask.new(
             :selling,
             %{
               fuel_consumed: fuel_used,
               waypoint_symbol: market.symbol,
-              trade_symbol: item.item_symbol,
+              trade_symbol: item.item.symbol,
               price: price,
               units: units,
               total_profit: total_profit,

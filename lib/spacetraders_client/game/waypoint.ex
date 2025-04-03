@@ -23,7 +23,9 @@ defmodule SpacetradersClient.Game.Waypoint do
 
     belongs_to :orbits_waypoint, __MODULE__
 
-    has_many :orbitals, __MODULE__, preload_order: [asc: :symbol]
+    has_many :orbitals, __MODULE__,
+      preload_order: [asc: :symbol],
+      foreign_key: :orbits_waypoint_id
 
     has_many :modifiers, WaypointModifier, on_replace: :delete_if_exists
 

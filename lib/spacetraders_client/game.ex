@@ -1,6 +1,7 @@
 defmodule SpacetradersClient.Game do
   alias Phoenix.PubSub
   alias SpacetradersClient.ShipTask
+  alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.ShipCargoItem
@@ -93,6 +94,125 @@ defmodule SpacetradersClient.Game do
     end)
 
     waypoints
+  end
+
+  def load_ship!(client, ship_symbol) do
+    {:ok, %{body: ship_body, status: 200}} = Fleet.get_ship(client, ship_symbol)
+    {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
+
+    ship = save_ship!(agent_body["data"]["symbol"], ship_body["data"])
+
+    PubSub.broadcast!(
+      @pubsub,
+      "agent:" <> ship.agent_symbol,
+      {:ship_updated, ship.symbol}
+    )
+
+    ship
+  end
+
+  def save_ship!(agent_symbol, ship_data) do
+    agent = Repo.get_by!(Agent, symbol: agent_symbol)
+
+    if ship = Repo.get_by(Ship, symbol: ship_data["symbol"]) do
+      ship
+      |> Repo.preload([
+        :cargo_items,
+        :nav_waypoint,
+        :nav_route_origin_waypoint,
+        :nav_route_destination_waypoint
+      ])
+      |> Ship.changeset(ship_data)
+      |> Repo.update!()
+    else
+      nav_waypoint =
+        Repo.get_by!(Waypoint, symbol: ship_data["nav"]["waypointSymbol"])
+
+      nav_dest =
+        Repo.get_by!(Waypoint, symbol: ship_data["nav"]["route"]["destination"]["symbol"])
+
+      nav_orig =
+        Repo.get_by!(Waypoint, symbol: ship_data["nav"]["route"]["origin"]["symbol"])
+
+      Ecto.build_assoc(agent, :ships,
+        nav_waypoint: nav_waypoint,
+        nav_route_destination_waypoint: nav_dest,
+        nav_route_origin_waypoint: nav_orig
+      )
+      |> Ship.changeset(ship_data)
+      |> Repo.insert!()
+    end
+
+    save_ship_nav!(ship_data["symbol"], ship_data["nav"])
+    save_ship_cargo!(ship_data["symbol"], ship_data["cargo"])
+  end
+
+  def save_ship_nav!(ship_symbol, ship_nav_data) do
+    ship =
+      Repo.get_by!(Ship, symbol: ship_symbol)
+      |> Repo.preload([
+        :nav_waypoint,
+        :nav_route_destination_waypoint,
+        :nav_route_origin_waypoint
+      ])
+
+    nav_waypoint =
+      Repo.get_by!(Waypoint, symbol: ship_nav_data["waypointSymbol"])
+
+    nav_dest =
+      Repo.get_by!(Waypoint, symbol: ship_nav_data["route"]["destination"]["symbol"])
+
+    nav_orig =
+      Repo.get_by!(Waypoint, symbol: ship_nav_data["route"]["origin"]["symbol"])
+
+    ship
+    |> Ship.nav_changeset(ship_nav_data)
+    |> Ecto.Changeset.put_assoc(:nav_waypoint, nav_waypoint)
+    |> Ecto.Changeset.put_assoc(:nav_route_destination_waypoint, nav_dest)
+    |> Ecto.Changeset.put_assoc(:nav_route_origin_waypoint, nav_orig)
+    |> Repo.update!()
+  end
+
+  def save_ship_cargo!(ship_symbol, ship_cargo_data) do
+    ship = Repo.get_by!(Ship, symbol: ship_symbol)
+
+    Enum.map(ship_cargo_data["inventory"], fn item_data ->
+      item =
+        if item = Repo.get_by(Item, symbol: item_data["symbol"]) do
+          item
+        else
+          %Item{
+            symbol: item_data["symbol"],
+            name: item_data["name"],
+            description: item_data["description"]
+          }
+          |> Repo.insert!()
+        end
+
+      if cargo_item = Repo.get_by(ShipCargoItem, ship_id: ship.id, item_id: item.id) do
+        cargo_item
+        |> Ecto.Changeset.change(%{units: item_data["units"]})
+        |> Repo.update!()
+      else
+        Ecto.build_assoc(ship, :cargo_items)
+        |> Ecto.Changeset.change(%{
+          item: item,
+          units: item_data["units"]
+        })
+        |> Repo.insert!()
+      end
+    end)
+    |> Enum.map(fn c -> c.id end)
+    |> then(fn current_cargo_ids ->
+      from(sci in ShipCargoItem,
+        join: s in assoc(sci, :ship),
+        where: s.id == ^ship.id,
+        where: sci.id not in ^current_cargo_ids
+      )
+      |> Repo.delete_all()
+    end)
+
+    ship
   end
 
   def load_construction_site!(_client, _system_symbol, _waypoint_symbol, _topic \\ nil) do
@@ -189,9 +309,12 @@ defmodule SpacetradersClient.Game do
 
         if trade_good = Enum.find(trade_goods, fn tg -> tg["symbol"] == symbol end) do
           market_item
-          |> Ecto.Changeset.change(%{
+          |> MarketTradeGood.changeset(%{
             purchase_price: trade_good["purchasePrice"],
-            sell_price: trade_good["sellPrice"]
+            sell_price: trade_good["sellPrice"],
+            trade_volume: trade_good["tradeVolume"],
+            supply: trade_good["supply"],
+            activity: trade_good["activity"]
           })
           |> Repo.update!()
         else
@@ -216,32 +339,6 @@ defmodule SpacetradersClient.Game do
     end
 
     market
-  end
-
-  def load_ship!(client, ship_symbol) do
-    {:ok, %{body: ship_body, status: 200}} = Fleet.get_ship(client, ship_symbol)
-
-    ship =
-      if ship = Repo.get_by(Ship, symbol: ship_symbol) do
-        ship
-      else
-        {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
-
-        agent = Repo.get_by!(Agent, symbol: agent_body["data"]["symbol"])
-
-        Ecto.build_assoc(agent, :ships)
-      end
-      |> Repo.preload(:cargo_items)
-      |> Ship.changeset(ship_body["data"])
-      |> Repo.insert_or_update!()
-
-    PubSub.broadcast!(
-      @pubsub,
-      "agent:" <> ship.agent_symbol,
-      {:ship_updated, ship.symbol}
-    )
-
-    ship
   end
 
   def load_ship_cargo!(_ship_symbol) do
@@ -479,8 +576,9 @@ defmodule SpacetradersClient.Game do
       on: m.symbol == w.symbol,
       join: s in assoc(w, :system),
       join: mtg in assoc(m, :trade_goods),
+      join: i in assoc(mtg, :item),
       where: s.symbol == ^system_symbol,
-      where: mtg.item_symbol == ^trade_symbol,
+      where: i.symbol == ^trade_symbol,
       where: not is_nil(mtg.sell_price),
       select: {m, mtg.sell_price}
     )
@@ -643,7 +741,7 @@ defmodule SpacetradersClient.Game do
         Enum.flat_map(markets, fn end_market ->
           end_market.trade_goods
           |> Enum.filter(fn end_trade_good ->
-            start_trade_good.item_symbol == end_trade_good.item_symbol &&
+            start_trade_good.item_id == end_trade_good.item_id &&
               end_trade_good.sell_price > start_trade_good.purchase_price
           end)
           |> Enum.map(fn end_trade_good ->
@@ -731,7 +829,10 @@ defmodule SpacetradersClient.Game do
     # into maps by waypoint, so we can pick up all of one item at once.
     # This will make it easier to find buyers.
 
-    from(s in Ship, where: [agent_symbol: ^agent_symbol])
+    from(s in Ship,
+      join: a in assoc(s, :agent),
+      where: a.symbol == ^agent_symbol
+    )
     |> Repo.all()
     |> Repo.preload(:cargo_items)
     |> Enum.filter(fn ship ->
@@ -809,7 +910,11 @@ defmodule SpacetradersClient.Game do
 
   defp market_visibility_actions(agent_symbol) do
     fleet =
-      from(s in Ship, where: [agent_symbol: ^agent_symbol])
+      from(s in Ship,
+        join: a in assoc(s, :agent),
+        where: a.symbol == ^agent_symbol,
+        preload: :nav_waypoint
+      )
       |> Repo.all()
 
     satellites_at_wp =

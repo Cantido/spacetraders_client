@@ -61,8 +61,8 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             </.link>
           </div>
           <div class="stat-actions">
-            <button class="btn btn-neutral" disabled>Undock</button>
-            <button class="btn btn-neutral" disabled>Dock</button>
+            <button class="btn btn-neutral btn-xs" disabled>Undock</button>
+            <button class="btn btn-neutral btn-xs" disabled>Dock</button>
           </div>
         <% :in_orbit -> %>
           <div class="stat-value">
@@ -72,14 +72,14 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             Orbiting
             <.link
               class="link"
-              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint.symbol}"}
+              patch={~p"/game/systems/#{@ship.nav_waypoint.system.symbol}/waypoints/#{@ship.nav_waypoint.symbol}"}
             >
               <%= @ship.nav_waypoint.symbol %>
             </.link>
           </div>
           <div class="stat-actions">
-            <button class="btn btn-neutral" disabled>Undock</button>
-            <button phx-click="dock-ship" phx-value-ship-symbol={@ship.symbol} class="btn btn-neutral">Dock</button>
+            <button class="btn btn-neutral btn-xs" disabled>Undock</button>
+            <button phx-click="dock-ship" phx-value-ship-symbol={@ship.symbol} class="btn btn-neutral btn-xs">Dock</button>
           </div>
         <% :docked -> %>
           <div class="stat-value">
@@ -95,8 +95,8 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             </.link>
           </div>
           <div class="stat-actions">
-            <button phx-click="orbit-ship" phx-value-ship-symbol={@ship.symbol} class="btn btn-neutral">Undock</button>
-            <button class="btn btn-neutral" disabled>Dock</button>
+            <button phx-click="orbit-ship" phx-value-ship-symbol={@ship.symbol} class="btn btn-neutral btn-xs">Undock</button>
+            <button class="btn btn-neutral btn-xs" disabled>Dock</button>
           </div>
       <% end %>
     </div>

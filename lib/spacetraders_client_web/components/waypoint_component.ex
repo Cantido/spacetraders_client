@@ -387,7 +387,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
         </div>
 
         <% ships_in_system =
-          Enum.filter(fleet, fn ship -> ship.nav_waypoint.system_symbol == @system_symbol end) %>
+          Enum.filter(fleet, fn ship -> ship.nav_waypoint.system.symbol == @system_symbol end) %>
 
         <table class="table table-zebra table-fixed">
           <thead>
@@ -415,7 +415,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                   <.link
                     class="link-hover"
                     patch={
-                      ~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"
+                      ~p"/game/systems/#{ship.nav_waypoint.system.symbol}/waypoints/#{ship.nav_waypoint.symbol}"
                     }
                   >
                     {ship.nav_waypoint.symbol}
@@ -1073,13 +1073,12 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     ships_at_waypoint =
       Repo.all(
         from s in Ship,
+          join: a in assoc(s, :agent),
           join: wp in assoc(s, :nav_waypoint),
-          where: [
-            agent_symbol: ^socket.assigns.agent_symbol
-          ],
+          where: a.symbol == ^socket.assigns.agent_symbol,
           where: wp.symbol == ^socket.assigns.waypoint_symbol
       )
-      |> Repo.preload(:nav_waypoint)
+      |> Repo.preload(nav_waypoint: :system)
 
     socket =
       socket
@@ -1106,9 +1105,10 @@ defmodule SpacetradersClientWeb.WaypointComponent do
         fleet =
           Repo.all(
             from s in Ship,
-              where: [agent_symbol: ^agent_symbol]
+              join: a in assoc(s, :agent),
+              where: a.symbol == ^agent_symbol
           )
-          |> Repo.preload(:nav_waypoint)
+          |> Repo.preload(nav_waypoint: :system)
 
         {:ok, %{fleet: fleet}}
       end)

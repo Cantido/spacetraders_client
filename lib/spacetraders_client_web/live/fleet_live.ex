@@ -35,12 +35,12 @@ defmodule SpacetradersClientWeb.FleetLive do
             <td><.link navigate={~p"/game/fleet/#{ship.symbol}"} class="hover:link"><%= ship.symbol %></.link></td>
             <td><%= ship.registration_role %></td>
             <td>
-              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system_symbol}"} class="hover:link">
-                <%= ship.nav_waypoint.system_symbol %>
+              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system.symbol}"} class="hover:link">
+                <%= ship.nav_waypoint.system.symbol %>
               </.link>
             </td>
             <td>
-              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
+              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system.symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
                 <%= ship.nav_waypoint.symbol %>
               </.link>
             </td>
@@ -73,19 +73,21 @@ defmodule SpacetradersClientWeb.FleetLive do
     fleet =
       Repo.all(
         from s in Ship,
-          where: [agent_symbol: ^socket.assigns.agent.result.symbol],
-          preload: [:nav_waypoint]
+          join: a in assoc(s, :agent),
+          where: a.symbol == ^socket.assigns.agent.result.symbol,
+          preload: [nav_waypoint: :system]
       )
 
     fleet_automation_ticks =
       Repo.all(
         from sat in ShipAutomationTick,
           join: s in assoc(sat, :ship),
-          where: s.agent_symbol == ^agent_symbol
+          join: a in assoc(s, :agent),
+          where: a.symbol == ^agent_symbol
       )
-      |> Repo.preload(active_task: :active_automation_ticks)
+      |> Repo.preload([:ship, active_task: :active_automation_ticks])
       |> Map.new(fn tick ->
-        {tick.ship_symbol, tick}
+        {tick.ship.symbol, tick}
       end)
 
     socket =

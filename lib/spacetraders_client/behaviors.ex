@@ -178,13 +178,12 @@ defmodule SpacetradersClient.Behaviors do
         case Fleet.orbit_ship(state.client, ship_symbol) do
           {:ok, %{status: 200, body: body}} ->
             ship =
-              Repo.get_by(Ship, symbol: ship_symbol)
-              |> Ship.changeset(body["data"])
-              |> Repo.update!()
+              Game.save_ship_nav!(ship_symbol, body["data"]["nav"])
+              |> Repo.preload(:agent)
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, ship.symbol, ship}
             )
 
@@ -217,13 +216,12 @@ defmodule SpacetradersClient.Behaviors do
           case Fleet.orbit_ship(state.client, state.ship_symbol) do
             {:ok, %{status: 200, body: body}} ->
               ship =
-                Repo.get_by(Ship, symbol: state.ship_symbol)
-                |> Ship.nav_changeset(body["data"]["nav"])
-                |> Repo.update!()
+                Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
+                |> Repo.preload(:agent)
 
               PubSub.broadcast(
                 @pubsub,
-                "agent:#{ship.agent_symbol}",
+                "agent:#{ship.agent.symbol}",
                 {:ship_updated, state.ship_symbol, ship}
               )
 
@@ -265,13 +263,12 @@ defmodule SpacetradersClient.Behaviors do
         case Fleet.dock_ship(state.client, state.ship_symbol) do
           {:ok, %{status: 200, body: body}} ->
             ship =
-              Repo.get_by(Ship, symbol: state.ship_symbol)
-              |> Ship.nav_changeset(body["data"]["nav"])
-              |> Repo.update!()
+              Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
+              |> Repo.preload(:agent)
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, state.ship_symbol, ship}
             )
 
@@ -290,13 +287,12 @@ defmodule SpacetradersClient.Behaviors do
       case Fleet.set_flight_mode(state.client, state.ship_symbol, flight_mode) do
         {:ok, %{status: 200, body: body}} ->
           ship =
-            Repo.get_by(Ship, symbol: state.ship_symbol)
-            |> Ship.nav_changeset(body["data"]["nav"])
-            |> Repo.update!()
+            Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
+            |> Repo.preload(:agent)
 
           PubSub.broadcast(
             @pubsub,
-            "agent:#{ship.agent_symbol}",
+            "agent:#{ship.agent.symbol}",
             {:ship_updated, ship.symbol, ship}
           )
 
@@ -449,13 +445,12 @@ defmodule SpacetradersClient.Behaviors do
       case Fleet.navigate_ship(state.client, state.ship_symbol, state.fuel_market.symbol) do
         {:ok, %{status: 200, body: body}} ->
           ship =
-            Repo.get_by(Ship, symbol: state.ship_symbol)
-            |> Ship.nav_changeset(body["data"]["nav"])
-            |> Repo.update!()
+            Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
+            |> Repo.preload(:agent)
 
           PubSub.broadcast(
             @pubsub,
-            "agent:#{ship.agent_symbol}",
+            "agent:#{ship.agent.symbol}",
             {:ship_updated, state.ship_symbol, ship}
           )
 
@@ -527,12 +522,13 @@ defmodule SpacetradersClient.Behaviors do
 
         case Fleet.siphon_resources(state.client, state.ship_symbol) do
           {:ok, %{status: 201, body: body}} ->
+            ship
+            |> Ship.cooldown_changeset(body["data"]["cooldown"])
+            |> Repo.update!()
+
             ship =
-              ship
-              |> Ship.cooldown_changeset(body["data"]["cooldown"])
-              |> Ship.cargo_changeset(body["data"]["cargo"])
-              |> Repo.update!()
-              |> Repo.preload(:nav_waypoint)
+              Game.save_ship_cargo!(state.ship_symbol, body["data"]["cargo"])
+              |> Repo.preload([:agent, :nav_waypoint])
 
             # TODO
             # |> Game.add_extraction(ship["nav"]["waypointSymbol"], body["data"]["siphon"])
@@ -731,13 +727,12 @@ defmodule SpacetradersClient.Behaviors do
                  ) do
               {:ok, %{status: 200, body: body}} ->
                 ship =
-                  ship
-                  |> Ship.cargo_changeset(body["data"]["cargo"])
-                  |> Repo.update!()
+                  Game.save_ship_cargo!(state.ship_symbol, body["data"]["cargo"])
+                  |> Repo.preload([:agent, :nav_waypoint])
 
                 PubSub.broadcast(
                   @pubsub,
-                  "agent:#{ship.agent_symbol}",
+                  "agent:#{ship.agent.symbol}",
                   {:ship_updated, state.ship_symbol, ship}
                 )
 
@@ -771,13 +766,12 @@ defmodule SpacetradersClient.Behaviors do
           case Fleet.set_flight_mode(state.client, state.ship_symbol, flight_mode) do
             {:ok, %{status: 200, body: body}} ->
               ship =
-                Repo.get_by(Ship, symbol: state.ship_symbol)
-                |> Ship.nav_changeset(body["data"]["nav"])
-                |> Repo.update!()
+                Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
+                |> Repo.preload(:agent)
 
               PubSub.broadcast(
                 @pubsub,
-                "agent:#{ship.agent_symbol}",
+                "agent:#{ship.agent.symbol}",
                 {:ship_updated, state.ship_symbol, ship}
               )
 
@@ -791,15 +785,17 @@ defmodule SpacetradersClient.Behaviors do
         Node.action(fn state ->
           case Fleet.navigate_ship(state.client, state.ship_symbol, waypoint_symbol) do
             {:ok, %{status: 200, body: body}} ->
+              Repo.get_by(Ship, symbol: state.ship_symbol)
+              |> Ship.fuel_changeset(body["data"]["fuel"])
+              |> Repo.update!()
+
               ship =
-                Repo.get_by(Ship, symbol: state.ship_symbol)
-                |> Ship.nav_changeset(body["data"]["nav"])
-                |> Ship.fuel_changeset(body["data"]["fuel"])
-                |> Repo.update!()
+                Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
+                |> Repo.preload(:agent)
 
               PubSub.broadcast(
                 @pubsub,
-                "agent:#{ship.agent_symbol}",
+                "agent:#{ship.agent.symbol}",
                 {:ship_updated, state.ship_symbol, ship}
               )
 
@@ -820,7 +816,7 @@ defmodule SpacetradersClient.Behaviors do
   def sell_cargo_item(trade_symbol, units, opts \\ []) do
     Node.sequence([
       Node.action(fn state ->
-        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
         market =
           Repo.get_by(Market, symbol: ship.nav_waypoint.symbol) |> Repo.preload(:trade_goods)
@@ -898,16 +894,19 @@ defmodule SpacetradersClient.Behaviors do
                  ) do
               {:ok, %{status: 201, body: body}} ->
                 ship =
-                  Repo.get_by(Ship, symbol: state.ship_symbol)
-                  |> Ship.cargo_changeset(body["data"]["cargo"])
-                  |> Repo.update!()
+                  Game.save_ship_cargo!(state.ship_symbol, body["data"]["cargo"])
+                  |> Repo.preload([:agent, [nav_waypoint: :system]])
 
                 agent =
-                  Repo.get_by(Agent, symbol: ship.agent_symbol)
+                  Repo.get_by(Agent, symbol: ship.agent.symbol)
                   |> Agent.changeset(body["data"]["agent"])
                   |> Repo.update!()
 
-                # TODO: reload market
+                Game.load_market!(
+                  state.client,
+                  ship.nav_waypoint.system.symbol,
+                  ship.nav_waypoint.symbol
+                )
 
                 tx = body["data"]["transaction"]
                 {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
@@ -961,50 +960,55 @@ defmodule SpacetradersClient.Behaviors do
              ) do
           {:ok, %{status: 200, body: body}} ->
             source_ship =
-              Repo.get_by(Ship, symbol: source_ship_symbol)
-              |> Ship.cargo_changeset(body["data"]["cargo"])
-              |> Repo.update!()
+              Game.save_ship_cargo!(source_ship_symbol, body["data"]["cargo"])
+              |> Repo.preload(:agent)
 
             Game.load_ship_cargo!(state.ship_symbol)
 
-            receiving_ship = Repo.get_by(Ship, symbol: state.ship_symbol)
+            receiving_ship =
+              Repo.get_by(Ship, symbol: state.ship_symbol)
+              |> Repo.preload(:agent)
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{source_ship.agent_symbol}",
+              "agent:#{source_ship.agent.symbol}",
               {:ship_updated, source_ship.symbol, source_ship}
             )
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{receiving_ship.agent_symbol}",
+              "agent:#{receiving_ship.agent.symbol}",
               {:ship_updated, receiving_ship.symbol, receiving_ship}
             )
 
             {:success, state}
 
           {:ok, %{status: 400, body: %{"error" => %{"code" => 4234, "data" => data}}}} ->
+            source_ship_waypoint = Repo.get_by!(Waypoint, symbol: data["destinationSymbol"])
+
             source_ship =
-              Repo.get_by(Ship, symbol: data["shipSymbol"])
-              |> Ecto.Changeset.change(%{nav_waypoint_symbol: data["destinationSymbol"]})
+              Repo.get_by!(Ship, symbol: data["shipSymbol"])
+              |> Ecto.Changeset.put_assoc(:nav_waypoint, source_ship_waypoint)
               |> Repo.update!()
+              |> Repo.preload(:agent)
+
+            receiving_ship_waypoint = data["conflictingDestinationSymbol"]
 
             receiving_ship =
               Repo.get_by(Ship, symbol: data["targetShipSymbol"])
-              |> Ecto.Changeset.change(%{
-                nav_waypoint_symbol: data["conflictingDestinationSymbol"]
-              })
+              |> Ecto.Changeset.put_assoc(:nav_waypoint, receiving_ship_waypoint)
               |> Repo.update!()
+              |> Repo.preload(:agent)
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{source_ship.agent_symbol}",
+              "agent:#{source_ship.agent.symbol}",
               {:ship_updated, source_ship.symbol, source_ship}
             )
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{receiving_ship.agent_symbol}",
+              "agent:#{receiving_ship.agent.symbol}",
               {:ship_updated, receiving_ship.symbol, receiving_ship}
             )
 
@@ -1085,13 +1089,11 @@ defmodule SpacetradersClient.Behaviors do
         case Fleet.purchase_cargo(state.client, state.ship_symbol, trade_symbol, units) do
           {:ok, %{status: 201, body: body}} ->
             ship =
-              Repo.get_by(Ship, symbol: state.ship_symbol)
-              |> Repo.preload(:cargo_items)
-              |> Ship.cargo_changeset(body["data"]["cargo"])
-              |> Repo.update!()
+              Game.save_ship_cargo!(state.ship_symbol, body["data"]["cargo"])
+              |> Repo.preload(:agent)
 
             agent =
-              Repo.get_by(Agent, symbol: ship.agent_symbol)
+              Repo.get_by(Agent, symbol: ship.agent.symbol)
               |> Agent.changeset(body["data"]["agent"])
               |> Repo.update!()
 
@@ -1125,7 +1127,7 @@ defmodule SpacetradersClient.Behaviors do
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, state.ship_symbol, ship}
             )
 
@@ -1150,11 +1152,11 @@ defmodule SpacetradersClient.Behaviors do
     Node.action(fn state ->
       ship =
         Repo.get_by(Ship, symbol: state.ship_symbol)
-        |> Repo.preload(:nav_waypoint)
+        |> Repo.preload(nav_waypoint: :system)
 
       case Systems.supply_construction_site(
              state.client,
-             ship.nav_waypoint.system_symbol,
+             ship.nav_waypoint.system.symbol,
              ship.nav_waypoint.symbol,
              state.ship_symbol,
              trade_symbol,
@@ -1162,19 +1164,18 @@ defmodule SpacetradersClient.Behaviors do
            ) do
         {:ok, %{status: 201, body: body}} ->
           ship =
-            ship
-            |> Ship.cargo_changeset(body["data"]["cargo"])
-            |> Repo.update!()
+            Game.save_ship_cargo!(state.ship_symbol, body["data"]["cargo"])
+            |> Repo.preload(:agent)
 
           Game.load_construction_site!(
             state.client,
-            ship.nav_waypoint.system_symbol,
+            ship.nav_waypoint.system.symbol,
             ship.nav_waypoint.symbol
           )
 
           {:ok, _ledger} =
             Finance.supply_construction_site(
-              ship.agent_symbol,
+              ship.agent.symbol,
               trade_symbol,
               DateTime.utc_now(),
               units

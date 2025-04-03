@@ -24,7 +24,7 @@ defmodule SpacetradersClientWeb.ShipCargoComponent do
                 data-confirm={"Are you sure you want to jettison #{item.units} unit(s) of #{item.item.name}?"}
                 phx-click="jettison-cargo"
                 phx-value-ship-symbol={@ship.symbol}
-                phx-value-item-symbol={item.item_symbol}
+                phx-value-item-symbol={item.item.symbol}
                 phx-value-units={item.units}
               >
                 Jettison

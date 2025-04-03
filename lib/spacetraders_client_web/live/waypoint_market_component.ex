@@ -57,9 +57,9 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
     ~H"""
     <table class="table table-zebra border border-2 border-neutral">
       <tbody>
-      <%= for item <- @items do %>
+      <%= for market_item <- @items do %>
         <tr>
-          <td><%= item.item_symbol %></td>
+          <td><%= market_item.item.symbol %></td>
         </tr>
       <% end %>
       </tbody>
@@ -80,12 +80,12 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
           </tr>
         </thead>
         <tbody>
-        <%= for item <- @items do %>
+        <%= for market_item <- @items do %>
           <tr>
-            <td><%= item.item_symbol %></td>
-            <td class="text-right"><%= item.trade_volume %></td>
-            <td class="text-right"><%= item.purchase_price %></td>
-            <td class="text-right"><%= item.sell_price %></td>
+            <td><%= market_item.item.symbol %></td>
+            <td class="text-right"><%= market_item.trade_volume %></td>
+            <td class="text-right"><%= market_item.purchase_price %></td>
+            <td class="text-right"><%= market_item.sell_price %></td>
             <td class="text-right flex flex-row">
               <div class="join">
                 <button class="btn btn-xs btn-error join-item">Buy</button>
