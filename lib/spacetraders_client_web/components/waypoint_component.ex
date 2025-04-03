@@ -36,8 +36,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                 <div class="skeleton h-6 w-56 inline-block align-middle"></div>
               </:loading>
               <:failed :let={_failure}>an unknown system</:failed>
-              the
-              <.link patch={~p"/game/systems/#{system.symbol}"} class="link">{system.name}</.link>
+              the <.link patch={~p"/game/systems/#{system.symbol}"} class="link">{system.name}</.link>
               system
             </.async_result>
           </span>
@@ -105,7 +104,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                 market_action={@market_action}
               />
             </div>
-        <% end %>
+          <% end %>
 
           <%= if waypoint.type in ~w(ASTEROID ASTEROID_FIELD ENGINEERED_ASTEROID) do %>
             <a
@@ -314,12 +313,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
             <%= for ship <- @ships_at_waypoint do %>
               <tr>
                 <td>
-                  <.link
-                    class="link-hover"
-                    patch={
-                      ~p"/game/fleet/#{ship.symbol}"
-                    }
-                  >
+                  <.link class="link-hover" patch={~p"/game/fleet/#{ship.symbol}"}>
                     {ship.symbol}
                   </.link>
                 </td>
@@ -425,9 +419,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
                   <.async_result :let={system} assign={@system}>
                     <:loading><span class="loading loading-ring loading-lg"></span></:loading>
                     <:failed :let={_failure}>There was an error loading the system.</:failed>
-                    {trunc(
-                      Float.round(distance(system, @waypoint_symbol, ship.nav_waypoint.symbol))
-                    )}u
+                    {trunc(Float.round(distance(system, @waypoint_symbol, ship.nav_waypoint.symbol)))}u
                   </.async_result>
                 </td>
                 <td>{ship.registration_role}</td>
@@ -511,117 +503,117 @@ defmodule SpacetradersClientWeb.WaypointComponent do
 
   def market_tab_content(assigns) do
     ~H"""
-      <%= if @market do %>
-        <div class="mb-8">
-          <SpacetradersClientWeb.WaypointMarketComponent.imports_exports
-            market={@market}
-            system_symbol={@waypoint.system.symbol}
-            waypoint_symbol={@waypoint.symbol}
-          />
-        </div>
-      <% end %>
+    <%= if @market do %>
+      <div class="mb-8">
+        <SpacetradersClientWeb.WaypointMarketComponent.imports_exports
+          market={@market}
+          system_symbol={@waypoint.system.symbol}
+          waypoint_symbol={@waypoint.symbol}
+        />
+      </div>
+    <% end %>
 
-      <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
-        <div class="text-lg font-bold text-right">
-          Select ship
-        </div>
-
-        <form phx-change="select-ship">
-          <select class="select select-border w-72" name="ship-symbol">
-            <%= for ship <- @ships_at_waypoint do %>
-              <option value={ship.symbol}>
-                {ship.symbol}
-              </option>
-            <% end %>
-          </select>
-        </form>
-
-        <div class="divider divider-horizontal"></div>
-
-        <form class="w-20" phx-change="set-market-action">
-          <div class="form-control">
-            <label class="label cursor-pointer">
-              <input
-                type="radio"
-                name="radio-market"
-                class="radio"
-                value="buy"
-                checked={@market_action == "buy"}
-              />
-              <span class="label-text">Buy</span>
-            </label>
-          </div>
-          <div class="form-control">
-            <label class="label cursor-pointer">
-              <input
-                type="radio"
-                name="radio-market"
-                class="radio"
-                value="sell"
-                checked={@market_action == "sell"}
-              />
-              <span class="label-text">Sell</span>
-            </label>
-          </div>
-        </form>
+    <div class="flex flex-row justify-center items-center mb-8 p-4 gap-8 bg-base-300 rounded">
+      <div class="text-lg font-bold text-right">
+        Select ship
       </div>
 
-      <%= case @market_action do %>
-        <% "sell" -> %>
-          <div>
-            <%= if anything_to_sell?(@ships_at_waypoint, @market) do %>
-              <table class="table table-zebra">
-                <thead>
-                  <tr>
-                    <th>Ship</th>
-                    <th>Item</th>
-                    <th class="text-right">Quantity</th>
-                    <th class="text-right">Value</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for ship <- @ships_at_waypoint do %>
-                    <%= for item <- ship["cargo"]["inventory"] do %>
-                      <% sell_value = cargo_sell_value(@market, item) %>
-                      <%= if is_integer(sell_value) do %>
-                        <tr>
-                          <td>{ship["registration"]["name"]}</td>
-                          <td>{item["name"]}</td>
-                          <td class="text-right">{item["units"]}</td>
-                          <td class="text-right">{sell_value}</td>
-                          <td class="text-right">
-                            <button
-                              class="btn btn-xs btn-success"
-                              phx-click="sell-cargo"
-                              phx-value-ship-symbol={ship["symbol"]}
-                              phx-value-trade-symbol={item["symbol"]}
-                              phx-value-units={item["units"]}
-                            >
-                              Sell
-                            </button>
-                          </td>
-                        </tr>
-                      <% end %>
+      <form phx-change="select-ship">
+        <select class="select select-border w-72" name="ship-symbol">
+          <%= for ship <- @ships_at_waypoint do %>
+            <option value={ship.symbol}>
+              {ship.symbol}
+            </option>
+          <% end %>
+        </select>
+      </form>
+
+      <div class="divider divider-horizontal"></div>
+
+      <form class="w-20" phx-change="set-market-action">
+        <div class="form-control">
+          <label class="label cursor-pointer">
+            <input
+              type="radio"
+              name="radio-market"
+              class="radio"
+              value="buy"
+              checked={@market_action == "buy"}
+            />
+            <span class="label-text">Buy</span>
+          </label>
+        </div>
+        <div class="form-control">
+          <label class="label cursor-pointer">
+            <input
+              type="radio"
+              name="radio-market"
+              class="radio"
+              value="sell"
+              checked={@market_action == "sell"}
+            />
+            <span class="label-text">Sell</span>
+          </label>
+        </div>
+      </form>
+    </div>
+
+    <%= case @market_action do %>
+      <% "sell" -> %>
+        <div>
+          <%= if anything_to_sell?(@ships_at_waypoint, @market) do %>
+            <table class="table table-zebra">
+              <thead>
+                <tr>
+                  <th>Ship</th>
+                  <th>Item</th>
+                  <th class="text-right">Quantity</th>
+                  <th class="text-right">Value</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for ship <- @ships_at_waypoint do %>
+                  <%= for item <- ship["cargo"]["inventory"] do %>
+                    <% sell_value = cargo_sell_value(@market, item) %>
+                    <%= if is_integer(sell_value) do %>
+                      <tr>
+                        <td>{ship["registration"]["name"]}</td>
+                        <td>{item["name"]}</td>
+                        <td class="text-right">{item["units"]}</td>
+                        <td class="text-right">{sell_value}</td>
+                        <td class="text-right">
+                          <button
+                            class="btn btn-xs btn-success"
+                            phx-click="sell-cargo"
+                            phx-value-ship-symbol={ship["symbol"]}
+                            phx-value-trade-symbol={item["symbol"]}
+                            phx-value-units={item["units"]}
+                          >
+                            Sell
+                          </button>
+                        </td>
+                      </tr>
                     <% end %>
                   <% end %>
-                </tbody>
-              </table>
-            <% else %>
-              <div class="opacity-50 italic text-center mt-32">
-                This ship has no items that the market is buying
-              </div>
+                <% end %>
+              </tbody>
+            </table>
+          <% else %>
+            <div class="opacity-50 italic text-center mt-32">
+              This ship has no items that the market is buying
+            </div>
+          <% end %>
+        </div>
+      <% "buy" -> %>
+        <div>
+          <%= if @market do %>
+            <%= if items = @market.trade_goods do %>
+              <SpacetradersClientWeb.WaypointMarketComponent.item_table items={items} />
             <% end %>
-          </div>
-        <% "buy" -> %>
-          <div>
-            <%= if @market do %>
-              <%= if items = @market.trade_goods do %>
-                <SpacetradersClientWeb.WaypointMarketComponent.item_table items={items} />
-              <% end %>
-            <% end %>
-          </div>
-      <% end %>
+          <% end %>
+        </div>
+    <% end %>
     """
   end
 

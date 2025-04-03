@@ -17,12 +17,33 @@ defmodule SpacetradersClientWeb.ShipComponent do
     ~H"""
     <section class="flex flex-col overflow-y-auto p-4">
       <header class="mb-4 flex-none">
-        <h1 class="text-2xl font-bold"><%= @ship.symbol %></h1>
+        <h1 class="text-2xl font-bold">
+          <%= @ship.symbol %>
+          <button class="inline-block btn btn-square btn-sm" phx-click="reload-ship" phx-value-ship-symbol={@ship.symbol}>
+            <Heroicons.arrow_path mini class="h-4 w-4 inline-block text-error" />
+          </button>
+        </h1>
+
+        <span class="opacity-50 text-xl font-normal">
+          {@ship.registration_role} ship
+
+          <%= case @ship.nav_status do %>
+            <% :docked -> %>
+              docked at
+              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">{@ship.nav_waypoint.symbol}</.link>
+            <% :in_orbit -> %>
+              in orbit around
+              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">{@ship.nav_waypoint.symbol}</.link>
+            <% :in_transit -> %>
+              in transit to
+              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">{@ship.nav_waypoint.symbol}</.link>
+          <% end %>
+        </span>
       </header>
 
       <section class="stats mb-8 flex-none">
-        <ShipStatsComponent.registration ship={@ship} />
-        <ShipStatsComponent.navigation ship={@ship} cooldown_remaining={@cooldown_remaining} />
+        <ShipStatsComponent.navigation ship={@ship} now={@stats_timestamp} />
+        <ShipStatsComponent.cooldown ship={@ship} now={@stats_timestamp} />
         <ShipStatsComponent.fuel ship={@ship}>
           <div class="stat-actions">
             <button
@@ -155,66 +176,28 @@ defmodule SpacetradersClientWeb.ShipComponent do
       assign(socket, %{
         ship_symbol: ship_symbol,
         ship: ship,
-        previous_automation_tick: previous_automation_tick
+        previous_automation_tick: previous_automation_tick,
+        stats_timestamp: DateTime.utc_now()
       })
+      |> start_async(:tick_stats, fn ->
+        Process.sleep(250)
 
-    socket =
-      if socket.assigns[:ship] do
-        socket
-        |> assign(:cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns[:ship]))
-        |> schedule_cooldown_update()
-      else
-        socket
-      end
+        :ok
+      end)
 
     {:ok, socket}
   end
 
-  def handle_event("select-tab", %{"tab" => tab}, socket) do
+  def handle_async(:tick_stats, _, socket) do
     socket =
-      case tab do
-        "cargo" ->
-          assign(socket, :tab, :cargo)
-
-        "navigate" ->
-          assign(socket, :tab, :navigate)
-      end
-
-    {:noreply, socket}
-  end
-
-  def handle_async(:update_counter, _, socket) do
-    socket =
-      assign(socket, :cooldown_remaining, seconds_til_cooldown_expiration(socket.assigns.ship))
-
-    socket = schedule_cooldown_update(socket)
-
-    {:noreply, socket}
-  end
-
-  defp schedule_cooldown_update(socket) do
-    if socket.assigns.cooldown_remaining > 0 do
-      start_async(socket, :update_counter, fn ->
+      socket
+      |> assign(:stats_timestamp, DateTime.utc_now())
+      |> start_async(:tick_stats, fn ->
         Process.sleep(250)
+
         :ok
       end)
-    else
-      send(self(), {:travel_cooldown_expired, socket.assigns.ship.symbol})
-      socket
-    end
-  end
 
-  defp seconds_til_cooldown_expiration(ship) do
-    if exp_at = ship.cooldown_expires_at do
-      DateTime.diff(exp_at, DateTime.utc_now())
-      |> max(0)
-    else
-      if arrive_at = ship.nav_route_arrival_at do
-        DateTime.diff(arrive_at, DateTime.utc_now())
-        |> max(0)
-      else
-        0
-      end
-    end
+    {:noreply, socket}
   end
 end

@@ -1,5 +1,6 @@
 defmodule SpacetradersClientWeb.GameLive do
   use SpacetradersClientWeb, :live_view
+  use Timex
 
   alias Phoenix.LiveView.Socket
   alias Phoenix.LiveView.AsyncResult
@@ -8,6 +9,7 @@ defmodule SpacetradersClientWeb.GameLive do
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Repo
   alias SpacetradersClient.Finance
+  alias SpacetradersClient.Game
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.ShipLoadWorker
@@ -174,6 +176,16 @@ defmodule SpacetradersClientWeb.GameLive do
     assign(socket, :selected_ship_symbol, ship["symbol"])
   end
 
+  def handle_event("reload-ship", %{"ship-symbol" => ship_symbol}, socket) do
+    ship = Game.load_ship!(socket.assigns.client, ship_symbol)
+
+    if socket.assigns[:ship_symbol] == ship.symbol do
+      {:noreply, assign(socket, :ship, ship)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("automation-started", %{}, socket) do
     {:ok, _} =
       DynamicSupervisor.start_child(
@@ -189,21 +201,12 @@ defmodule SpacetradersClientWeb.GameLive do
       {:ok, %{status: 200, body: body}} ->
         socket = put_flash(socket, :info, "Ship refueled")
 
-        fleet =
-          Enum.map(socket.assigns.fleet.result, fn ship ->
-            if ship["symbol"] == ship_symbol do
-              put_in(ship, ~w(fuel current), get_in(body, ~w(data fuel current)))
-            else
-              ship
-            end
-          end)
-          |> AsyncResult.ok()
+        ship =
+          Game.save_ship_fuel!(ship_symbol, body["data"]["fuel"]) |> Repo.preload(:nav_waypoint)
 
-        socket = assign(socket, :fleet, fleet)
-
-        waypoint_symbol =
-          Enum.find(socket.assigns.fleet.result, fn ship -> ship["symbol"] == ship_symbol end)
-          |> get_in(~w(nav waypointSymbol))
+        socket.assigns.agent.result
+        |> Agent.changeset(body["data"]["agent"])
+        |> Repo.update!()
 
         tx = body["data"]["transaction"]
         {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
@@ -213,7 +216,7 @@ defmodule SpacetradersClientWeb.GameLive do
             Finance.post_journal(
               body["data"]["agent"]["symbol"],
               ts,
-              "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{waypoint_symbol}",
+              "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{ship.nav_waypoint.symbol}",
               "Fuel",
               "Cash",
               tx["totalPrice"]
@@ -305,17 +308,20 @@ defmodule SpacetradersClientWeb.GameLive do
   def handle_event("orbit-ship", %{"ship-symbol" => ship_symbol}, socket) do
     {:ok, %{status: 200, body: body}} = Fleet.orbit_ship(socket.assigns.client, ship_symbol)
 
-    ship =
-      Repo.get_by!(Ship, symbol: ship_symbol)
-      |> Ship.nav_changeset(body["data"]["nav"])
-      |> Repo.update!()
+    ship = Game.save_ship_nav!(ship_symbol, body["data"]["nav"]) |> Repo.preload(:agent)
 
-    PubSub.broadcast(@pubsub, "agent:" <> ship.agent_symbol, {:ship_updated, ship.symbol})
+    PubSub.broadcast(@pubsub, "agent:" <> ship.agent.symbol, {:ship_updated, ship.symbol})
 
     socket =
       socket
-      |> assign(:ship, ship)
       |> put_flash(:info, "Ship #{ship_symbol} undocked successfully")
+
+    socket =
+      if socket.assigns[:ship_symbol] == ship.symbol do
+        assign(socket, :ship, ship)
+      else
+        socket
+      end
 
     {:noreply, socket}
   end
@@ -323,17 +329,20 @@ defmodule SpacetradersClientWeb.GameLive do
   def handle_event("dock-ship", %{"ship-symbol" => ship_symbol}, socket) do
     {:ok, %{status: 200, body: body}} = Fleet.dock_ship(socket.assigns.client, ship_symbol)
 
-    ship =
-      Repo.get_by!(Ship, symbol: ship_symbol)
-      |> Ship.nav_changeset(body["data"]["nav"])
-      |> Repo.update!()
+    ship = Game.save_ship_nav!(ship_symbol, body["data"]["nav"]) |> Repo.preload(:agent)
 
-    PubSub.broadcast(@pubsub, "agent:" <> ship.agent_symbol, {:ship_updated, ship.symbol})
+    PubSub.broadcast(@pubsub, "agent:" <> ship.agent.symbol, {:ship_updated, ship.symbol})
 
     socket =
       socket
-      |> assign(:ship, ship)
       |> put_flash(:info, "Ship #{ship_symbol} docked successfully")
+
+    socket =
+      if socket.assigns[:ship_symbol] == ship.symbol do
+        assign(socket, :ship, ship)
+      else
+        socket
+      end
 
     {:noreply, socket}
   end
@@ -360,23 +369,34 @@ defmodule SpacetradersClientWeb.GameLive do
         {:ok, %{status: 200, body: body}} =
           Fleet.set_flight_mode(socket.assigns.client, ship_symbol, flight_mode)
 
-        ship =
-          ship
-          |> Ship.nav_changeset(body["data"]["nav"])
-          |> Repo.update!()
+        ship = Game.save_ship_nav!(body["data"]["symbol"], body["data"]["nav"])
 
-        socket
-        |> assign(:ship, ship)
+        if socket.assigns[:ship] &&
+             socket.assigns.ship.symbol == ship.symbol do
+          socket
+          |> assign(:ship, ship)
+        else
+          socket
+        end
       else
         socket
       end
 
     case Fleet.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
       {:ok, %{status: 200, body: body}} ->
-        ship =
-          socket.assigns.ship
-          |> Ship.nav_changeset(body["data"]["nav"])
-          |> Repo.update!()
+        Game.save_ship_nav!(ship_symbol, body["data"]["nav"])
+        ship = Game.save_ship_fuel!(ship_symbol, body["data"]["fuel"])
+
+        travel_time_human =
+          Timex.diff(ship.nav_route_arrival_at, ship.nav_route_departure_at, :duration)
+          |> Timex.Format.Duration.Formatters.Humanized.format!()
+
+        socket =
+          socket
+          |> put_flash(
+            :info,
+            "Navigating ship #{ship.symbol} to #{waypoint_symbol}. Estimated travel time: #{travel_time_human}"
+          )
 
         %{
           token: socket.assigns.token,
@@ -386,8 +406,12 @@ defmodule SpacetradersClientWeb.GameLive do
         |> Oban.insert!()
 
         socket =
-          socket
-          |> assign(:ship, ship)
+          if socket.assigns[:ship_symbol] == ship.symbol do
+            socket
+            |> assign(:ship, ship)
+          else
+            socket
+          end
 
         {:noreply, socket}
 

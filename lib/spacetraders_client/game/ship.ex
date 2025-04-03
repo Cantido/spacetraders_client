@@ -1,5 +1,6 @@
 defmodule SpacetradersClient.Game.Ship do
   use Ecto.Schema
+  use Timex
 
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Waypoint
@@ -140,6 +141,22 @@ defmodule SpacetradersClient.Game.Ship do
     model
     |> cast(params, [:fuel_capacity, :fuel_current])
     |> validate_required([:fuel_capacity, :fuel_current])
+  end
+
+  def remaining_cooldown(%__MODULE__{} = ship, now) do
+    if ship.cooldown_expires_at && Timex.before?(now, ship.cooldown_expires_at) do
+      Timex.diff(ship.cooldown_expires_at, now, :duration)
+    else
+      Timex.Duration.zero()
+    end
+  end
+
+  def remaining_travel_duration(%__MODULE__{} = ship, now) do
+    if ship.nav_route_arrival_at && Timex.before?(now, ship.nav_route_arrival_at) do
+      Timex.diff(ship.nav_route_arrival_at, now, :duration)
+    else
+      Timex.Duration.zero()
+    end
   end
 
   def cargo_current(%__MODULE__{cargo_items: cargo_items}) do

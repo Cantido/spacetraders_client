@@ -1,5 +1,4 @@
 <main>
-  <.flash_group flash={@flash} />
     <div
         phx-hook="SurveyStorage"
         id="gamedata"
@@ -81,6 +80,7 @@
       </div>
 
       <div class="drawer-content">
+        <.flash_group flash={@flash} />
         <%= @inner_content %>
       </div>
     </div>
