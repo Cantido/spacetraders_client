@@ -4,6 +4,7 @@ defmodule SpacetradersClient.Game do
   alias SpacetradersClient.Finance
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Item
+  alias SpacetradersClient.Game.Extraction
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.ShipCargoItem
   alias SpacetradersClient.Game.ShipyardShip
@@ -223,6 +224,36 @@ defmodule SpacetradersClient.Game do
     Repo.get_by!(Ship, symbol: ship_symbol)
     |> Ship.fuel_changeset(fuel_data)
     |> Repo.update!()
+  end
+
+  def save_ship_cooldown!(ship_symbol, cooldown_data) do
+    Repo.get_by!(Ship, symbol: ship_symbol)
+    |> Ship.cooldown_changeset(cooldown_data)
+    |> Repo.update!()
+  end
+
+  def save_extraction!(waypoint_symbol, extraction_data) do
+    ship = Repo.get_by!(Ship, symbol: extraction_data["shipSymbol"])
+    waypoint = Repo.get_by!(Waypoint, symbol: waypoint_symbol)
+
+    item =
+      if item = Repo.get_by(Item, symbol: extraction_data["yield"]["symbol"]) do
+        item
+      else
+        %Item{
+          symbol: extraction_data["yield"]["symbol"]
+        }
+        |> Repo.insert!()
+      end
+
+    %Extraction{
+      ship_id: ship.id,
+      item_id: item.id,
+      waypoint_id: waypoint.id,
+      units: extraction_data["yield"]["units"]
+    }
+    |> Ecto.Changeset.change()
+    |> Repo.insert!()
   end
 
   def load_construction_site!(_client, _system_symbol, _waypoint_symbol, _topic \\ nil) do

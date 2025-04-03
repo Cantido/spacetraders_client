@@ -454,26 +454,21 @@ defmodule SpacetradersClient.Behaviors do
       enter_orbit(),
       wait_for_ship_cooldown(),
       Node.action(fn state ->
-        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
+        ship =
+          Repo.get_by(Ship, symbol: state.ship_symbol)
+          |> Repo.preload(:agent, nav_waypoint: :system)
 
         case Fleet.siphon_resources(state.client, state.ship_symbol) do
           {:ok, %{status: 201, body: body}} ->
-            ship
-            |> Ship.cooldown_changeset(body["data"]["cooldown"])
-            |> Repo.update!()
-
-            ship =
-              Game.save_ship_cargo!(state.ship_symbol, body["data"]["cargo"])
-              |> Repo.preload([:agent, :nav_waypoint])
-
-            # TODO
-            # |> Game.add_extraction(ship["nav"]["waypointSymbol"], body["data"]["siphon"])
+            Game.save_extraction!(ship.nav_waypoint.symbol, body["data"]["siphon"])
+            Game.save_ship_cooldown!(ship.symbol, body["data"]["cooldown"])
+            Game.save_ship_cargo!(ship.sybmol, body["data"]["cargo"])
 
             yield_symbol = get_in(body, ~w(data siphon yield symbol))
             yield_units = get_in(body, ~w(data siphon yield units))
 
             price =
-              Game.average_purchase_price(ship.nav_waypoint.system_symbol, yield_symbol)
+              Game.average_purchase_price(ship.nav_waypoint.system.symbol, yield_symbol)
 
             value_of_material = trunc(price * yield_units)
 
@@ -489,7 +484,7 @@ defmodule SpacetradersClient.Behaviors do
 
             {:ok, _ledger} =
               Finance.purchase_inventory_by_total(
-                ship.agent_symbol,
+                ship.agent.symbol,
                 yield_symbol,
                 DateTime.utc_now(),
                 yield_units,
@@ -524,7 +519,9 @@ defmodule SpacetradersClient.Behaviors do
       enter_orbit(),
       wait_for_ship_cooldown(),
       Node.action(fn state ->
-        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
+        ship =
+          Repo.get_by(Ship, symbol: state.ship_symbol)
+          |> Repo.preload(:agent, nav_waypoint: :system)
 
         best_survey =
           Game.surveys(ship.nav_waypoint.symbol)
@@ -546,19 +543,15 @@ defmodule SpacetradersClient.Behaviors do
 
         case Fleet.extract_resources(state.client, state.ship_symbol, best_survey) do
           {:ok, %{status: 201, body: body}} ->
-            ship =
-              ship
-              |> Ship.changeset(body["data"])
-              |> Repo.update!()
-
-            # TODO
-            # |> Game.add_extraction(ship["nav"]["waypointSymbol"], body["data"]["extraction"])
+            Game.save_extraction!(ship.nav_waypoint.symbol, body["data"]["extraction"])
+            Game.save_ship_cooldown!(ship.symbol, body["data"]["cooldown"])
+            Game.save_ship_cargo!(ship.sybmol, body["data"]["cargo"])
 
             yield_symbol = get_in(body, ~w(data extraction yield symbol))
             yield_units = get_in(body, ~w(data extraction yield units))
 
             price =
-              Game.average_selling_price(ship.nav_waypoint.sytem_symbol, yield_symbol)
+              Game.average_selling_price(ship.nav_waypoint.sytem.symbol, yield_symbol)
 
             value_of_material = trunc(price * yield_units)
 
@@ -574,7 +567,7 @@ defmodule SpacetradersClient.Behaviors do
 
             {:ok, _ledger} =
               Finance.purchase_inventory_by_total(
-                ship.agent_symbol,
+                ship.agent.symbol,
                 yield_symbol,
                 DateTime.utc_now(),
                 yield_units,
