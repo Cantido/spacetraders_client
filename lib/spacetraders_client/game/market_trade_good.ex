@@ -6,20 +6,10 @@ defmodule SpacetradersClient.Game.MarketTradeGood do
 
   import Ecto.Changeset
 
-  @primary_key false
-
   schema "market_trade_goods" do
-    belongs_to :market, Market,
-      foreign_key: :market_symbol,
-      references: :symbol,
-      type: :string,
-      primary_key: true
+    belongs_to :market, Market
 
-    belongs_to :item, Item,
-      foreign_key: :item_symbol,
-      references: :symbol,
-      type: :string,
-      primary_key: true
+    belongs_to :item, Item
 
     field :type, Ecto.Enum, values: [export: "EXPORT", import: "IMPORT", exchange: "EXCHANGE"]
     field :trade_volume, :integer

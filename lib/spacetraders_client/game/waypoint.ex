@@ -7,38 +7,27 @@ defmodule SpacetradersClient.Game.Waypoint do
 
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
   @timestamps_opts [type: :utc_datetime_usec]
 
   @derive {Inspect, only: [:symbol]}
-  @derive {Jason.Encoder, except: [:__meta__, :__struct__, :system, :orbitals, :orbits]}
+  @derive {Jason.Encoder, except: [:__meta__, :__struct__, :system, :orbitals, :orbits_waypoint]}
 
   schema "waypoints" do
-    belongs_to :system, System, foreign_key: :system_symbol, references: :symbol, type: :string
+    field :symbol, :string
+    belongs_to :system, System
 
     field :type, :string
     field :x_coordinate, :integer
     field :y_coordinate, :integer
     field :under_construction, :boolean
 
-    belongs_to :orbits, __MODULE__,
-      foreign_key: :orbits_waypoint_symbol,
-      references: :symbol,
-      type: :string
+    belongs_to :orbits_waypoint, __MODULE__
 
-    has_many :orbitals, __MODULE__,
-      foreign_key: :orbits_waypoint_symbol,
-      preload_order: [asc: :symbol]
+    has_many :orbitals, __MODULE__, preload_order: [asc: :symbol]
 
-    has_many :modifiers, WaypointModifier,
-      foreign_key: :waypoint_symbol,
-      references: :symbol,
-      on_replace: :delete_if_exists
+    has_many :modifiers, WaypointModifier, on_replace: :delete_if_exists
 
-    has_many :traits, WaypointTrait,
-      foreign_key: :waypoint_symbol,
-      references: :symbol,
-      on_replace: :delete_if_exists
+    has_many :traits, WaypointTrait, on_replace: :delete_if_exists
 
     timestamps()
   end

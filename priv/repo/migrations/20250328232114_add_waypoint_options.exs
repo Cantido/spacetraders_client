@@ -2,18 +2,26 @@ defmodule SpacetradersClient.Repo.Migrations.AddWaypointOptions do
   use Ecto.Migration
 
   def change do
-    create table(:markets, primary_key: false) do
-      add :symbol, :string, primary_key: true
+    create table(:markets) do
+      add :symbol, :string, null: false
     end
 
-    create table(:market_trade_goods, primary_key: false) do
-      add :market_symbol,
-          references(:markets, column: :symbol, on_update: :update_all, on_delete: :delete_all),
-          primary_key: true
+    create unique_index(:markets, [:symbol])
 
-      add :item_symbol,
-          references(:items, column: :symbol, on_update: :update_all, on_delete: :delete_all),
-          primary_key: true
+    create table(:market_trade_goods) do
+      add :market_id,
+          references(:markets,
+            on_update: :update_all,
+            on_delete: :delete_all
+          ),
+          null: false
+
+      add :item_id,
+          references(:items,
+            on_update: :update_all,
+            on_delete: :delete_all
+          ),
+          null: false
 
       add :type, :string, null: false
       add :trade_volume, :integer
@@ -24,5 +32,7 @@ defmodule SpacetradersClient.Repo.Migrations.AddWaypointOptions do
 
       timestamps()
     end
+
+    create unique_index(:market_trade_goods, [:market_id, :item_id])
   end
 end

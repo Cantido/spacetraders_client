@@ -1,5 +1,7 @@
 import Config
 
+config :spacetraders_client, SpacetradersClient.Repo, pool: Ecto.Adapters.SQL.Sandbox
+
 config :spacetraders_client, Oban, testing: :manual
 
 # We don't run a server during test. If one is required,

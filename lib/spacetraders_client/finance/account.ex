@@ -5,7 +5,7 @@ defmodule SpacetradersClient.Finance.Account do
   alias SpacetradersClient.Game.Agent
 
   schema "accounts" do
-    belongs_to :agent, Agent, foreign_key: :agent_symbol, references: :symbol, type: :string
+    belongs_to :agent, Agent
 
     has_one :parent_account, __MODULE__
     has_many :subaccounts, __MODULE__, preload_order: [asc: :number]

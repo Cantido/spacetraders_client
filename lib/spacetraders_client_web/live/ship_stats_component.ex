@@ -51,7 +51,7 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             In transit
           </div>
           <div class="stat-desc">
-            <% waypoint_symbol = @ship.nav_waypoint_symbol %>
+            <% waypoint_symbol = @ship.nav_waypoint.symbol %>
             <%= @ship.nav_flight_mode %> to
             <.link
               class="link"
@@ -72,9 +72,9 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             Orbiting
             <.link
               class="link"
-              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint_symbol}"}
+              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint.symbol}"}
             >
-              <%= @ship.nav_waypoint_symbol %>
+              <%= @ship.nav_waypoint.symbol %>
             </.link>
           </div>
           <div class="stat-actions">
@@ -89,9 +89,9 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             Docked at
             <.link
               class="link"
-              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint_symbol}"}
+              patch={~p"/game/systems/#{@ship.nav_waypoint.system_symbol}/waypoints/#{@ship.nav_waypoint.symbol}"}
             >
-              <%= @ship.nav_waypoint_symbol %>
+              <%= @ship.nav_waypoint.symbol %>
             </.link>
           </div>
           <div class="stat-actions">

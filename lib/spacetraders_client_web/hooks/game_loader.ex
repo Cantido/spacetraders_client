@@ -22,13 +22,13 @@ defmodule SpacetradersClientWeb.GameLoader do
 
       {:ok, %{status: 200, body: agent_body}} ->
         agent =
-          if agent = Repo.get(Agent, agent_body["data"]["symbol"]) do
+          if agent = Repo.get_by(Agent, symbol: agent_body["data"]["symbol"]) do
             agent
           else
             %Agent{token: token}
           end
           |> Agent.changeset(agent_body["data"])
-          |> Repo.insert_or_update!(on_conflict: {:replace, [:credits]})
+          |> Repo.insert_or_update!(conflict_target: :symbol, on_conflict: {:replace, [:credits]})
 
         socket =
           socket

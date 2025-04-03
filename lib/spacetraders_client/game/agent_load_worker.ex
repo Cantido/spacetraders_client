@@ -9,8 +9,11 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
   alias SpacetradersClient.Fleet
   alias SpacetradersClient.Systems
   alias SpacetradersClient.Game.Agent
+  alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Game.System
+  alias SpacetradersClient.Game.ShipCargoItem
+  alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Repo
 
   import Ecto.Query
@@ -31,13 +34,13 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
     Logger.info("Loading data for agent #{agent_body["symbol"]}")
 
     agent =
-      if agent = Repo.get(Agent, agent_body["data"]["symbol"]) do
+      if agent = Repo.get_by(Agent, symbol: agent_body["data"]["symbol"]) do
         agent
       else
         %Agent{token: token}
       end
       |> Agent.changeset(agent_body["data"])
-      |> Repo.insert!(on_conflict: {:replace, [:credits]})
+      |> Repo.insert_or_update!(conflict_target: :symbol, on_conflict: {:replace, [:credits]})
 
     ship_data =
       Stream.iterate(1, &(&1 + 1))
@@ -72,15 +75,65 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
         if !Repo.exists?(from s in System, where: [symbol: ^system_symbol]) do
           {:ok, %{body: body, status: 200}} = Systems.get_system(client, system_symbol)
 
-          %System{}
+          %System{symbol: body["data"]["symbol"]}
           |> System.changeset(body["data"])
-          |> Repo.insert!(on_conflict: :nothing)
+          |> Repo.insert!(conflict_target: :symbol, on_conflict: :nothing)
         end
 
-        Enum.each(ships_in_system, fn ship ->
-          Ecto.build_assoc(agent, :ships)
-          |> Ship.changeset(ship)
-          |> Repo.insert!(on_conflict: :replace_all)
+        Enum.each(ships_in_system, fn ship_data ->
+          nav_waypoint =
+            Repo.get_by!(Waypoint, symbol: ship_data["nav"]["waypointSymbol"])
+
+          nav_dest =
+            Repo.get_by!(Waypoint, symbol: ship_data["nav"]["route"]["destination"]["symbol"])
+
+          nav_orig =
+            Repo.get_by!(Waypoint, symbol: ship_data["nav"]["route"]["origin"]["symbol"])
+
+          cargo_items =
+            Enum.map(ship_data["cargo"]["inventory"], fn item_data ->
+              item =
+                if item = Repo.get_by(Item, symbol: item_data["symbol"]) do
+                  item
+                else
+                  %Item{
+                    symbol: item_data["symbol"],
+                    name: item_data["name"],
+                    description: item_data["description"]
+                  }
+                  |> Repo.insert!()
+                end
+
+              %ShipCargoItem{
+                item: item,
+                units: item_data["units"]
+              }
+            end)
+
+          ship =
+            if ship = Repo.get_by(Ship, symbol: ship_data["symbol"]) do
+              ship
+              |> Repo.preload([
+                :cargo_items,
+                :nav_waypoint,
+                :nav_route_origin_waypoint,
+                :nav_route_destination_waypoint
+              ])
+              |> Ship.changeset(ship_data)
+              |> Ecto.Changeset.put_assoc(:nav_waypoint, nav_waypoint)
+              |> Ecto.Changeset.put_assoc(:nav_route_destination_waypoint, nav_dest)
+              |> Ecto.Changeset.put_assoc(:nav_route_origin_waypoint, nav_orig)
+              |> Ecto.Changeset.put_assoc(:cargo_items, cargo_items)
+              |> Repo.update!()
+            else
+              Ecto.build_assoc(agent, :ships)
+              |> Ship.changeset(ship_data)
+              |> Ecto.Changeset.put_assoc(:nav_waypoint, nav_waypoint)
+              |> Ecto.Changeset.put_assoc(:nav_route_destination_waypoint, nav_dest)
+              |> Ecto.Changeset.put_assoc(:nav_route_origin_waypoint, nav_orig)
+              |> Ecto.Changeset.put_assoc(:cargo_items, cargo_items)
+              |> Repo.insert!()
+            end
         end)
 
         Enum.count(ships_in_system)
@@ -90,7 +143,7 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
     |> Stream.map(fn {:ok, count} -> count end)
     |> Stream.scan(&(&1 + &2))
     |> Enum.each(fn ships_loaded_count ->
-      if args["topic"] do
+      if is_binary(topic) do
         PubSub.broadcast!(
           @pubsub,
           topic,
@@ -109,18 +162,18 @@ defmodule SpacetradersClient.Game.AgentLoadWorker do
     |> Stream.flat_map(fn {:ok, wps} -> wps end)
     |> Task.async_stream(
       fn waypoint ->
-        waypoint = Repo.preload(waypoint, :traits)
+        waypoint = Repo.preload(waypoint, [:traits, :system])
 
         if Enum.any?(waypoint.traits, fn t -> t.symbol == "MARKETPLACE" end) do
-          Game.load_market!(client, waypoint.system_symbol, waypoint.symbol, topic)
+          Game.load_market!(client, waypoint.system.symbol, waypoint.symbol, topic)
         end
 
         if Enum.any?(waypoint.traits, fn t -> t.symbol == "SHIPYARD" end) do
-          Game.load_shipyard!(client, waypoint.system_symbol, waypoint.symbol, topic)
+          Game.load_shipyard!(client, waypoint.system.symbol, waypoint.symbol, topic)
         end
 
         if waypoint.under_construction do
-          Game.load_construction_site!(client, waypoint.system_symbol, waypoint.symbol, topic)
+          Game.load_construction_site!(client, waypoint.system.symbol, waypoint.symbol, topic)
         end
       end,
       timeout: 120_000

@@ -3,6 +3,11 @@ defmodule SpacetradersClient.Systems do
 
   alias SpacetradersClient.Cache
 
+  @decorate cacheable(cache: Cache, key: {:systems, page})
+  def list_systems(client, page: page) do
+    Tesla.get(client, "/v2/systems?page=#{page}&limit=20")
+  end
+
   @decorate cacheable(cache: Cache, key: {:system, system_symbol})
   def get_system(client, system_symbol) when is_binary(system_symbol) do
     Tesla.get(client, "/v2/systems/#{system_symbol}")

@@ -1,6 +1,7 @@
 defmodule SpacetradersClient.Finance do
   alias SpacetradersClient.Game
   alias SpacetradersClient.Game.Agent
+  alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Finance.Account
   alias SpacetradersClient.Finance.Inventory
   alias SpacetradersClient.Finance.InventoryLineItem
@@ -10,7 +11,9 @@ defmodule SpacetradersClient.Finance do
   import Ecto.Query
 
   def open_accounts(agent_symbol) do
-    if Repo.get_by(Account, agent_symbol: agent_symbol, name: "Cash") do
+    agent = Repo.get_by!(Agent, symbol: agent_symbol)
+
+    if Repo.get_by(Account, agent_id: agent.id, name: "Cash") do
       :ok
     else
       do_open_accounts(agent_symbol)
@@ -18,7 +21,7 @@ defmodule SpacetradersClient.Finance do
   end
 
   defp do_open_accounts(agent_symbol) do
-    agent = Repo.get(Agent, agent_symbol)
+    agent = Repo.get_by(Agent, symbol: agent_symbol)
 
     starting_credits = agent.credits
     starting_fleet = Game.fleet_value(agent_symbol)
@@ -30,25 +33,25 @@ defmodule SpacetradersClient.Finance do
 
     Repo.transaction(fn ->
       starting_accounts = [
-        %{agent_symbol: agent_symbol, name: "Cash", type: :assets, number: 1000},
-        %{agent_symbol: agent_symbol, name: "Fleet", type: :assets, number: 1200},
-        %{agent_symbol: agent_symbol, name: "Merchandise", type: :assets, number: 1500},
-        %{agent_symbol: agent_symbol, name: "Sales", type: :revenue, number: 4000},
-        %{agent_symbol: agent_symbol, name: "Natural Resources", type: :revenue, number: 4900},
-        %{agent_symbol: agent_symbol, name: "Starting Balances", type: :equity, number: 3900},
+        %{agent_id: agent.id, name: "Cash", type: :assets, number: 1000},
+        %{agent_id: agent.id, name: "Fleet", type: :assets, number: 1200},
+        %{agent_id: agent.id, name: "Merchandise", type: :assets, number: 1500},
+        %{agent_id: agent.id, name: "Sales", type: :revenue, number: 4000},
+        %{agent_id: agent.id, name: "Natural Resources", type: :revenue, number: 4900},
+        %{agent_id: agent.id, name: "Starting Balances", type: :equity, number: 3900},
         %{
-          agent_symbol: agent_symbol,
+          agent_id: agent.id,
           name: "Cost of Merchandise Sold",
           type: :expenses,
           number: 5000
         },
         %{
-          agent_symbol: agent_symbol,
+          agent_id: agent.id,
           name: "Construction Site Supply",
           type: :expenses,
           number: 5100
         },
-        %{agent_symbol: agent_symbol, name: "Fuel", type: :expenses, number: 6000}
+        %{agent_id: agent.id, name: "Fuel", type: :expenses, number: 6000}
       ]
 
       {9, accounts} = Repo.insert_all(Account, starting_accounts, returning: true)
@@ -88,9 +91,11 @@ defmodule SpacetradersClient.Finance do
       end)
 
       Enum.each(starting_merchandise, fn merch ->
+        item = Repo.get_by!(Item, symbol: merch.trade_symbol)
+
         %Inventory{
-          agent_symbol: agent_symbol,
-          item_symbol: merch.trade_symbol
+          agent_id: agent.id,
+          item_id: item.id
         }
         |> Repo.insert!()
 
@@ -106,6 +111,16 @@ defmodule SpacetradersClient.Finance do
     end)
   end
 
+  defp agent_account_by_name(agent_symbol, name) do
+    Repo.one(
+      from(a in Account,
+        join: ag in assoc(a, :agent),
+        where: ag.symbol == ^agent_symbol,
+        where: a.name == ^name
+      )
+    )
+  end
+
   def post_journal(
         agent_symbol,
         timestamp,
@@ -114,8 +129,8 @@ defmodule SpacetradersClient.Finance do
         credit_account_name,
         amount
       ) do
-    debit_account = Repo.get_by(Account, agent_symbol: agent_symbol, name: debit_account_name)
-    credit_account = Repo.get_by(Account, agent_symbol: agent_symbol, name: credit_account_name)
+    debit_account = agent_account_by_name(agent_symbol, debit_account_name)
+    credit_account = agent_account_by_name(agent_symbol, credit_account_name)
 
     post_journal(
       timestamp,
@@ -139,7 +154,13 @@ defmodule SpacetradersClient.Finance do
 
   def purchase_inventory_by_total(agent_symbol, item_symbol, timestamp, quantity, total_cost) do
     inventory =
-      Repo.get_by!(Inventory, agent_symbol: agent_symbol, item_symbol: item_symbol)
+      from(inv in Inventory,
+        join: a in assoc(inv, :agent),
+        join: i in assoc(inv, :item),
+        where: a.symbol == ^agent_symbol,
+        where: i.symbol == ^item_symbol
+      )
+      |> Repo.one!()
 
     %InventoryLineItem{
       inventory_id: inventory.id,
@@ -153,7 +174,13 @@ defmodule SpacetradersClient.Finance do
 
   def purchase_inventory_by_unit(agent_symbol, item_symbol, timestamp, quantity, cost_per_unit) do
     inventory =
-      Repo.get_by!(Inventory, agent_symbol: agent_symbol, item_symbol: item_symbol)
+      from(inv in Inventory,
+        join: a in assoc(inv, :agent),
+        join: i in assoc(inv, :item),
+        where: a.symbol == ^agent_symbol,
+        where: i.symbol == ^item_symbol
+      )
+      |> Repo.one!()
 
     %InventoryLineItem{
       inventory_id: inventory.id,
@@ -167,8 +194,8 @@ defmodule SpacetradersClient.Finance do
 
   def sell_inventory(agent_symbol, item_symbol, timestamp, quantity, credits) do
     Repo.transaction(fn ->
-      dr_acct = Repo.get_by!(Account, agent_symbol: agent_symbol, name: "Cash")
-      cr_acct = Repo.get_by!(Account, agent_symbol: agent_symbol, name: "Sales")
+      dr_acct = agent_account_by_name(agent_symbol, "Cash")
+      cr_acct = agent_account_by_name(agent_symbol, "Sales")
 
       tx =
         post_journal(
@@ -185,9 +212,20 @@ defmodule SpacetradersClient.Finance do
     end)
   end
 
+  defp inventory(agent_symbol, item_symbol) do
+    Repo.one(
+      from(i in Inventory,
+        join: a in assoc(i, :agent),
+        join: item in assoc(i, :item),
+        where: a.symbol == ^agent_symbol,
+        where: item.symbol == ^item_symbol
+      )
+    )
+  end
+
   defp do_sell_inventory(agent_symbol, item_symbol, timestamp, quantity) do
     Repo.transaction(fn ->
-      inventory = Repo.get_by!(Inventory, agent_symbol: agent_symbol, item_symbol: item_symbol)
+      inventory = inventory(agent_symbol, item_symbol)
 
       goods_available = goods_available_for_sale(agent_symbol)
 
@@ -205,11 +243,8 @@ defmodule SpacetradersClient.Finance do
         }
         |> Repo.insert!()
 
-      merch_dr_acct =
-        Repo.get_by!(Account, agent_symbol: agent_symbol, name: "Cost of Merchandise Sold")
-
-      merch_cr_acct =
-        Repo.get_by!(Account, agent_symbol: agent_symbol, name: "Merchandise")
+      merch_dr_acct = agent_account_by_name(agent_symbol, "Cost of Merchandise Sold")
+      merch_cr_acct = agent_account_by_name(agent_symbol, "Merchandise")
 
       post_journal(
         timestamp,
@@ -229,7 +264,8 @@ defmodule SpacetradersClient.Finance do
         from(
           il in InventoryLineItem,
           join: i in assoc(il, :inventory),
-          where: i.agent_symbol == ^agent_symbol,
+          join: a in assoc(i, :agent),
+          where: a.symbol == ^agent_symbol,
           select: %{
             quantity: sum(il.quantity),
             total_cost: sum(il.total_cost)
@@ -252,11 +288,8 @@ defmodule SpacetradersClient.Finance do
     Repo.transaction(fn ->
       {:ok, line_item} = do_sell_inventory(agent_symbol, item_symbol, timestamp, quantity)
 
-      dr_acct =
-        Repo.get_by!(Account, agent_symbol: agent_symbol, name: "Construction Site Supply")
-
-      cr_acct =
-        Repo.get_by!(Account, agent_symbol: agent_symbol, name: "Merchandise")
+      dr_acct = agent_account_by_name(agent_symbol, "Construction Site Supply")
+      cr_acct = agent_account_by_name(agent_symbol, "Merchandise")
 
       post_journal(
         timestamp,
@@ -272,8 +305,9 @@ defmodule SpacetradersClient.Finance do
     revenues =
       Repo.all(
         from a in Account,
+          join: ag in assoc(a, :agent),
           where: a.type == :revenue,
-          where: a.agent_symbol == ^agent_symbol
+          where: ag.symbol == ^agent_symbol
       )
       |> Enum.map(fn account ->
         balance = account_balance(account.id, from, to)
@@ -283,9 +317,10 @@ defmodule SpacetradersClient.Finance do
     direct_costs =
       Repo.all(
         from a in Account,
+          join: ag in assoc(a, :agent),
           where: a.type == :expenses,
           where: a.direct_cost,
-          where: a.agent_symbol == ^agent_symbol
+          where: ag.symbol == ^agent_symbol
       )
       |> Enum.map(fn account ->
         balance = account_balance(account.id, from, to)
@@ -295,9 +330,10 @@ defmodule SpacetradersClient.Finance do
     expenses =
       Repo.all(
         from a in Account,
+          join: ag in assoc(a, :agent),
           where: a.type == :expenses,
           where: not a.direct_cost,
-          where: a.agent_symbol == ^agent_symbol
+          where: ag.symbol == ^agent_symbol
       )
       |> Enum.map(fn account ->
         balance = account_balance(account.id, from, to)

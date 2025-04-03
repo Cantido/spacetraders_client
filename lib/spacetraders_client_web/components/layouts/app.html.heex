@@ -15,7 +15,7 @@
             <:failed :let={_failure}>Failed to fetch your agent</:failed>
 
             <div>
-              <.link class="hover:link" patch={~p"/game/agent"}>
+              <.link class="hover:link" navigate={~p"/game/agent"}>
                 <span class="font-mono text-lg"><%= agent.symbol %></span>
               </.link>
             </div>
@@ -39,25 +39,25 @@
 
         <ul class="p-4 bg-base-300 menu w-56 grow">
           <li >
-            <.link patch={~p"/game/contracts"} class={if @app_section == :contracts, do: "menu-active", else: ""}>
+            <.link navigate={~p"/game/contracts"} class={if @app_section == :contracts, do: "menu-active", else: ""}>
               <Heroicons.newspaper class="w-5 h-5" />
               Contracts
             </.link>
           </li>
           <li>
-            <.link patch={~p"/game/fleet"} class={if @app_section == :fleet, do: "menu-active", else: ""}>
+            <.link navigate={~p"/game/fleet"} class={if @app_section == :fleet, do: "menu-active", else: ""}>
               <Heroicons.rocket_launch class="w-5 h-5" />
               Fleet
             </.link>
           </li>
           <li>
-            <.link patch={~p"/game/galaxy"} class={if @app_section == :galaxy, do: "menu-active", else: ""}>
+            <.link navigate={~p"/game/galaxy"} class={if @app_section == :galaxy, do: "menu-active", else: ""}>
               <Heroicons.sparkles class="w-5 h-5" />
               Galaxy
             </.link>
           </li>
           <li>
-            <.link patch={~p"/game/automation"} class={if @app_section == :automation, do: "menu-active", else: ""}>
+            <.link navigate={~p"/game/automation"} class={if @app_section == :automation, do: "menu-active", else: ""}>
               <Heroicons.cog class="w-5 h-5" />
               <span>
                 Automation

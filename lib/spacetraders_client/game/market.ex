@@ -5,10 +5,9 @@ defmodule SpacetradersClient.Game.Market do
 
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
-
   schema "markets" do
-    has_many :items, MarketTradeGood, on_replace: :delete_if_exists
+    field :symbol, :string
+    has_many :items, MarketTradeGood
 
     has_many :trade_goods, MarketTradeGood,
       where: [sell_price: {:not, nil}, purchase_price: {:not, nil}]

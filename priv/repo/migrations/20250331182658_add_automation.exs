@@ -39,19 +39,24 @@ defmodule SpacetradersClient.Repo.Migrations.AddAutomation do
       add :value, :float, null: false
     end
 
-    create table(:ship_task_conditions, primary_key: false) do
+    create table(:ship_task_conditions) do
       add :ship_task_id,
           references(:ship_tasks, on_update: :update_all, on_delete: :delete_all),
           primary_key: true
 
-      add :name, :string, primary_key: true
+      add :name, :string, null: false
     end
+
+    create unique_index(:ship_task_conditions, [:ship_task_id, :name])
 
     create table(:ship_automation_ticks) do
       add :timestamp, :utc_datetime_usec, null: false
 
-      add :ship_symbol,
-          references(:ships, column: :symbol, on_update: :update_all, on_delete: :delete_all)
+      add :ship_id,
+          references(:ships,
+            on_update: :update_all,
+            on_delete: :delete_all
+          )
 
       add :active_task_id,
           references(:ship_tasks, on_update: :update_all, on_delete: :delete_all)

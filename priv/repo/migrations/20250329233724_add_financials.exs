@@ -3,8 +3,11 @@ defmodule SpacetradersClient.Repo.Migrations.AddFinancials do
 
   def change do
     create table(:accounts) do
-      add :agent_symbol,
-          references(:agents, column: :symbol, on_update: :update_all, on_delete: :delete_all),
+      add :agent_id,
+          references(:agents,
+            on_update: :update_all,
+            on_delete: :delete_all
+          ),
           null: false
 
       add :parent_account_id,
@@ -37,16 +40,22 @@ defmodule SpacetradersClient.Repo.Migrations.AddFinancials do
     end
 
     create table(:inventories) do
-      add :agent_symbol,
-          references(:agents, column: :symbol, on_update: :update_all, on_delete: :delete_all),
+      add :agent_id,
+          references(:agents,
+            on_update: :update_all,
+            on_delete: :delete_all
+          ),
           null: false
 
-      add :item_symbol,
-          references(:items, column: :symbol, on_update: :update_all, on_delete: :delete_all),
+      add :item_id,
+          references(:items,
+            on_update: :update_all,
+            on_delete: :delete_all
+          ),
           null: false
     end
 
-    create unique_index(:inventories, [:agent_symbol, :item_symbol])
+    create unique_index(:inventories, [:agent_id, :item_id])
 
     create table(:inventory_line_items) do
       add :inventory_id,

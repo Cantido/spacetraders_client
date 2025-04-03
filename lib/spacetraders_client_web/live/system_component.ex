@@ -72,7 +72,7 @@ defmodule SpacetradersClientWeb.SystemComponent do
     system_symbol = socket.assigns.system_symbol
 
     system =
-      Repo.get(System, system_symbol)
+      Repo.get_by(System, symbol: system_symbol)
       |> Repo.preload(waypoints: [:traits])
 
     market_count =

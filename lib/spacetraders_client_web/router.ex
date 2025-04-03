@@ -32,6 +32,7 @@ defmodule SpacetradersClientWeb.Router do
       live "/game/contracts", ContractsLive, :index
       live "/game/agent", AgentLive, :index
       live "/game/credits", CreditsLive, :index
+      live "/game/galaxy", GalaxyLive, :index
       live "/game/fleet", FleetLive, :index
       live "/game/fleet/:ship_symbol", GameLive, :ship
       live "/game/automation", AutomationLive, :index

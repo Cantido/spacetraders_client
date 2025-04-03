@@ -54,7 +54,7 @@ defmodule SpacetradersClient.ShipAutomaton do
         struct
       else
         ship =
-          Repo.get!(Ship, struct.ship_symbol)
+          Repo.get_by!(Ship, symbol: struct.ship_symbol)
           |> Repo.preload([:nav_waypoint, :cargo_items])
 
         game_actions =
@@ -174,7 +174,10 @@ defmodule SpacetradersClient.ShipAutomaton do
 
   defp customize_action(_struct, ship, %ShipTask{name: :goto} = action) do
     distance =
-      Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, action.args.waypoint_symbol))
+      Waypoint.distance(
+        ship.nav_waypoint,
+        Repo.get_by(Waypoint, symbol: action.args.waypoint_symbol)
+      )
 
     ShipTask.assign(action, %{
       distance: distance
@@ -220,9 +223,12 @@ defmodule SpacetradersClient.ShipAutomaton do
 
   defp action_variations(_struct, ship, %ShipTask{name: :pickup} = pickup_task) do
     proximity =
-      Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, pickup_task.args.start_wp))
+      Waypoint.distance(
+        ship.nav_waypoint,
+        Repo.get_by(Waypoint, symbol: pickup_task.args.start_wp)
+      )
 
-    if ship.nav_waypoint_symbol == pickup_task.args.start_wp do
+    if ship.nav_waypoint.symbol == pickup_task.args.start_wp do
       args = %{
         time_required: 0.5,
         start_flight_mode: "CRUISE",
@@ -257,7 +263,7 @@ defmodule SpacetradersClient.ShipAutomaton do
   end
 
   defp action_variations(_struct, ship, %ShipTask{name: :trade} = trade_task) do
-    agent = Repo.get(Agent, ship.agent_symbol)
+    agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
     cargo_space = ship.cargo_capacity - Ship.cargo_current(ship)
 
     max_units =
@@ -315,13 +321,16 @@ defmodule SpacetradersClient.ShipAutomaton do
       # Don't spend more than 20% of my money
       # I chose 20% because it is possible multiple ships might evaluate many trade tasks,
       # so they might spend all my money if I set this higher
-      agent = Repo.get(Agent, ship.agent_symbol)
+      agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
 
       task.args.expense > agent.credits * 0.20
     end)
     |> Enum.flat_map(fn trade_task ->
       proximity =
-        Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, trade_task.args.start_wp))
+        Waypoint.distance(
+          ship.nav_waypoint,
+          Repo.get_by(Waypoint, symbol: trade_task.args.start_wp)
+        )
 
       Ship.possible_travel_modes(ship, proximity)
       |> Enum.map(fn start_flight_mode ->
@@ -343,8 +352,8 @@ defmodule SpacetradersClient.ShipAutomaton do
     |> Enum.flat_map(fn trade_task ->
       distance =
         Waypoint.distance(
-          Repo.get(Waypoint, trade_task.args.start_wp),
-          Repo.get(Waypoint, trade_task.args.end_wp)
+          Repo.get_by(Waypoint, symbol: trade_task.args.start_wp),
+          Repo.get_by(Waypoint, symbol: trade_task.args.end_wp)
         )
 
       Ship.possible_travel_modes(ship, distance)
@@ -399,7 +408,10 @@ defmodule SpacetradersClient.ShipAutomaton do
   defp estimate_costs(_struct, ship, %ShipTask{name: :deliver_construction_materials} = task) do
     if units = task.args[:units] do
       ship_to_site_distance =
-        Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, task.args.waypoint_symbol))
+        Waypoint.distance(
+          ship.nav_waypoint,
+          Repo.get_by(Waypoint, symbol: task.args.waypoint_symbol)
+        )
 
       ship_to_site_fuel_consumed = Ship.fuel_cost(ship_to_site_distance)[:cruise]
       ship_to_site_travel_time = Ship.travel_time(ship, ship_to_site_distance)[:cruise]
@@ -414,7 +426,7 @@ defmodule SpacetradersClient.ShipAutomaton do
         ship.fuel_capacity > ship_to_site_fuel_consumed
       end)
     else
-      agent = Repo.get(Agent, ship.agent_symbol)
+      agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
       maximum_spend = max(agent.credits - 500_000, 0)
       cargo_space = ship.cargo_capacity - Ship.cargo_current(ship)
 
@@ -425,12 +437,15 @@ defmodule SpacetradersClient.ShipAutomaton do
         |> min(cargo_space)
 
       ship_to_market_distance =
-        Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, task.args.market_waypoint))
+        Waypoint.distance(
+          ship.nav_waypoint,
+          Repo.get_by(Waypoint, symbol: task.args.market_waypoint)
+        )
 
       market_to_site_distance =
         Waypoint.distance(
-          Repo.get(Waypoint, task.args.market_waypoint),
-          Repo.get(Waypoint, task.args.waypoint_symbol)
+          Repo.get_by(Waypoint, symbol: task.args.market_waypoint),
+          Repo.get_by(Waypoint, symbol: task.args.waypoint_symbol)
         )
 
       ship_to_market_fuel_consumed = Ship.fuel_cost(ship_to_market_distance)[:cruise]
@@ -484,7 +499,10 @@ defmodule SpacetradersClient.ShipAutomaton do
 
   defp estimate_costs(_struct, ship, %ShipTask{name: :mine} = task) do
     distance =
-      Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, task.args.waypoint_symbol))
+      Waypoint.distance(
+        ship.nav_waypoint,
+        Repo.get_by(Waypoint, symbol: task.args.waypoint_symbol)
+      )
 
     fuel_consumed = Ship.fuel_cost(distance) |> Map.fetch!(task.args.flight_mode)
     travel_time = Ship.travel_time(ship, distance) |> Map.fetch!(task.args.flight_mode)
@@ -503,7 +521,10 @@ defmodule SpacetradersClient.ShipAutomaton do
 
   defp estimate_costs(_struct, ship, %ShipTask{name: :siphon_resources} = task) do
     distance =
-      Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, task.args.waypoint_symbol))
+      Waypoint.distance(
+        ship.nav_waypoint,
+        Repo.get_by(Waypoint, symbol: task.args.waypoint_symbol)
+      )
 
     fuel_consumed = Ship.fuel_cost(distance) |> Map.fetch!(task.args.flight_mode)
     travel_time = Ship.travel_time(ship, distance) |> Map.fetch!(task.args.flight_mode)
@@ -535,19 +556,21 @@ defmodule SpacetradersClient.ShipAutomaton do
 
   defp ship_actions(%__MODULE__{} = struct) do
     ship =
-      Repo.get!(Ship, struct.ship_symbol)
+      Repo.get_by!(Ship, symbol: struct.ship_symbol)
       |> Repo.preload([:cargo_items, :nav_waypoint])
 
     Enum.flat_map(ship.cargo_items, fn item ->
       Game.selling_markets(ship.nav_waypoint.system_symbol, item.item_symbol)
       |> Enum.flat_map(fn {market, price} ->
         distance =
-          Waypoint.distance(ship.nav_waypoint, Repo.get(Waypoint, market.symbol))
+          Waypoint.distance(ship.nav_waypoint, Repo.get_by(Waypoint, symbol: market.symbol))
 
         Ship.possible_travel_modes(ship, distance)
         |> Enum.map(fn flight_mode ->
           units =
-            market.trade_goods
+            market
+            |> Repo.preload(:trade_goods)
+            |> Map.fetch!(:trade_goods)
             |> Enum.filter(fn t -> is_integer(t.trade_volume) end)
             |> Enum.find(fn t -> t.item_symbol == item.item_symbol end)
             |> Map.fetch!(:trade_volume)

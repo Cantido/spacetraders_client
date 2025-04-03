@@ -5,16 +5,10 @@ defmodule SpacetradersClient.Game.ShipyardShip do
 
   import Ecto.Changeset
 
-  @primary_key false
-
   schema "shipyard_ships" do
-    belongs_to :shipyard, Shipyard,
-      foreign_key: :shipyard_symbol,
-      references: :symbol,
-      type: :string,
-      primary_key: true
+    belongs_to :shipyard, Shipyard
 
-    field :type, :string, primary_key: true
+    field :type, :string
     field :name, :string
     field :description, :string
     field :supply, :string

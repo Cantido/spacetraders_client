@@ -1058,7 +1058,7 @@ defmodule SpacetradersClientWeb.WaypointComponent do
     waypoint_symbol = socket.assigns.waypoint_symbol
 
     market =
-      Repo.get(Market, socket.assigns.waypoint_symbol)
+      Repo.get_by(Market, symbol: socket.assigns.waypoint_symbol)
       |> Repo.preload(
         imports: [:item],
         exports: [:item],
@@ -1067,16 +1067,17 @@ defmodule SpacetradersClientWeb.WaypointComponent do
       )
 
     shipyard =
-      Repo.get(Shipyard, socket.assigns.waypoint_symbol)
+      Repo.get_by(Shipyard, symbol: socket.assigns.waypoint_symbol)
       |> Repo.preload([:ships])
 
     ships_at_waypoint =
       Repo.all(
         from s in Ship,
+          join: wp in assoc(s, :nav_waypoint),
           where: [
-            agent_symbol: ^socket.assigns.agent_symbol,
-            nav_waypoint_symbol: ^socket.assigns.waypoint_symbol
-          ]
+            agent_symbol: ^socket.assigns.agent_symbol
+          ],
+          where: wp.symbol == ^socket.assigns.waypoint_symbol
       )
       |> Repo.preload(:nav_waypoint)
 
@@ -1089,14 +1090,14 @@ defmodule SpacetradersClientWeb.WaypointComponent do
       })
       |> assign_async(:system, fn ->
         system =
-          Repo.get(System, system_symbol)
+          Repo.get_by(System, symbol: system_symbol)
           |> Repo.preload(:waypoints)
 
         {:ok, %{system: system}}
       end)
       |> assign_async(:waypoint, fn ->
         waypoint =
-          Repo.get(Waypoint, waypoint_symbol)
+          Repo.get_by(Waypoint, symbol: waypoint_symbol)
           |> Repo.preload([:system, :modifiers, :traits])
 
         {:ok, %{waypoint: waypoint}}

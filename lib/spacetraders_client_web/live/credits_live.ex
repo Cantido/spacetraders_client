@@ -243,7 +243,7 @@ defmodule SpacetradersClientWeb.CreditsLive do
     PubSub.subscribe(@pubsub, "agent:#{socket.assigns.agent.result.symbol}")
 
     agent =
-      Repo.get(Agent, socket.assigns.agent_symbol)
+      Repo.get_by(Agent, symbol: socket.assigns.agent_symbol)
       |> Repo.preload(:accounts)
 
     income_statement =

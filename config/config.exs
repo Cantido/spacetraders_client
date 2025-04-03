@@ -26,16 +26,21 @@ config :spacetraders_client,
   generators: [timestamp_type: :utc_datetime]
 
 config :spacetraders_client, SpacetradersClient.Repo,
-  database: "tmp/#{config_env()}.db",
+  database: "spacetraders-#{config_env()}",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
   migration_timestamps: [
     type: :utc_datetime
   ]
 
 config :spacetraders_client, Oban,
-  engine: Oban.Engines.Lite,
+  engine: Oban.Engines.Basic,
   repo: SpacetradersClient.Repo,
   notifier: Oban.Notifiers.PG,
   plugins: [
+    {Oban.Plugins.Pruner, max_age: div(:timer.minutes(60), 1_000)},
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(5)},
     {Oban.Plugins.Cron,
      crontab: [
        {"* * * * */5", SpacetradersClient.Game.AgentLoadWorker}

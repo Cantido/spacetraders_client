@@ -6,20 +6,10 @@ defmodule SpacetradersClient.Game.ShipCargoItem do
 
   import Ecto.Changeset
 
-  @primary_key false
-
   schema "ship_cargo_items" do
-    belongs_to :ship, Ship,
-      foreign_key: :ship_symbol,
-      references: :symbol,
-      type: :string,
-      primary_key: true
+    belongs_to :ship, Ship, on_replace: :delete
 
-    belongs_to :item, Item,
-      foreign_key: :item_symbol,
-      references: :symbol,
-      type: :string,
-      primary_key: true
+    belongs_to :item, Item, on_replace: :delete
 
     field :units, :integer
 
@@ -27,9 +17,16 @@ defmodule SpacetradersClient.Game.ShipCargoItem do
   end
 
   def changeset(model, params) do
+    item =
+      %Item{
+        symbol: params["symbol"],
+        name: params["name"],
+        description: params["description"]
+      }
+
     model
-    |> cast(params, [:item_symbol, :units])
-    |> cast_assoc(:item)
+    |> cast(params, [:units])
+    |> put_assoc(:item, item)
     |> assoc_constraint(:ship)
     |> assoc_constraint(:item)
   end

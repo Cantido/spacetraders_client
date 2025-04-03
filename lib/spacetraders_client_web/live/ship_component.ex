@@ -2,7 +2,6 @@ defmodule SpacetradersClientWeb.ShipComponent do
   use SpacetradersClientWeb, :live_component
 
   alias SpacetradersClient.ShipAutomaton
-  alias SpacetradersClient.Game.Ship
   alias SpacetradersClient.Automation.ShipAutomationTick
   alias SpacetradersClient.Repo
   alias SpacetradersClientWeb.ShipStatsComponent

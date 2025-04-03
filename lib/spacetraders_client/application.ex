@@ -39,6 +39,10 @@ defmodule SpacetradersClient.Application do
       {:ok, _} ->
         {:ok, _} = Cldr.Currency.new(:XST, name: "SpaceTraders credits", digits: 0)
 
+        %{page: 1}
+        |> SpacetradersClient.Game.SystemLoadWorker.new(priority: 9)
+        |> Oban.insert!()
+
       _ ->
         :noop
     end

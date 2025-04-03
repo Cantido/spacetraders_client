@@ -4,30 +4,21 @@ defmodule SpacetradersClient.Game.Ship do
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.ShipCargoItem
+  alias SpacetradersClient.Game.Item
 
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
-
   schema "ships" do
-    belongs_to :agent, Agent, foreign_key: :agent_symbol, references: :symbol, type: :string
+    field :symbol, :string
+    belongs_to :agent, Agent
 
-    belongs_to :nav_waypoint, Waypoint,
-      foreign_key: :nav_waypoint_symbol,
-      references: :symbol,
-      type: :string
+    belongs_to :nav_waypoint, Waypoint
 
     field :registration_role, :string
 
-    belongs_to :nav_route_destination_waypoint, Waypoint,
-      foreign_key: :nav_route_destination_waypoint_symbol,
-      references: :symbol,
-      type: :string
+    belongs_to :nav_route_destination_waypoint, Waypoint
 
-    belongs_to :nav_route_origin_waypoint, Waypoint,
-      foreign_key: :nav_route_origin_waypoint_symbol,
-      references: :symbol,
-      type: :string
+    belongs_to :nav_route_origin_waypoint, Waypoint
 
     field :nav_route_departure_at, :utc_datetime_usec
     field :nav_route_arrival_at, :utc_datetime_usec
@@ -43,7 +34,7 @@ defmodule SpacetradersClient.Game.Ship do
 
     field :cargo_capacity, :integer
 
-    has_many :cargo_items, ShipCargoItem
+    has_many :cargo_items, ShipCargoItem, on_replace: :delete_if_exists
 
     field :fuel_capacity, :integer
     field :fuel_current, :integer
@@ -54,9 +45,6 @@ defmodule SpacetradersClient.Game.Ship do
   @required_params [
     :symbol,
     :registration_role,
-    :nav_waypoint_symbol,
-    :nav_route_destination_waypoint_symbol,
-    :nav_route_origin_waypoint_symbol,
     :nav_route_departure_at,
     :nav_route_arrival_at,
     :nav_status,
@@ -68,7 +56,7 @@ defmodule SpacetradersClient.Game.Ship do
   ]
 
   @optional_params [
-    # :cooldown_expires_at
+    :cooldown_expires_at
   ]
 
   @allowed_params @required_params ++ @optional_params
@@ -77,9 +65,6 @@ defmodule SpacetradersClient.Game.Ship do
     params = %{
       symbol: params["symbol"],
       registration_role: params["registration"]["role"],
-      nav_waypoint_symbol: params["nav"]["waypointSymbol"],
-      nav_route_destination_waypoint_symbol: params["nav"]["route"]["destination"]["symbol"],
-      nav_route_origin_waypoint_symbol: params["nav"]["route"]["origin"]["symbol"],
       nav_route_departure_at: params["nav"]["route"]["departureTime"],
       nav_route_arrival_at: params["nav"]["route"]["arrival"],
       nav_status: params["nav"]["status"],
@@ -91,27 +76,15 @@ defmodule SpacetradersClient.Game.Ship do
       fuel_current: params["fuel"]["current"]
     }
 
-    cargo_items =
-      get_in(params, [Access.key("cargo", %{}), Access.key("inventory", [])])
-      |> Enum.map(fn item ->
-        %{
-          item_symbol: item["symbol"],
-          units: item["units"]
-        }
-      end)
-
     model
     |> cast(params, @allowed_params)
-    |> put_assoc(:cargo_items, cargo_items)
-    |> validate_required([:agent_symbol] ++ @required_params)
+    |> cargo_changeset(params["cargo"])
+    |> validate_required(@required_params)
     |> assoc_constraint(:agent)
   end
 
   def nav_changeset(model, params) do
     params = %{
-      nav_waypoint_symbol: params["waypointSymbol"],
-      nav_route_destination_waypoint_symbol: params["route"]["destination"]["symbol"],
-      nav_route_origin_waypoint_symbol: params["route"]["origin"]["symbol"],
       nav_route_departure_at: params["route"]["departureTime"],
       nav_route_arrival_at: params["route"]["arrival"],
       nav_status: params["status"],
@@ -120,22 +93,25 @@ defmodule SpacetradersClient.Game.Ship do
 
     model
     |> cast(params, @allowed_params)
-    |> validate_required([:agent_symbol] ++ @required_params)
+    |> validate_required(@required_params)
   end
 
+  def cargo_changeset(model, nil), do: change(model, %{})
+
   def cargo_changeset(model, params) do
+    cargo_items_params =
+      Map.get(params, "inventory", [])
+      |> Enum.map(fn item ->
+        item_params = Map.take(item, ~w(symbol name description))
+
+        %{
+          "item" => item_params,
+          "units" => item["units"]
+        }
+      end)
+
     params = %{
-      cargo_items:
-        Enum.map(params["inventory"], fn item ->
-          %{
-            item: %{
-              symbol: item["symbol"],
-              name: item["name"],
-              description: item["description"]
-            },
-            units: item["units"]
-          }
-        end)
+      "cargo_items" => cargo_items_params
     }
 
     model
@@ -151,7 +127,7 @@ defmodule SpacetradersClient.Game.Ship do
 
     model
     |> cast(params, [:cooldown_total_seconds, :cooldown_expires_at])
-    |> validate_required([:agent_symbol] ++ @required_params)
+    |> validate_required(@required_params)
     |> assoc_constraint(:agent)
   end
 

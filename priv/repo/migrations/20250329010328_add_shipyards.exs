@@ -2,18 +2,21 @@ defmodule SpacetradersClient.Repo.Migrations.AddShipyards do
   use Ecto.Migration
 
   def change do
-    create table(:shipyards, primary_key: false) do
-      add :symbol, :string, primary_key: true
+    create table(:shipyards) do
+      add :symbol, :string, null: false
 
       add :modification_fee, :integer, null: false
     end
 
-    create table(:shipyard_ships, primary_key: false) do
-      add :shipyard_symbol,
-          references(:shipyards, column: :symbol, on_update: :update_all, on_delete: :delete_all),
-          primary_key: true
+    create table(:shipyard_ships) do
+      add :shipyard_id,
+          references(:shipyards,
+            on_update: :update_all,
+            on_delete: :delete_all
+          ),
+          null: false
 
-      add :type, :string, primary_key: true
+      add :type, :string
 
       add :name, :string
       add :description, :string
@@ -21,5 +24,7 @@ defmodule SpacetradersClient.Repo.Migrations.AddShipyards do
       add :activity, :string
       add :purchase_price, :integer
     end
+
+    create unique_index(:shipyard_ships, [:shipyard_id, :type])
   end
 end

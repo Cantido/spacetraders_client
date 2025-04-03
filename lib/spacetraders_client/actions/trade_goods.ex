@@ -23,7 +23,7 @@ defmodule SpacetradersClient.Actions.TradeGoods do
 
     def customize(%TradeGoods{} = action, ship) do
       cargo_space = ship.cargo_capacity - Ship.cargo_current(ship)
-      agent = Repo.get(Agent, ship.agent_symbol)
+      agent = Repo.get_by(Agent, symbol: ship.agent_symbol)
 
       units =
         (max(agent.credits - 5_000, 0) / action.buy_price)
@@ -46,7 +46,7 @@ defmodule SpacetradersClient.Actions.TradeGoods do
 
     def decision_factors(%TradeGoods{} = action, %Ship{} = ship) do
       distance_to_start =
-        Game.distance_between(ship.nav_waypoint_symbol, action.buy_waypoint_symbol)
+        Game.distance_between(ship.nav_waypoint.symbol, action.buy_waypoint_symbol)
 
       start_fuel_consumption =
         Ship.fuel_cost(distance_to_start) |> Map.fetch!(action.start_flight_mode)

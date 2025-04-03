@@ -6,9 +6,8 @@ defmodule SpacetradersClient.Game.Agent do
 
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
-
   schema "agents" do
+    field :symbol, :string
     field :credits, :integer
     field :token, :string
     field :automation_enabled, :boolean

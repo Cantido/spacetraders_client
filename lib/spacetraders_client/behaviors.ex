@@ -170,7 +170,7 @@ defmodule SpacetradersClient.Behaviors do
   def enter_orbit(ship_symbol) do
     Node.select([
       Node.condition(fn _state ->
-        ship = Repo.get(Ship, ship_symbol)
+        ship = Repo.get_by(Ship, symbol: ship_symbol)
 
         ship.nav_status == :in_orbit
       end),
@@ -178,7 +178,7 @@ defmodule SpacetradersClient.Behaviors do
         case Fleet.orbit_ship(state.client, ship_symbol) do
           {:ok, %{status: 200, body: body}} ->
             ship =
-              Repo.get(Ship, ship_symbol)
+              Repo.get_by(Ship, symbol: ship_symbol)
               |> Ship.changeset(body["data"])
               |> Repo.update!()
 
@@ -202,14 +202,14 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       Node.invert(
         Node.condition(fn state ->
-          ship = Repo.get(Ship, state.ship_symbol)
+          ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
           ship.nav_status == :in_transit
         end)
       ),
       Node.select([
         Node.condition(fn state ->
-          ship = Repo.get(Ship, state.ship_symbol)
+          ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
           ship.nav_status == :in_orbit
         end),
@@ -217,7 +217,7 @@ defmodule SpacetradersClient.Behaviors do
           case Fleet.orbit_ship(state.client, state.ship_symbol) do
             {:ok, %{status: 200, body: body}} ->
               ship =
-                Repo.get(Ship, state.ship_symbol)
+                Repo.get_by(Ship, symbol: state.ship_symbol)
                 |> Ship.nav_changeset(body["data"]["nav"])
                 |> Repo.update!()
 
@@ -231,7 +231,7 @@ defmodule SpacetradersClient.Behaviors do
 
             {:ok, %{status: 400, body: %{"error" => %{"code" => 4214, "data" => data}}}} ->
               ship =
-                Repo.get(Ship, state.ship_symbol)
+                Repo.get_by(Ship, symbol: state.ship_symbol)
                 |> Ship.changeset(%{
                   nav_route_arrival_at: data["arrival"],
                   nav_status: "IN_TRANSIT"
@@ -257,7 +257,7 @@ defmodule SpacetradersClient.Behaviors do
   def dock_ship do
     Node.select([
       Node.condition(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
         ship.nav_status == :docked
       end),
@@ -265,7 +265,7 @@ defmodule SpacetradersClient.Behaviors do
         case Fleet.dock_ship(state.client, state.ship_symbol) do
           {:ok, %{status: 200, body: body}} ->
             ship =
-              Repo.get(Ship, state.ship_symbol)
+              Repo.get_by(Ship, symbol: state.ship_symbol)
               |> Ship.nav_changeset(body["data"]["nav"])
               |> Repo.update!()
 
@@ -290,7 +290,7 @@ defmodule SpacetradersClient.Behaviors do
       case Fleet.set_flight_mode(state.client, state.ship_symbol, flight_mode) do
         {:ok, %{status: 200, body: body}} ->
           ship =
-            Repo.get(Ship, state.ship_symbol)
+            Repo.get_by(Ship, symbol: state.ship_symbol)
             |> Ship.nav_changeset(body["data"]["nav"])
             |> Repo.update!()
 
@@ -312,7 +312,7 @@ defmodule SpacetradersClient.Behaviors do
   def refuel(opts \\ []) do
     Node.sequence([
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
         min_fuel_opt = Keyword.get(opts, :min_fuel, :maximum)
 
@@ -327,7 +327,7 @@ defmodule SpacetradersClient.Behaviors do
       end),
       Node.select([
         Node.condition(fn state ->
-          ship = Repo.get(Ship, state.ship_symbol)
+          ship = Repo.get_by(Ship, symbol: state.ship_symbol)
           ship.fuel_current >= state.min_fuel
         end),
         Node.sequence([
@@ -335,7 +335,7 @@ defmodule SpacetradersClient.Behaviors do
           wait_for_transit(),
           dock_ship(),
           Node.action(fn state ->
-            ship = Repo.get(Ship, state.ship_symbol)
+            ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
             fallback_min_fuel = ship.fuel_capacity - 100
 
@@ -351,7 +351,7 @@ defmodule SpacetradersClient.Behaviors do
               case Fleet.refuel_ship(state.client, state.ship_symbol, units: fuel_units_to_buy) do
                 {:ok, %{status: 200, body: body}} ->
                   agent =
-                    Repo.get(Agent, ship.agent_symbol)
+                    Repo.get_by(Agent, symbol: ship.agent_symbol)
                     |> Agent.changeset(body["data"]["agent"])
                     |> Repo.update!()
 
@@ -368,7 +368,7 @@ defmodule SpacetradersClient.Behaviors do
                       Finance.post_journal(
                         agent.symbol,
                         ts,
-                        "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
+                        "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
                         "Fuel",
                         "Cash",
                         tx["totalPrice"]
@@ -424,9 +424,9 @@ defmodule SpacetradersClient.Behaviors do
 
   def fetch_nearest_fuel do
     Node.action(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
-      fuel_wp = Game.nearest_fuel_waypoint(ship.nav_waypoint_symbol)
+      fuel_wp = Game.nearest_fuel_waypoint(ship.nav_waypoint.symbol)
 
       if is_nil(fuel_wp) do
         raise "No fuel markets found in market data"
@@ -438,9 +438,9 @@ defmodule SpacetradersClient.Behaviors do
 
   def at_fuel_market? do
     Node.condition(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:nav_waypoint)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
-      state.fuel_market.symbol == ship.nav_waypoint_symbol
+      state.fuel_market.symbol == ship.nav_waypoint.symbol
     end)
   end
 
@@ -449,7 +449,7 @@ defmodule SpacetradersClient.Behaviors do
       case Fleet.navigate_ship(state.client, state.ship_symbol, state.fuel_market.symbol) do
         {:ok, %{status: 200, body: body}} ->
           ship =
-            Repo.get(Ship, state.ship_symbol)
+            Repo.get_by(Ship, symbol: state.ship_symbol)
             |> Ship.nav_changeset(body["data"]["nav"])
             |> Repo.update!()
 
@@ -473,7 +473,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def wait_for_transit do
     Node.action(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol)
       arrival = ship.nav_route_arrival_at
 
       if arrival && ship.nav_status == :in_transit do
@@ -504,7 +504,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def wait_for_ship_cooldown do
     Node.action(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
       if expiration = ship.cooldown_expires_at do
         if DateTime.before?(DateTime.utc_now(), expiration) do
@@ -523,13 +523,14 @@ defmodule SpacetradersClient.Behaviors do
       enter_orbit(),
       wait_for_ship_cooldown(),
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
         case Fleet.siphon_resources(state.client, state.ship_symbol) do
           {:ok, %{status: 201, body: body}} ->
             ship =
               ship
-              |> Ship.changeset(body["data"])
+              |> Ship.cooldown_changeset(body["data"]["cooldown"])
+              |> Ship.cargo_changeset(body["data"]["cargo"])
               |> Repo.update!()
               |> Repo.preload(:nav_waypoint)
 
@@ -548,7 +549,7 @@ defmodule SpacetradersClient.Behaviors do
               Finance.post_journal(
                 ship.agent_symbol,
                 DateTime.utc_now(),
-                "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
+                "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
                 "Merchandise",
                 "Natural Resources",
                 value_of_material
@@ -571,8 +572,15 @@ defmodule SpacetradersClient.Behaviors do
 
             {:success, state}
 
+          {:ok, %{status: 400, body: %{"error" => %{"code" => 4228}}}} ->
+            # Full cargo
+
+            Game.load_ship!(state.client, state.ship_symbol)
+
+            {:failure, state}
+
           err ->
-            Logger.error("Failed to extract resources: #{inspect(err)}")
+            Logger.error("Failed to siphon resources: #{inspect(err)}")
             {:failure, state}
         end
       end)
@@ -584,10 +592,10 @@ defmodule SpacetradersClient.Behaviors do
       enter_orbit(),
       wait_for_ship_cooldown(),
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:nav_waypoint)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
         best_survey =
-          Game.surveys(ship.nav_waypoint_symbol)
+          Game.surveys(ship.nav_waypoint.symbol)
           |> Enum.sort_by(
             fn survey ->
               Survey.profitability(survey, fn trade_symbol ->
@@ -626,7 +634,7 @@ defmodule SpacetradersClient.Behaviors do
               Finance.post_journal(
                 ship.agent_symbol,
                 DateTime.utc_now(),
-                "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
+                "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
                 "Merchandise",
                 "Natural Resources",
                 value_of_material
@@ -652,11 +660,18 @@ defmodule SpacetradersClient.Behaviors do
           {:ok, %{status: 409, body: %{"error" => %{"code" => 4224}}}} ->
             game =
               Game.delete_survey(
-                ship.nav_waypoint_symbol,
+                ship.nav_waypoint.symbol,
                 best_survey["signature"]
               )
 
             {:failure, Map.put(state, :game, game)}
+
+          {:ok, %{status: 400, body: %{"error" => %{"code" => 4228}}}} ->
+            # Full cargo
+
+            Game.load_ship!(state.client, state.ship_symbol)
+
+            {:failure, state}
 
           err ->
             Logger.error("Failed to extract resources: #{inspect(err)}")
@@ -668,7 +683,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def cargo_full do
     Node.condition(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:cargo_items)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:cargo_items)
 
       Ship.cargo_current(ship) == ship.cargo_capacity
     end)
@@ -676,7 +691,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def cargo_empty do
     Node.condition(fn state ->
-      ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:cargo_items)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:cargo_items)
 
       Ship.cargo_current(ship) == 0
     end)
@@ -688,7 +703,9 @@ defmodule SpacetradersClient.Behaviors do
       Node.sequence([
         enter_orbit(),
         Node.action(fn state ->
-          ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload([:cargo_items, :nav_waypoint])
+          ship =
+            Repo.get_by(Ship, symbol: state.ship_symbol)
+            |> Repo.preload([:cargo_items, :nav_waypoint])
 
           cargo_to_jettison =
             Enum.filter(ship.cargo_items, fn cargo_item ->
@@ -744,9 +761,9 @@ defmodule SpacetradersClient.Behaviors do
 
     Node.select([
       Node.condition(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
-        ship.nav_waypoint_symbol == waypoint_symbol
+        ship.nav_waypoint.symbol == waypoint_symbol
       end),
       Node.sequence([
         enter_orbit(),
@@ -754,7 +771,7 @@ defmodule SpacetradersClient.Behaviors do
           case Fleet.set_flight_mode(state.client, state.ship_symbol, flight_mode) do
             {:ok, %{status: 200, body: body}} ->
               ship =
-                Repo.get(Ship, state.ship_symbol)
+                Repo.get_by(Ship, symbol: state.ship_symbol)
                 |> Ship.nav_changeset(body["data"]["nav"])
                 |> Repo.update!()
 
@@ -775,7 +792,7 @@ defmodule SpacetradersClient.Behaviors do
           case Fleet.navigate_ship(state.client, state.ship_symbol, waypoint_symbol) do
             {:ok, %{status: 200, body: body}} ->
               ship =
-                Repo.get(Ship, state.ship_symbol)
+                Repo.get_by(Ship, symbol: state.ship_symbol)
                 |> Ship.nav_changeset(body["data"]["nav"])
                 |> Ship.fuel_changeset(body["data"]["fuel"])
                 |> Repo.update!()
@@ -803,9 +820,10 @@ defmodule SpacetradersClient.Behaviors do
   def sell_cargo_item(trade_symbol, units, opts \\ []) do
     Node.sequence([
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
-        market = Repo.get(Market, ship.nav_waypoint_symbol) |> Repo.preload(:trade_goods)
+        market =
+          Repo.get_by(Market, symbol: ship.nav_waypoint.symbol) |> Repo.preload(:trade_goods)
 
         {:success, Map.put(state, :market, market)}
       end),
@@ -821,7 +839,7 @@ defmodule SpacetradersClient.Behaviors do
         end
       end),
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:cargo_items)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:cargo_items)
 
         cargo_to_sell =
           Enum.find(ship.cargo_items, fn cargo_item ->
@@ -880,12 +898,12 @@ defmodule SpacetradersClient.Behaviors do
                  ) do
               {:ok, %{status: 201, body: body}} ->
                 ship =
-                  Repo.get(Ship, state.ship_symbol)
+                  Repo.get_by(Ship, symbol: state.ship_symbol)
                   |> Ship.cargo_changeset(body["data"]["cargo"])
                   |> Repo.update!()
 
                 agent =
-                  Repo.get(Agent, ship.agent_symbol)
+                  Repo.get_by(Agent, symbol: ship.agent_symbol)
                   |> Agent.changeset(body["data"]["agent"])
                   |> Repo.update!()
 
@@ -943,13 +961,13 @@ defmodule SpacetradersClient.Behaviors do
              ) do
           {:ok, %{status: 200, body: body}} ->
             source_ship =
-              Repo.get(Ship, source_ship_symbol)
+              Repo.get_by(Ship, symbol: source_ship_symbol)
               |> Ship.cargo_changeset(body["data"]["cargo"])
               |> Repo.update!()
 
             Game.load_ship_cargo!(state.ship_symbol)
 
-            receiving_ship = Repo.get(Ship, state.ship_symbol)
+            receiving_ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
             PubSub.broadcast(
               @pubsub,
@@ -967,12 +985,12 @@ defmodule SpacetradersClient.Behaviors do
 
           {:ok, %{status: 400, body: %{"error" => %{"code" => 4234, "data" => data}}}} ->
             source_ship =
-              Repo.get(Ship, data["shipSymbol"])
+              Repo.get_by(Ship, symbol: data["shipSymbol"])
               |> Ecto.Changeset.change(%{nav_waypoint_symbol: data["destinationSymbol"]})
               |> Repo.update!()
 
             receiving_ship =
-              Repo.get(Ship, data["targetShipSymbol"])
+              Repo.get_by(Ship, symbol: data["targetShipSymbol"])
               |> Ecto.Changeset.change(%{
                 nav_waypoint_symbol: data["conflictingDestinationSymbol"]
               })
@@ -1011,7 +1029,7 @@ defmodule SpacetradersClient.Behaviors do
             end)
 
             ship =
-              Repo.get(Ship, state.ship_symbol)
+              Repo.get_by(Ship, symbol: state.ship_symbol)
               |> Ship.cooldown_changeset(body["data"]["cooldown"])
               |> Repo.update!()
 
@@ -1025,7 +1043,7 @@ defmodule SpacetradersClient.Behaviors do
 
           {:ok, %{status: 409, body: body}} ->
             ship =
-              Repo.get(Ship, state.ship_symbol)
+              Repo.get_by(Ship, symbol: state.ship_symbol)
               |> Ship.cooldown_changeset(body["error"]["data"]["cooldown"])
               |> Repo.update!()
 
@@ -1050,9 +1068,9 @@ defmodule SpacetradersClient.Behaviors do
     Node.sequence([
       Node.condition(fn state ->
         if max_price = Keyword.get(opts, :max_price) do
-          ship = Repo.get(Ship, state.ship_symbol)
+          ship = Repo.get_by(Ship, symbol: state.ship_symbol)
 
-          market = Game.market(ship.nav_waypoint_symbol) |> Repo.preload(:trade_goods)
+          market = Game.market(ship.nav_waypoint.symbol) |> Repo.preload(:trade_goods)
 
           market.trade_goods
           |> Enum.any?(fn trade_good ->
@@ -1067,13 +1085,13 @@ defmodule SpacetradersClient.Behaviors do
         case Fleet.purchase_cargo(state.client, state.ship_symbol, trade_symbol, units) do
           {:ok, %{status: 201, body: body}} ->
             ship =
-              Repo.get(Ship, state.ship_symbol)
+              Repo.get_by(Ship, symbol: state.ship_symbol)
               |> Repo.preload(:cargo_items)
               |> Ship.cargo_changeset(body["data"]["cargo"])
               |> Repo.update!()
 
             agent =
-              Repo.get(Agent, ship.agent_symbol)
+              Repo.get_by(Agent, symbol: ship.agent_symbol)
               |> Agent.changeset(body["data"]["agent"])
               |> Repo.update!()
 
@@ -1093,7 +1111,7 @@ defmodule SpacetradersClient.Behaviors do
               Finance.post_journal(
                 agent.symbol,
                 ts,
-                "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint_symbol}",
+                "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
                 "Merchandise",
                 "Cash",
                 tx["totalPrice"]
@@ -1119,9 +1137,9 @@ defmodule SpacetradersClient.Behaviors do
         end
       end),
       Node.action(fn state ->
-        ship = Repo.get(Ship, state.ship_symbol) |> Repo.preload(:nav_waypoint)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
-        Game.load_market!(state.client, ship.nav_waypoint.system_symbol, ship.nav_waypoint_symbol)
+        Game.load_market!(state.client, ship.nav_waypoint.system_symbol, ship.nav_waypoint.symbol)
 
         {:success, state}
       end)
@@ -1131,13 +1149,13 @@ defmodule SpacetradersClient.Behaviors do
   def deliver_construction_materials(trade_symbol, units) do
     Node.action(fn state ->
       ship =
-        Repo.get(Ship, state.ship_symbol)
+        Repo.get_by(Ship, symbol: state.ship_symbol)
         |> Repo.preload(:nav_waypoint)
 
       case Systems.supply_construction_site(
              state.client,
              ship.nav_waypoint.system_symbol,
-             ship.nav_waypoint_symbol,
+             ship.nav_waypoint.symbol,
              state.ship_symbol,
              trade_symbol,
              units
@@ -1151,7 +1169,7 @@ defmodule SpacetradersClient.Behaviors do
           Game.load_construction_site!(
             state.client,
             ship.nav_waypoint.system_symbol,
-            ship.nav_waypoint_symbol
+            ship.nav_waypoint.symbol
           )
 
           {:ok, _ledger} =

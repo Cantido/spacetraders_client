@@ -228,7 +228,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
   end
 
   defp get_satellites(system, waypoint_symbol) do
-    Enum.filter(system.waypoints, fn wp -> wp.orbits_waypoint_symbol == waypoint_symbol end)
+    Enum.filter(system.waypoints, fn wp -> wp.orbits_waypoint.symbol == waypoint_symbol end)
   end
 
   attr :type, :string, required: true
@@ -308,7 +308,7 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
       )
 
     system =
-      Repo.get(System, socket.assigns.system_symbol)
+      Repo.get_by(System, symbol: socket.assigns.system_symbol)
       |> Repo.preload(waypoints: [:orbits, :orbitals])
 
     fleet =

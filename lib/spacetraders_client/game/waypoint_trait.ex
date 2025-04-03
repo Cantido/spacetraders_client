@@ -10,11 +10,7 @@ defmodule SpacetradersClient.Game.WaypointTrait do
   @derive {Jason.Encoder, except: [:__meta__, :__struct__, :waypoint]}
 
   schema "waypoint_traits" do
-    belongs_to :waypoint, Waypoint,
-      primary_key: true,
-      foreign_key: :waypoint_symbol,
-      references: :symbol,
-      type: :string
+    belongs_to :waypoint, Waypoint
 
     field :symbol, :string, primary_key: true
     field :name, :string

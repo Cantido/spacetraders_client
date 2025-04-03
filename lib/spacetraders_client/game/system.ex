@@ -5,12 +5,11 @@ defmodule SpacetradersClient.Game.System do
 
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
-
   @derive {Inspect, only: [:symbol]}
   @derive {Jason.Encoder, except: [:__meta__, :__struct__]}
 
   schema "systems" do
+    field :symbol, :string
     field :sector_symbol, :string
     field :name, :string
     field :type, :string
@@ -18,10 +17,7 @@ defmodule SpacetradersClient.Game.System do
     field :x_coordinate, :integer
     field :y_coordinate, :integer
 
-    has_many :waypoints, Waypoint,
-      foreign_key: :system_symbol,
-      references: :symbol,
-      preload_order: [asc: :symbol]
+    has_many :waypoints, Waypoint, preload_order: [asc: :symbol]
   end
 
   def changeset(model, params) do

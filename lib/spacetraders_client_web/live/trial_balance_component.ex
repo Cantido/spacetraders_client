@@ -55,7 +55,7 @@ defmodule SpacetradersClientWeb.TrialBalanceComponent do
     agent_symbol = Map.fetch!(assigns, :agent_symbol)
 
     agent =
-      Repo.get(Agent, agent_symbol)
+      Repo.get_by(Agent, symbol: agent_symbol)
       |> Repo.preload(:accounts)
 
     balances =

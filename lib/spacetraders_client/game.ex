@@ -7,6 +7,7 @@ defmodule SpacetradersClient.Game do
   alias SpacetradersClient.Game.ShipyardShip
   alias SpacetradersClient.Game.MarketTradeGood
   alias SpacetradersClient.Game.Shipyard
+  alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.Market
   alias SpacetradersClient.Systems
@@ -34,6 +35,8 @@ defmodule SpacetradersClient.Game do
         }
       )
     end
+
+    system = Repo.get_by(System, symbol: system_symbol)
 
     waypoints_data =
       Stream.iterate(1, &(&1 + 1))
@@ -71,19 +74,21 @@ defmodule SpacetradersClient.Game do
 
     waypoints =
       Enum.map(waypoints_data, fn waypoint_data ->
-        if waypoint = Repo.get(Waypoint, waypoint_data["symbol"]) do
+        if waypoint = Repo.get_by(Waypoint, symbol: waypoint_data["symbol"]) do
           Repo.preload(waypoint, [:modifiers, :traits])
         else
-          %Waypoint{system_symbol: system_symbol}
+          Ecto.build_assoc(system, :waypoints)
         end
         |> Waypoint.changeset(waypoint_data)
-        |> Repo.insert!(on_conflict: :replace_all)
+        |> Repo.insert_or_update!()
       end)
 
     Enum.each(waypoints_data, fn waypoint_data ->
       if waypoint_data["orbits"] do
+        orbited = Repo.get_by!(Waypoint, symbol: waypoint_data["orbits"])
+
         from(w in Waypoint, where: [symbol: ^waypoint_data["symbol"]])
-        |> Repo.update_all(set: [orbits_waypoint_symbol: waypoint_data["orbits"]])
+        |> Repo.update_all(set: [orbits_waypoint_id: orbited.id])
       end
     end)
 
@@ -106,14 +111,14 @@ defmodule SpacetradersClient.Game do
     {:ok, %{body: body, status: 200}} =
       Systems.get_shipyard(client, system_symbol, waypoint_symbol)
 
-    if shipyard = Repo.get(Shipyard, waypoint_symbol) do
+    if shipyard = Repo.get_by(Shipyard, symbol: waypoint_symbol) do
       shipyard
     else
       %Shipyard{symbol: waypoint_symbol}
     end
     |> Repo.preload(:ships)
     |> Shipyard.changeset(body["data"])
-    |> Repo.insert!(on_conflict: :replace_all)
+    |> Repo.insert_or_update!()
 
     if load_events_topic do
       PubSub.broadcast!(
@@ -136,24 +141,71 @@ defmodule SpacetradersClient.Game do
     {:ok, %{body: body, status: 200}} =
       Systems.get_market(client, system_symbol, waypoint_symbol)
 
-    body["data"]["exports"]
-    |> Enum.concat(body["data"]["imports"])
-    |> Enum.concat(body["data"]["exchange"])
-    |> Enum.each(fn e ->
-      %Item{}
-      |> Item.changeset(e)
-      |> Repo.insert!(on_conflict: :nothing)
-    end)
-
     market =
-      if market = Repo.get(Market, waypoint_symbol) do
+      if market = Repo.get_by(Market, symbol: waypoint_symbol) do
         market
       else
         %Market{symbol: waypoint_symbol}
+        |> Repo.insert!()
       end
-      |> Repo.preload(:items)
-      |> Market.changeset(body["data"])
-      |> Repo.insert!(on_conflict: :replace_all)
+      |> Repo.preload(items: [:item])
+
+    import_data = Enum.map(body["data"]["imports"], &Map.put(&1, "type", :import))
+    export_data = Enum.map(body["data"]["exports"], &Map.put(&1, "type", :export))
+    exchange_data = Enum.map(body["data"]["exchange"], &Map.put(&1, "type", :exchange))
+
+    current_market_item_ids =
+      (import_data ++ export_data ++ exchange_data)
+      |> Enum.map(fn e ->
+        item =
+          if item = Repo.get_by(Item, symbol: e["symbol"]) do
+            item
+          else
+            %Item{}
+            |> Item.changeset(e)
+            |> Repo.insert!()
+          end
+
+        existing_market_item =
+          Repo.get_by(MarketTradeGood,
+            market_id: market.id,
+            item_id: item.id
+          )
+
+        market_item =
+          if existing_market_item do
+            existing_market_item
+          else
+            Ecto.build_assoc(market, :items, item: item, type: e["type"])
+            |> Repo.insert!()
+          end
+          |> Repo.preload(:item)
+
+        symbol = market_item.item.symbol
+
+        trade_goods =
+          Map.fetch!(body, "data")
+          |> Map.get("tradeGoods", [])
+
+        if trade_good = Enum.find(trade_goods, fn tg -> tg["symbol"] == symbol end) do
+          market_item
+          |> Ecto.Changeset.change(%{
+            purchase_price: trade_good["purchasePrice"],
+            sell_price: trade_good["sellPrice"]
+          })
+          |> Repo.update!()
+        else
+          market_item
+        end
+      end)
+      |> Enum.map(fn market_item -> market_item.item_id end)
+
+    from(
+      mtg in MarketTradeGood,
+      where: mtg.market_id == ^market.id,
+      where: mtg.item_id not in ^current_market_item_ids
+    )
+    |> Repo.delete_all()
 
     if load_events_topic do
       PubSub.broadcast!(
@@ -170,15 +222,16 @@ defmodule SpacetradersClient.Game do
     {:ok, %{body: ship_body, status: 200}} = Fleet.get_ship(client, ship_symbol)
 
     ship =
-      if ship = Repo.get(Ship, ship_symbol) do
+      if ship = Repo.get_by(Ship, symbol: ship_symbol) do
         ship
       else
         {:ok, %{status: 200, body: agent_body}} = Agents.my_agent(client)
 
-        agent = Repo.get!(Agent, agent_body["data"]["symbol"])
+        agent = Repo.get_by!(Agent, symbol: agent_body["data"]["symbol"])
 
         Ecto.build_assoc(agent, :ships)
       end
+      |> Repo.preload(:cargo_items)
       |> Ship.changeset(ship_body["data"])
       |> Repo.insert_or_update!()
 
@@ -196,7 +249,7 @@ defmodule SpacetradersClient.Game do
   end
 
   def market(market_symbol) do
-    Repo.get(Market, market_symbol)
+    Repo.get_by(Market, symbol: market_symbol)
   end
 
   def markets(system_symbol) do
@@ -217,7 +270,8 @@ defmodule SpacetradersClient.Game do
     fleet =
       Repo.all(
         from s in Ship,
-          where: s.agent_symbol == ^agent_symbol
+          join: a in assoc(s, :agent),
+          where: a.symbol == ^agent_symbol
       )
 
     Enum.map(fleet, fn ship ->
@@ -238,7 +292,7 @@ defmodule SpacetradersClient.Game do
       {price, count}
     end)
     |> Enum.reject(fn {price, _count} -> is_nil(price) end)
-    |> Enum.map(fn {price, count} -> price * count end)
+    |> Enum.map(fn {price, count} -> Decimal.mult(price, count) |> Decimal.to_integer() end)
     |> Enum.sum()
   end
 
@@ -250,25 +304,27 @@ defmodule SpacetradersClient.Game do
   def merchandise_value(agent_symbol) do
     from(sci in ShipCargoItem,
       join: s in assoc(sci, :ship),
-      where: s.agent_symbol == ^agent_symbol
+      join: a in assoc(s, :agent),
+      where: a.symbol == ^agent_symbol
     )
     |> Repo.all()
+    |> Repo.preload(:item)
     |> Enum.map(fn cargo_item ->
       price_per_unit =
-        average_selling_price(cargo_item.item_symbol) || 0
+        average_selling_price(cargo_item.item.symbol) || 0
 
       %{
-        trade_symbol: cargo_item.item_symbol,
+        trade_symbol: cargo_item.item.symbol,
         units: cargo_item.units,
-        total_cost: price_per_unit * cargo_item.units
+        total_cost: Decimal.mult(price_per_unit, cargo_item.units) |> Decimal.to_integer()
       }
     end)
   end
 
   def distance_between(wp_a, wp_b) do
     Waypoint.distance(
-      Repo.get(Waypoint, wp_a),
-      Repo.get(Waypoint, wp_b)
+      Repo.get_by(Waypoint, symbol: wp_a),
+      Repo.get_by(Waypoint, symbol: wp_b)
     )
   end
 
@@ -387,7 +443,10 @@ defmodule SpacetradersClient.Game do
     Repo.one(
       from(
         mtg in MarketTradeGood,
-        where: [market_symbol: ^waypoint_symbol, item_symbol: ^trade_symbol],
+        join: m in assoc(mtg, :market),
+        join: i in assoc(mtg, :item),
+        where: m.symbol == ^waypoint_symbol,
+        where: i.symbol == ^trade_symbol,
         select: mtg.sell_price
       )
     )
@@ -397,7 +456,10 @@ defmodule SpacetradersClient.Game do
     Repo.one(
       from(
         mtg in MarketTradeGood,
-        where: [market_symbol: ^waypoint_symbol, item_symbol: ^trade_symbol],
+        join: m in assoc(mtg, :market),
+        join: i in assoc(mtg, :item),
+        where: m.symbol == ^waypoint_symbol,
+        where: i.symbol == ^trade_symbol,
         select: mtg.purchase_price
       )
     )
@@ -415,8 +477,9 @@ defmodule SpacetradersClient.Game do
       m in Market,
       join: w in Waypoint,
       on: m.symbol == w.symbol,
+      join: s in assoc(w, :system),
       join: mtg in assoc(m, :trade_goods),
-      where: w.system_symbol == ^system_symbol,
+      where: s.symbol == ^system_symbol,
       where: mtg.item_symbol == ^trade_symbol,
       where: not is_nil(mtg.sell_price),
       select: {m, mtg.sell_price}
@@ -428,7 +491,8 @@ defmodule SpacetradersClient.Game do
     from(
       m in Market,
       join: mtg in assoc(m, :trade_goods),
-      where: mtg.item_symbol == ^trade_symbol,
+      join: i in assoc(mtg, :item),
+      where: i.symbol == ^trade_symbol,
       where: not is_nil(mtg.sell_price),
       select: {m, mtg.sell_price}
     )
@@ -439,10 +503,12 @@ defmodule SpacetradersClient.Game do
     from(
       mtg in MarketTradeGood,
       join: m in assoc(mtg, :market),
+      join: i in assoc(mtg, :item),
       join: w in Waypoint,
       on: m.symbol == w.symbol,
-      where: w.system_symbol == ^system_symbol,
-      where: mtg.item_symbol == ^trade_symbol
+      join: s in assoc(w, :system),
+      where: s.symbol == ^system_symbol,
+      where: i.symbol == ^trade_symbol
     )
     |> Repo.aggregate(:avg, :sell_price)
   end
@@ -450,7 +516,8 @@ defmodule SpacetradersClient.Game do
   def average_selling_price(trade_symbol) do
     from(
       mtg in MarketTradeGood,
-      where: mtg.item_symbol == ^trade_symbol
+      join: i in assoc(mtg, :item),
+      where: i.symbol == ^trade_symbol
     )
     |> Repo.aggregate(:avg, :sell_price)
   end
@@ -472,9 +539,11 @@ defmodule SpacetradersClient.Game do
       m in Market,
       join: w in Waypoint,
       on: m.symbol == w.symbol,
+      join: s in assoc(w, :system),
       join: mtg in assoc(m, :trade_goods),
-      where: w.system_symbol == ^system_symbol,
-      where: mtg.item_symbol == ^trade_symbol,
+      join: i in assoc(mtg, :item),
+      where: s.symbol == ^system_symbol,
+      where: i.symbol == ^trade_symbol,
       where: not is_nil(mtg.purchase_price),
       select: {m, mtg.purchase_price}
     )
@@ -485,7 +554,8 @@ defmodule SpacetradersClient.Game do
     from(
       m in Market,
       join: mtg in assoc(m, :trade_goods),
-      where: mtg.item_symbol == ^trade_symbol,
+      join: i in assoc(mtg, :item),
+      where: i.symbol == ^trade_symbol,
       where: not is_nil(mtg.purchase_price),
       select: {m, mtg.purchase_price}
     )
@@ -527,15 +597,17 @@ defmodule SpacetradersClient.Game do
   end
 
   def nearest_fuel_waypoint(waypoint_symbol) do
-    waypoint = Repo.get(Waypoint, waypoint_symbol)
+    waypoint = Repo.get_by(Waypoint, symbol: waypoint_symbol)
 
     from(
       m in Market,
       join: w in Waypoint,
       on: m.symbol == w.symbol,
+      join: s in assoc(w, :system),
       join: mtg in assoc(m, :items),
-      where: mtg.item_symbol == "FUEL",
-      where: w.system_symbol == ^waypoint.system_symbol,
+      join: i in assoc(mtg, :item),
+      where: i.symbol == "FUEL",
+      where: s.symbol == ^waypoint.system_symbol,
       select: w
     )
     |> Repo.all()
@@ -575,8 +647,8 @@ defmodule SpacetradersClient.Game do
               end_trade_good.sell_price > start_trade_good.purchase_price
           end)
           |> Enum.map(fn end_trade_good ->
-            start_wp = Repo.get(Waypoint, start_market.symbol)
-            end_wp = Repo.get(Waypoint, end_market.symbol)
+            start_wp = Repo.get_by(Waypoint, symbol: start_market.symbol)
+            end_wp = Repo.get_by(Waypoint, symbol: end_market.symbol)
 
             ShipTask.new(
               :trade,
@@ -600,7 +672,14 @@ defmodule SpacetradersClient.Game do
 
   def actions(agent_symbol) do
     resource_extractions =
-      Repo.all(Waypoint)
+      from(s in Ship,
+        join: nav_wp in assoc(s, :nav_waypoint),
+        join: sys in assoc(nav_wp, :system),
+        join: wp in assoc(sys, :waypoints),
+        select: wp,
+        distinct: true
+      )
+      |> Repo.all()
       |> Enum.flat_map(fn waypoint ->
         resource_actions(waypoint)
       end)
@@ -659,7 +738,7 @@ defmodule SpacetradersClient.Game do
       ship.registration_role == "EXCAVATOR" &&
         ship.nav_status == :in_orbit
     end)
-    |> Enum.group_by(fn ship -> ship.nav_waypoint_symbol end)
+    |> Enum.group_by(fn ship -> ship.nav_waypoint.symbol end)
     |> Enum.map(fn {waypoint_symbol, ships} ->
       # Example of the data structure I'm trying to build, one for each waypoint:
       #
@@ -741,7 +820,7 @@ defmodule SpacetradersClient.Game do
       |> Map.new(fn waypoint_symbol ->
         satellites =
           Enum.filter(fleet, fn ship ->
-            ship.nav_waypoint_symbol == waypoint_symbol &&
+            ship.nav_waypoint.symbol == waypoint_symbol &&
               ship.registration_role == "SATELLITE"
           end)
 

@@ -30,7 +30,7 @@ defmodule SpacetradersClient.ObanLogger do
 
   defp handle_event([:oban, :job, :exception], _measure, meta, _) do
     Logger.error(
-      "[Oban] #{meta.worker} failed with error: #{Exception.format(meta[:kind], meta[:result], meta[:stacktrace])}"
+      "[Oban] #{meta.worker} failed with error: #{Exception.format(meta[:kind], meta[:reason], meta[:stacktrace])}"
     )
   end
 end

@@ -112,7 +112,7 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def handle_params(%{"ship_symbol" => ship_symbol}, _uri, socket) do
     ship =
-      Repo.get!(Ship, ship_symbol)
+      Repo.get_by!(Ship, symbol: ship_symbol)
       |> Repo.preload(:nav_waypoint)
 
     socket =
@@ -121,7 +121,7 @@ defmodule SpacetradersClientWeb.GameLive do
         ship_symbol: ship.symbol,
         ship: ship,
         system_symbol: ship.nav_waypoint.system_symbol,
-        waypoint_symbol: ship.nav_waypoint_symbol
+        waypoint_symbol: ship.nav_waypoint.symbol
       })
 
     {:noreply, socket}
@@ -305,7 +305,7 @@ defmodule SpacetradersClientWeb.GameLive do
     {:ok, %{status: 200, body: body}} = Fleet.orbit_ship(socket.assigns.client, ship_symbol)
 
     ship =
-      Repo.get!(Ship, ship_symbol)
+      Repo.get_by!(Ship, symbol: ship_symbol)
       |> Ship.nav_changeset(body["data"]["nav"])
       |> Repo.update!()
 
@@ -323,7 +323,7 @@ defmodule SpacetradersClientWeb.GameLive do
     {:ok, %{status: 200, body: body}} = Fleet.dock_ship(socket.assigns.client, ship_symbol)
 
     ship =
-      Repo.get!(Ship, ship_symbol)
+      Repo.get_by!(Ship, symbol: ship_symbol)
       |> Ship.nav_changeset(body["data"]["nav"])
       |> Repo.update!()
 
@@ -681,7 +681,7 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def handle_info({:ship_updated, ship_symbol}, %Socket{} = socket) do
     if ship_symbol == socket.assigns.ship_symbol do
-      ship = Repo.get!(Ship, ship_symbol)
+      ship = Repo.get_by!(Ship, symbol: ship_symbol)
       {:noreply, assign(socket, :ship, ship)}
     else
       {:noreply, socket}

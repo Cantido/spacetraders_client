@@ -1,11 +1,12 @@
 defmodule SpacetradersClient.Game.Item do
   use Ecto.Schema
 
+  alias SpacetradersClient.Game.ShipCargoItem
+
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
-
   schema "items" do
+    field :symbol, :string
     field :name, :string
     field :description, :string
   end

@@ -41,7 +41,7 @@ defmodule SpacetradersClientWeb.FleetLive do
             </td>
             <td>
               <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system_symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
-                <%= ship.nav_waypoint_symbol %>
+                <%= ship.nav_waypoint.symbol %>
               </.link>
             </td>
 

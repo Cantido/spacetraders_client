@@ -5,9 +5,9 @@ defmodule SpacetradersClient.Game.Shipyard do
 
   import Ecto.Changeset
 
-  @primary_key {:symbol, :string, autogenerate: false}
-
   schema "shipyards" do
+    field :symbol, :string
+
     has_many :ships, ShipyardShip, on_replace: :delete_if_exists
 
     field :modification_fee, :integer
