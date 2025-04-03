@@ -441,14 +441,14 @@ defmodule SpacetradersClient.Game do
             {:ship_updated, ship_symbol, ship}
           )
 
-          {:ok, %{agent: agent, ship: ship}}
+          {:ok, ship}
 
         err ->
           Logger.error("Failed to refuel ship: #{inspect(err)}")
           {:error, err}
       end
     else
-      {:ok, %{agent: ship.agent, ship: ship}}
+      {:ok, ship}
     end
   end
 

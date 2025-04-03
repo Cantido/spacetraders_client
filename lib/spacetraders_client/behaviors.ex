@@ -331,66 +331,14 @@ defmodule SpacetradersClient.Behaviors do
           wait_for_transit(),
           dock_ship(),
           Node.action(fn state ->
-            ship = Repo.get_by(Ship, symbol: state.ship_symbol)
+            case Game.refuel_ship(state.client, state.ship_symbol) do
+              {:ok, _ship} ->
+                :success
 
-            fallback_min_fuel = ship.fuel_capacity - 100
+              {:error, reason} ->
+                Logger.error("Failed to refuel ship: #{inspect(err)}")
 
-            fuel_units_needed =
-              max(0, Map.get(state, :min_fuel, fallback_min_fuel) - ship.fuel_current)
-
-            market_units_to_buy =
-              Float.ceil(fuel_units_needed / 100)
-
-            fuel_units_to_buy = trunc(market_units_to_buy * 100)
-
-            if fuel_units_to_buy > 0 do
-              case Fleet.refuel_ship(state.client, state.ship_symbol, units: fuel_units_to_buy) do
-                {:ok, %{status: 200, body: body}} ->
-                  agent =
-                    Repo.get_by(Agent, symbol: ship.agent_symbol)
-                    |> Agent.changeset(body["data"]["agent"])
-                    |> Repo.update!()
-
-                  ship =
-                    ship
-                    |> Ship.fuel_changeset(body["data"]["fuel"])
-                    |> Repo.update!()
-
-                  tx = body["data"]["transaction"]
-                  {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
-
-                  if tx["units"] > 0 do
-                    {:ok, _ledger} =
-                      Finance.post_journal(
-                        agent.symbol,
-                        ts,
-                        "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
-                        "Fuel",
-                        "Cash",
-                        tx["totalPrice"]
-                      )
-                  end
-
-                  PubSub.broadcast(
-                    @pubsub,
-                    "agent:#{agent.symbol}",
-                    {:agent_updated, agent}
-                  )
-
-                  PubSub.broadcast(
-                    @pubsub,
-                    "agent:#{agent.symbol}",
-                    {:ship_updated, state.ship_symbol, ship}
-                  )
-
-                  {:success, state}
-
-                err ->
-                  Logger.error("Failed to refuel ship: #{inspect(err)}")
-                  {:failure, state}
-              end
-            else
-              :success
+                :failure
             end
           end)
         ])

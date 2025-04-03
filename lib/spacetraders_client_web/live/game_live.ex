@@ -197,36 +197,22 @@ defmodule SpacetradersClientWeb.GameLive do
   end
 
   def handle_event("purchase-fuel", %{"ship-symbol" => ship_symbol}, socket) do
-    case Fleet.refuel_ship(socket.assigns.client, ship_symbol) do
-      {:ok, %{status: 200, body: body}} ->
-        socket = put_flash(socket, :info, "Ship refueled")
+    case Game.refuel_ship(socket.assigns.client, ship_symbol) do
+      {:ok, ship} ->
+        if socket.assigns[:ship_symbol] == ship_symbol do
+          socket =
+            socket
+            |> put_flash(:success, "Refueled ship #{ship_symbol}")
+            |> assign(:ship, ship)
 
-        ship =
-          Game.save_ship_fuel!(ship_symbol, body["data"]["fuel"]) |> Repo.preload(:nav_waypoint)
-
-        socket.assigns.agent.result
-        |> Agent.changeset(body["data"]["agent"])
-        |> Repo.update!()
-
-        tx = body["data"]["transaction"]
-        {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
-
-        if tx["units"] > 0 do
-          {:ok, _ledger} =
-            Finance.post_journal(
-              body["data"]["agent"]["symbol"],
-              ts,
-              "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship_symbol} @ #{ship.nav_waypoint.symbol}",
-              "Fuel",
-              "Cash",
-              tx["totalPrice"]
-            )
+          {:noreply, socket}
+        else
+          {:noreply, socket}
         end
 
-        {:noreply, socket}
-
-      {:ok, %{body: %{"error" => %{"message" => message}}}} ->
-        socket = put_flash(socket, :error, message)
+      {:error, reason} ->
+        Logger.error(inspect(reason))
+        socket = put_flash(socket, :error, "Failed to refuel ship")
         {:noreply, socket}
     end
   end
