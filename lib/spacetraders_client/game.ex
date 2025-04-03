@@ -9,6 +9,7 @@ defmodule SpacetradersClient.Game do
   alias SpacetradersClient.Game.ShipyardShip
   alias SpacetradersClient.Game.MarketTradeGood
   alias SpacetradersClient.Game.Shipyard
+  alias SpacetradersClient.Game.ShipLoadWorker
   alias SpacetradersClient.Game.System
   alias SpacetradersClient.Game.Waypoint
   alias SpacetradersClient.Game.Market
@@ -449,6 +450,29 @@ defmodule SpacetradersClient.Game do
       end
     else
       {:ok, ship}
+    end
+  end
+
+  def navigate_ship(client, ship_symbol, waypoint_symbol) do
+    case Fleet.navigate_ship(client, ship_symbol, waypoint_symbol) do
+      {:ok, %{status: 200, body: body}} ->
+        save_ship_nav!(ship_symbol, body["data"]["nav"])
+
+        ship =
+          save_ship_fuel!(ship_symbol, body["data"]["fuel"])
+          |> Repo.preload(:agent)
+
+        %{
+          token: ship.agent.token,
+          ship_symbol: ship.symbol
+        }
+        |> ShipLoadWorker.new(scheduled_at: ship.nav_route_arrival_at)
+        |> Oban.insert!()
+
+        {:ok, ship}
+
+      {:ok, %{status: 400, body: %{"error" => error_data}}} ->
+        {:error, error_data}
     end
   end
 

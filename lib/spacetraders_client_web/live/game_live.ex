@@ -160,22 +160,6 @@ defmodule SpacetradersClientWeb.GameLive do
     {:noreply, socket}
   end
 
-  defp select_ship(socket, ship_symbol) do
-    ship =
-      if ship_symbol do
-        Enum.find(socket.assigns.fleet.result, fn ship ->
-          ship["symbol"] == ship_symbol
-        end)
-        |> then(fn ship ->
-          if is_nil(ship), do: List.first(socket.assigns.fleet.result), else: ship
-        end)
-      else
-        List.first(socket.assigns.fleet.result)
-      end
-
-    assign(socket, :selected_ship_symbol, ship["symbol"])
-  end
-
   def handle_event("reload-ship", %{"ship-symbol" => ship_symbol}, socket) do
     ship = Game.load_ship!(socket.assigns.client, ship_symbol)
 
@@ -215,14 +199,6 @@ defmodule SpacetradersClientWeb.GameLive do
         socket = put_flash(socket, :error, "Failed to refuel ship")
         {:noreply, socket}
     end
-  end
-
-  def handle_event("select-waypoint", %{"waypoint-symbol" => waypoint_symbol}, socket) do
-    {:noreply, assign(socket, :selected_waypoint, waypoint_symbol)}
-  end
-
-  def handle_event("select-ship", %{"ship-symbol" => ship_symbol}, socket) do
-    {:noreply, select_ship(socket, ship_symbol)}
   end
 
   def handle_event(
@@ -368,11 +344,8 @@ defmodule SpacetradersClientWeb.GameLive do
         socket
       end
 
-    case Fleet.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
-      {:ok, %{status: 200, body: body}} ->
-        Game.save_ship_nav!(ship_symbol, body["data"]["nav"])
-        ship = Game.save_ship_fuel!(ship_symbol, body["data"]["fuel"])
-
+    case Game.navigate_ship(socket.assigns.client, ship_symbol, waypoint_symbol) do
+      {:ok, ship} ->
         travel_time_human =
           Timex.diff(ship.nav_route_arrival_at, ship.nav_route_departure_at, :duration)
           |> Timex.Format.Duration.Formatters.Humanized.format()
@@ -384,13 +357,6 @@ defmodule SpacetradersClientWeb.GameLive do
             "Navigating ship #{ship.symbol} to #{waypoint_symbol}. Estimated travel time: #{travel_time_human}"
           )
 
-        %{
-          token: socket.assigns.token,
-          ship_symbol: ship.symbol
-        }
-        |> ShipLoadWorker.new(scheduled_at: ship.nav_route_arrival_at)
-        |> Oban.insert!()
-
         socket =
           if socket.assigns[:ship_symbol] == ship.symbol do
             socket
@@ -401,12 +367,12 @@ defmodule SpacetradersClientWeb.GameLive do
 
         {:noreply, socket}
 
-      {:ok, %{status: 400, body: %{"error" => %{"code" => 4203, "data" => data}}}} ->
+      {:error, error_data} ->
         socket =
           put_flash(
             socket,
             :error,
-            "Not enough fuel, #{data["fuelRequired"]} fuel is required, but only #{data["fuelAvailable"]} is available"
+            "Not enough fuel, #{error_data["data"]["fuelRequired"]} fuel is required, but only #{error_data["data"]["fuelAvailable"]} is available"
           )
 
         {:noreply, socket}

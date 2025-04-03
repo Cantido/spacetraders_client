@@ -336,7 +336,7 @@ defmodule SpacetradersClient.Behaviors do
                 :success
 
               {:error, reason} ->
-                Logger.error("Failed to refuel ship: #{inspect(err)}")
+                Logger.error("Failed to refuel ship: #{inspect(reason)}")
 
                 :failure
             end
