@@ -25,7 +25,6 @@ defmodule SpacetradersClientWeb.TrialBalanceComponent do
           balance={balance}
         />
       </tbody>
-
     </table>
     """
   end
@@ -36,15 +35,17 @@ defmodule SpacetradersClientWeb.TrialBalanceComponent do
   defp ledger_account_row(assigns) do
     ~H"""
     <tr>
-      <td><%= @account.name %></td> <td class="text-right">
+      <td>{@account.name}</td>
+      
+      <td class="text-right">
         <%= if @account.type in [:assets, :expenses] do %>
-          <%= Number.to_string!(@balance, format: :accounting, fractional_digits: 0) %>
+          {Number.to_string!(@balance, format: :accounting, fractional_digits: 0)}
         <% end %>
       </td>
 
       <td class="text-right">
         <%= if @account.type not in [:assets, :expenses] do %>
-          <%= Number.to_string!(@balance, format: :accounting, fractional_digits: 0) %>
+          {Number.to_string!(@balance, format: :accounting, fractional_digits: 0)}
         <% end %>
       </td>
     </tr>

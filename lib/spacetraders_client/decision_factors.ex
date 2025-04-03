@@ -16,9 +16,9 @@ defmodule SpacetradersClient.DecisionFactors do
 
   def construction_supply(factors, units_supplied) do
     y = Curves.linear(units_supplied, 80)
+
     put_factor(factors, %{name: :construction_supply, input: units_supplied, output: y})
     |> put_factor(%{name: :construction_bonus, input: 1.0, output: 1.0})
-
   end
 
   def income_over_time(factors, x) do
@@ -34,7 +34,8 @@ defmodule SpacetradersClient.DecisionFactors do
   end
 
   def time(factors, x) do
-    y = Curves.quadratic(x, 60 * 60, 0.333)
+    y =
+      Curves.quadratic(x, 60 * 60, 0.333)
       |> Curves.invert()
 
     put_factor(factors, %{name: :time, input: x, output: y})

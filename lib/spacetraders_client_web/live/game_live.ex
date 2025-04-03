@@ -27,42 +27,39 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def render(assigns) do
     ~H"""
-      <.live_component
-        module={SpacetradersClientWeb.OrbitalsMenuComponent}
-        id="orbitals"
-        agent_symbol={@agent.result.symbol}
-        system_symbol={@system_symbol}
-        waypoint_symbol={@waypoint_symbol}
-        ship_symbol={@ship_symbol}
-      >
-        <%= case @live_action do %>
-          <% :ship -> %>
-            <.live_component
-              module={SpacetradersClientWeb.ShipComponent}
-              id={"ship-#{@ship_symbol}"}
-              ship={@ship}
-            />
-
-          <% :waypoint -> %>
-            <.live_component
-              id={@waypoint_symbol}
-              module={SpacetradersClientWeb.WaypointComponent}
-              agent={@agent.result}
-              agent_symbol={@agent_symbol}
-              waypoint_symbol={@waypoint_symbol}
-              system_symbol={@system_symbol}
-            />
-
-          <% :system -> %>
-            <.live_component
-              id={@system_symbol}
-              module={SpacetradersClientWeb.SystemComponent}
-              agent={@agent}
-              system_symbol={@system_symbol}
-            />
-
-        <% end %>
-      </.live_component>
+    <.live_component
+      module={SpacetradersClientWeb.OrbitalsMenuComponent}
+      id="orbitals"
+      agent_symbol={@agent.result.symbol}
+      system_symbol={@system_symbol}
+      waypoint_symbol={@waypoint_symbol}
+      ship_symbol={@ship_symbol}
+    >
+      <%= case @live_action do %>
+        <% :ship -> %>
+          <.live_component
+            module={SpacetradersClientWeb.ShipComponent}
+            id={"ship-#{@ship_symbol}"}
+            ship={@ship}
+          />
+        <% :waypoint -> %>
+          <.live_component
+            id={@waypoint_symbol}
+            module={SpacetradersClientWeb.WaypointComponent}
+            agent={@agent.result}
+            agent_symbol={@agent_symbol}
+            waypoint_symbol={@waypoint_symbol}
+            system_symbol={@system_symbol}
+          />
+        <% :system -> %>
+          <.live_component
+            id={@system_symbol}
+            module={SpacetradersClientWeb.SystemComponent}
+            agent={@agent}
+            system_symbol={@system_symbol}
+          />
+      <% end %>
+    </.live_component>
     """
   end
 

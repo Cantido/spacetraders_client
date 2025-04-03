@@ -29,28 +29,37 @@ defmodule SpacetradersClientWeb.FleetLive do
           </tr>
         </thead>
         <tbody>
-          <tr
-            :for={ship <- fleet}
-          >
-            <td><.link navigate={~p"/game/fleet/#{ship.symbol}"} class="hover:link"><%= ship.symbol %></.link></td>
-            <td><%= ship.registration_role %></td>
+          <tr :for={ship <- fleet}>
             <td>
-              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system.symbol}"} class="hover:link">
-                <%= ship.nav_waypoint.system.symbol %>
+              <.link navigate={~p"/game/fleet/#{ship.symbol}"} class="hover:link">
+                {ship.symbol}
+              </.link>
+            </td>
+            <td>{ship.registration_role}</td>
+            <td>
+              <.link
+                navigate={~p"/game/systems/#{ship.nav_waypoint.system.symbol}"}
+                class="hover:link"
+              >
+                {ship.nav_waypoint.system.symbol}
               </.link>
             </td>
             <td>
-              <.link navigate={~p"/game/systems/#{ship.nav_waypoint.system.symbol}/waypoints/#{ship.nav_waypoint.symbol}"} class="hover:link">
-                <%= ship.nav_waypoint.symbol %>
+              <.link
+                navigate={
+                  ~p"/game/systems/#{ship.nav_waypoint.system.symbol}/waypoints/#{ship.nav_waypoint.symbol}"
+                }
+                class="hover:link"
+              >
+                {ship.nav_waypoint.symbol}
               </.link>
             </td>
-
 
             <% automation_tick = @automation_ticks[ship.symbol] %>
 
             <td>
               <%= if automation_tick do %>
-                <%= automation_tick.active_task.name %>
+                {automation_tick.active_task.name}
               <% end %>
             </td>
             <td>
@@ -105,7 +114,10 @@ defmodule SpacetradersClientWeb.FleetLive do
 
   defp action_runtime(assigns) do
     ~H"""
-    <.stopwatch id={@automation_tick.ship_id <> "-task-duration"} start={List.first(@automation_tick.active_task.active_automation_ticks).timestamp} />
+    <.stopwatch
+      id={@automation_tick.ship_id <> "-task-duration"}
+      start={List.first(@automation_tick.active_task.active_automation_ticks).timestamp}
+    />
     """
   end
 

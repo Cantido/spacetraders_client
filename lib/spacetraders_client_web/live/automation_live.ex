@@ -11,10 +11,14 @@ defmodule SpacetradersClientWeb.AutomationLive do
     ~H"""
     <.async_result :let={agent} assign={@agent}>
       <:loading>
-      <button name="enable-automation" class="btn btn-neutral" phx-click="start-automation" disabled="true">
-        <span class="loading loading-ring loading-lg"></span>
-        Loading automation...
-      </button>
+        <button
+          name="enable-automation"
+          class="btn btn-neutral"
+          phx-click="start-automation"
+          disabled="true"
+        >
+          <span class="loading loading-ring loading-lg"></span> Loading automation...
+        </button>
       </:loading>
       <:failed :let={_failure}>
         There was an error fetching automation data.
@@ -28,7 +32,6 @@ defmodule SpacetradersClientWeb.AutomationLive do
           Start game automation
         </button>
       <% end %>
-
     </.async_result>
     """
   end

@@ -9,9 +9,13 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
     ~H"""
     <div class="flex-1 grow">
       <%!-- <%= if items = @market["tradeGoods"] do %> --%>
-        <%!-- <.item_table items={items} /> --%>
+      <%!-- <.item_table items={items} /> --%>
       <%!-- <% else %> --%>
-        <.imports_exports market={@market} system_symbol={@system_symbol} waypoint_symbol={@waypoint_symbol} />
+      <.imports_exports
+        market={@market}
+        system_symbol={@system_symbol}
+        waypoint_symbol={@waypoint_symbol}
+      />
       <%!-- <% end %> --%>
     </div>
     """
@@ -57,11 +61,11 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
     ~H"""
     <table class="table table-zebra border border-2 border-neutral">
       <tbody>
-      <%= for market_item <- @items do %>
-        <tr>
-          <td><%= market_item.item.symbol %></td>
-        </tr>
-      <% end %>
+        <%= for market_item <- @items do %>
+          <tr>
+            <td>{market_item.item.symbol}</td>
+          </tr>
+        <% end %>
       </tbody>
     </table>
     """
@@ -69,23 +73,23 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
 
   def item_table(assigns) do
     ~H"""
-      <table class="table table-zebra table-pin-rows table-sm">
-        <thead class="border-b-4 border-neutral">
-          <tr>
-            <th>Item</th>
-            <th class="text-right">Volume</th>
-            <th class="text-right">Offer price</th>
-            <th class="text-right">Bid price</th>
-            <th class="w-40">Purchase</th>
-          </tr>
-        </thead>
-        <tbody>
+    <table class="table table-zebra table-pin-rows table-sm">
+      <thead class="border-b-4 border-neutral">
+        <tr>
+          <th>Item</th>
+          <th class="text-right">Volume</th>
+          <th class="text-right">Offer price</th>
+          <th class="text-right">Bid price</th>
+          <th class="w-40">Purchase</th>
+        </tr>
+      </thead>
+      <tbody>
         <%= for market_item <- @items do %>
           <tr>
-            <td><%= market_item.item.symbol %></td>
-            <td class="text-right"><%= market_item.trade_volume %></td>
-            <td class="text-right"><%= market_item.purchase_price %></td>
-            <td class="text-right"><%= market_item.sell_price %></td>
+            <td>{market_item.item.symbol}</td>
+            <td class="text-right">{market_item.trade_volume}</td>
+            <td class="text-right">{market_item.purchase_price}</td>
+            <td class="text-right">{market_item.sell_price}</td>
             <td class="text-right flex flex-row">
               <div class="join">
                 <button class="btn btn-xs btn-error join-item">Buy</button>
@@ -94,8 +98,8 @@ defmodule SpacetradersClientWeb.WaypointMarketComponent do
             </td>
           </tr>
         <% end %>
-        </tbody>
-      </table>
+      </tbody>
+    </table>
     """
   end
 end

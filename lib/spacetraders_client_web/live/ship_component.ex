@@ -17,26 +17,37 @@ defmodule SpacetradersClientWeb.ShipComponent do
     ~H"""
     <section class="flex flex-col overflow-y-auto p-4">
       <header class="mb-4 flex-none">
-        <h1 class="text-2xl font-bold">
-          <%= @ship.symbol %>
-          <button class="inline-block btn btn-square btn-sm" phx-click="reload-ship" phx-value-ship-symbol={@ship.symbol}>
-            <Heroicons.arrow_path mini class="h-4 w-4 inline-block text-error" />
-          </button>
+        <h1 class="text-2xl font-bold h-24 bg">
+          {@ship.symbol}
+          <div class="tooltip" data-tip="Force reload">
+            <button
+              class="inline-block btn btn-square btn-sm"
+              phx-click="reload-ship"
+              phx-value-ship-symbol={@ship.symbol}
+            >
+              <Heroicons.arrow_path mini class="h-4 w-4 inline-block text-error" />
+            </button>
+          </div>
         </h1>
 
         <span class="opacity-50 text-xl font-normal">
           {@ship.registration_role} ship
-
           <%= case @ship.nav_status do %>
             <% :docked -> %>
               docked at
-              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">{@ship.nav_waypoint.symbol}</.link>
+              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">
+                {@ship.nav_waypoint.symbol}
+              </.link>
             <% :in_orbit -> %>
               in orbit around
-              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">{@ship.nav_waypoint.symbol}</.link>
+              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">
+                {@ship.nav_waypoint.symbol}
+              </.link>
             <% :in_transit -> %>
               in transit to
-              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">{@ship.nav_waypoint.symbol}</.link>
+              <.link patch={~p"/game/systems/#{@ship.nav_waypoint.symbol}"} class="link">
+                {@ship.nav_waypoint.symbol}
+              </.link>
           <% end %>
         </span>
       </header>
@@ -57,7 +68,6 @@ defmodule SpacetradersClientWeb.ShipComponent do
         </ShipStatsComponent.fuel>
         <ShipStatsComponent.cargo ship={@ship} />
       </section>
-
 
       <%= if @previous_automation_tick do %>
         <.live_component
@@ -84,7 +94,9 @@ defmodule SpacetradersClientWeb.ShipComponent do
                     <option value="BURN" selected={@ship.nav_flight_mode == :burn}>Burn</option>
                     <option value="CRUISE" selected={@ship.nav_flight_mode == :cruise}>Cruise</option>
                     <option value="DRIFT" selected={@ship.nav_flight_mode == :dift}>Drift</option>
-                    <option value="STEALTH" selected={@ship.nav_flight_mode == :stealth}>Stealth</option>
+                    <option value="STEALTH" selected={@ship.nav_flight_mode == :stealth}>
+                      Stealth
+                    </option>
                   </select>
                 </form>
               </div>
@@ -106,10 +118,9 @@ defmodule SpacetradersClientWeb.ShipComponent do
                     <%= for waypoint <- @ship.nav_waypoint.system.waypoints do %>
                       <% waypoint = Repo.preload(waypoint, :system) %>
                       <tr>
-                        <td><%= waypoint.symbol %></td>
-                        <td><%= waypoint.type %></td>
+                        <td>{waypoint.symbol}</td>
+                        <td>{waypoint.type}</td>
                         <td>
-
                           <% disabled = @ship.nav_status != :in_orbit %>
 
                           <div {if disabled, do: %{"class" => "tooltip", "data-tip" => "Ship must be undocked to travel"}, else: %{}}>

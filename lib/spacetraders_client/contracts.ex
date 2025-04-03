@@ -8,6 +8,10 @@ defmodule SpacetradersClient.Contracts do
   end
 
   def deliver_cargo(client, id, ship_symbol, trade_symbol, quantity) do
-    Tesla.post(client, "/v2/my/contracts/#{id}/deliver", %{shipSymbol: ship_symbol, tradeSymbol: trade_symbol, units: quantity})
+    Tesla.post(client, "/v2/my/contracts/#{id}/deliver", %{
+      shipSymbol: ship_symbol,
+      tradeSymbol: trade_symbol,
+      units: quantity
+    })
   end
 end

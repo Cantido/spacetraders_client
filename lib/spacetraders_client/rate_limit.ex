@@ -8,6 +8,7 @@ defmodule SpacetradersClient.RateLimit do
     case Hammer.check_rate("SpaceTraders API (static pool)", :timer.seconds(1), 2) do
       {:allow, _count} ->
         Tesla.run(env, next)
+
       {:deny, _limit} ->
         Process.sleep(250)
         call(env, next, options)

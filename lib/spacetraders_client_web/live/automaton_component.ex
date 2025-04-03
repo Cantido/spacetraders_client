@@ -88,9 +88,15 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
                 <%= for factor <- @selected_task.decision_factors do %>
                   <tr>
                     <td class="font-mono">{factor.name}</td>
-                    <td class="font-mono text-right tabular-nums">{:erlang.float_to_binary(factor.input_value, decimals: 3)}</td>
-                    <td class="font-mono text-right tabular-nums">{:erlang.float_to_binary(factor.output_value, decimals: 3)}</td>
-                    <td class="font-mono text-right tabular-nums">{:erlang.float_to_binary(factor.weight, decimals: 3)}</td>
+                    <td class="font-mono text-right tabular-nums">
+                      {:erlang.float_to_binary(factor.input_value, decimals: 3)}
+                    </td>
+                    <td class="font-mono text-right tabular-nums">
+                      {:erlang.float_to_binary(factor.output_value, decimals: 3)}
+                    </td>
+                    <td class="font-mono text-right tabular-nums">
+                      {:erlang.float_to_binary(factor.weight, decimals: 3)}
+                    </td>
                   </tr>
                 <% end %>
               </tbody>

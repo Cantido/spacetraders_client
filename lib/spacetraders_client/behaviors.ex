@@ -7,6 +7,7 @@ defmodule SpacetradersClient.Behaviors do
   alias SpacetradersClient.Finance
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Ship
+  alias SpacetradersClient.Game.Market
   alias SpacetradersClient.Repo
 
   alias Taido.Node
@@ -506,6 +507,11 @@ defmodule SpacetradersClient.Behaviors do
 
             {:failure, state}
 
+          {:ok, %{status: 409, body: %{"error" => %{"code" => 4000, "data" => data}}}} ->
+            Game.save_ship_cooldown!(state.ship_symbol, data["cooldown"])
+
+            {:failure, state}
+
           err ->
             Logger.error("Failed to siphon resources: #{inspect(err)}")
             {:failure, state}
@@ -685,7 +691,7 @@ defmodule SpacetradersClient.Behaviors do
 
     Node.select([
       Node.condition(fn state ->
-        ship = Repo.get_by(Ship, symbol: state.ship_symbol)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
         ship.nav_waypoint.symbol == waypoint_symbol
       end),
@@ -748,7 +754,8 @@ defmodule SpacetradersClient.Behaviors do
         ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
         market =
-          Repo.get_by(Market, symbol: ship.nav_waypoint.symbol) |> Repo.preload(:trade_goods)
+          Repo.get_by(Market, symbol: ship.nav_waypoint.symbol)
+          |> Repo.preload(trade_goods: :item)
 
         {:success, Map.put(state, :market, market)}
       end),
@@ -764,11 +771,11 @@ defmodule SpacetradersClient.Behaviors do
         end
       end),
       Node.action(fn state ->
-        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:cargo_items)
+        ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(cargo_items: :item)
 
         cargo_to_sell =
           Enum.find(ship.cargo_items, fn cargo_item ->
-            cargo_item.item_symbol == trade_symbol
+            cargo_item.item.symbol == trade_symbol
           end)
 
         if cargo_to_sell do
@@ -780,12 +787,12 @@ defmodule SpacetradersClient.Behaviors do
       Node.action(fn state ->
         trade_good =
           state.market.trade_goods
-          |> Enum.find(%{}, fn t -> t.item_symbol == trade_symbol end)
+          |> Enum.find(%{}, fn t -> t.item.symbol == trade_symbol end)
 
         market_volume = trade_good.trade_volume
 
         whole_volume_count = div(state.cargo_to_sell.units, market_volume)
-        units_in_last_volume = rem(units, market_volume)
+        units_in_last_volume = rem(trunc(units), market_volume)
 
         whole_volume_amounts =
           Stream.repeatedly(fn -> market_volume end)
@@ -842,7 +849,7 @@ defmodule SpacetradersClient.Behaviors do
 
                 {:ok, _ledger} =
                   Finance.sell_inventory(
-                    ship.agent_symbol,
+                    ship.agent.symbol,
                     trade_symbol,
                     ts,
                     tx["units"],

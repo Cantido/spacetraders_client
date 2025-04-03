@@ -21,7 +21,8 @@ defmodule SpacetradersClientWeb.LoadingLive do
           <div class="justify-self-end">Agent</div>
 
           <progress :if={!@agent.ok?} class="progress w-56"></progress>
-          <progress :if={@agent.ok?} class="progress progress-success w-56" value="1" max="1"></progress>
+          <progress :if={@agent.ok?} class="progress progress-success w-56" value="1" max="1">
+          </progress>
 
           <div class="text-base-content/50 text-xs">
             <%= if @agent.ok? do %>
@@ -44,9 +45,8 @@ defmodule SpacetradersClientWeb.LoadingLive do
 
           <div class="justify-self-end">Waypoints</div>
 
-          <%
-            {system_loaded_count, system_loading_count} = load_progress(@progress_keys, :system_waypoints)
-          %>
+          <% {system_loaded_count, system_loading_count} =
+            load_progress(@progress_keys, :system_waypoints) %>
 
           <.loading_progress_bar
             loaded_count={system_loaded_count}
@@ -61,10 +61,8 @@ defmodule SpacetradersClientWeb.LoadingLive do
             <% end %>
           </div>
           <div class="justify-self-end">Markets</div>
-          <%
-            market_loading_count = Enum.count(Map.get(@loading_keys, :market, []))
-            market_loaded_count = Enum.count(Map.get(@loaded_keys, :market, []))
-          %>
+          <% market_loading_count = Enum.count(Map.get(@loading_keys, :market, []))
+          market_loaded_count = Enum.count(Map.get(@loaded_keys, :market, [])) %>
 
           <.loading_progress_bar
             loading_count={market_loading_count}

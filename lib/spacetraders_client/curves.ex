@@ -56,7 +56,8 @@ defmodule SpacetradersClient.Curves do
       iex> Curves.quadratic(0, 1.0, 5)
       0.0
   """
-  def quadratic(x, max_x, k) when is_number(x) and is_number(max_x) and is_number(k) and k > 0 and max_x > 0 do
+  def quadratic(x, max_x, k)
+      when is_number(x) and is_number(max_x) and is_number(k) and k > 0 and max_x > 0 do
     (x / max_x)
     |> clamp(0.0, 1.0)
     |> :math.pow(k)

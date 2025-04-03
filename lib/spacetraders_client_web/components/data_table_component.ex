@@ -19,26 +19,24 @@ defmodule SpacetradersClientWeb.DataTableComponent do
     <table class={["table", @class]}>
       <thead>
         <%= for col <- @column do %>
-          <th
-            class={[col[:class]]}
-          >
+          <th class={[col[:class]]}>
             <a
               class="cursor-pointer"
               phx-click="header-clicked"
               phx-value-key={col.key}
               phx-target={@myself}
             >
-              <%= col.label %>
+              {col.label}
 
               <span class="inline-block align-bottom">
-              <%= cond do %>
-                <% @sort_key == col.key && @sort_direction == :asc -> %>
-                  <Heroicons.chevron_up />
-                <% @sort_key == col.key && @sort_direction == :desc -> %>
-                  <Heroicons.chevron_down micro class="h-5 w-5" />
-                <% true -> %>
-                  <Heroicons.chevron_up_down micro class="h-5 w-5"/>
-              <% end %>
+                <%= cond do %>
+                  <% @sort_key == col.key && @sort_direction == :asc -> %>
+                    <Heroicons.chevron_up />
+                  <% @sort_key == col.key && @sort_direction == :desc -> %>
+                    <Heroicons.chevron_down micro class="h-5 w-5" />
+                  <% true -> %>
+                    <Heroicons.chevron_up_down micro class="h-5 w-5" />
+                <% end %>
               </span>
             </a>
           </th>
@@ -49,17 +47,15 @@ defmodule SpacetradersClientWeb.DataTableComponent do
         <%= for row <- Enum.sort_by(@rows, fn row -> Map.get(row, @sort_key) end, sorter(@sort_direction, Map.get(sort_column, :sorter))) do %>
           <tr>
             <%= for col <- @column do %>
-              <td
-                class={[col[:class]]}
-              >
-                <%= render_slot(col, row) %>
+              <td class={[col[:class]]}>
+                {render_slot(col, row)}
               </td>
             <% end %>
           </tr>
         <% end %>
       </tbody>
       <tfoot>
-        <%= render_slot @footer %>
+        {render_slot(@footer)}
       </tfoot>
     </table>
     """

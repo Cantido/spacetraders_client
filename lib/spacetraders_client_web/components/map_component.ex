@@ -15,7 +15,8 @@ defmodule SpacetradersClientWeb.MapComponent do
         phx-hook="SystemMap"
         data-system={Jason.encode!(@system)}
         data-waypoint-symbol={Jason.encode!(@waypoint_symbol)}
-      ></div>
+      >
+      </div>
     </div>
     """
   end

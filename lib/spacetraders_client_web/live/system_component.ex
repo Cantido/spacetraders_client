@@ -46,11 +46,7 @@ defmodule SpacetradersClientWeb.SystemComponent do
         </div>
       </div>
 
-        <.live_component
-          module={MapComponent}
-          id={"system-map-#{@system_symbol}"}
-          system={@system}
-        />
+      <.live_component module={MapComponent} id={"system-map-#{@system_symbol}"} system={@system} />
     </div>
     """
   end

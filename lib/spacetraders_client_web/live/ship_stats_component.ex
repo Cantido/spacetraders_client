@@ -23,25 +23,24 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
 
   def cooldown(assigns) do
     ~H"""
-    <%
-      cooldown_remaining_seconds =
-        Ship.remaining_cooldown(@ship, @now)
-        |> Timex.Duration.to_seconds()
-
-    %>
+    <% cooldown_remaining_seconds =
+      Ship.remaining_cooldown(@ship, @now)
+      |> Timex.Duration.to_seconds() %>
     <div class="stat">
       <h3 class="stat-title">Cooldown</h3>
 
       <%= if @ship.cooldown_expires_at && cooldown_remaining_seconds > 0 do %>
-        <%
-      cooldown_progress_seconds =
-        trunc(@ship.cooldown_total_seconds - cooldown_remaining_seconds)
+        <% cooldown_progress_seconds =
+          trunc(@ship.cooldown_total_seconds - cooldown_remaining_seconds)
 
-      cooldown_progress_percent =
-        cooldown_progress_seconds / @ship.cooldown_total_seconds * 100
-        %>
+        cooldown_progress_percent =
+          cooldown_progress_seconds / @ship.cooldown_total_seconds * 100 %>
         <div class="stat-figure">
-          <div class="radial-progress" style={"--value:#{cooldown_progress_percent};"} role="progressbar">
+          <div
+            class="radial-progress"
+            style={"--value:#{cooldown_progress_percent};"}
+            role="progressbar"
+          >
             <div class="countdown font-mono text-xs">
               <span style={"--value:#{div(cooldown_progress_seconds, 60)};"}></span>
               : <span style={"--value:#{rem(cooldown_progress_seconds, 60)};"}></span>
@@ -53,8 +52,7 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
         <div class="stat-figure">
           <div class="radial-progress" style="--value:100;" role="progressbar">
             <div class="countdown font-mono text-xs">
-              <span style={"--value:#{0};"}></span>
-              : <span style={"--value:#{0};"}></span>
+              <span style={"--value:#{0};"}></span> : <span style={"--value:#{0};"}></span>
             </div>
           </div>
         </div>
@@ -78,22 +76,16 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
       <h3 class="stat-title">Navigation</h3>
       <%= case @ship.nav_status do %>
         <% :in_transit -> %>
-          <%
-            cooldown_remaining =
-              Ship.remaining_travel_duration(@ship, @now)
-              |> Timex.Duration.to_seconds()
-              |> trunc()
+          <% cooldown_remaining =
+            Ship.remaining_travel_duration(@ship, @now)
+            |> Timex.Duration.to_seconds()
+            |> trunc()
 
-            total_duration = DateTime.diff(@ship.nav_route_arrival_at, @ship.nav_route_departure_at)
+          total_duration = DateTime.diff(@ship.nav_route_arrival_at, @ship.nav_route_departure_at)
 
-            progress_percent = (total_duration - cooldown_remaining) / total_duration * 100
-          %>
+          progress_percent = (total_duration - cooldown_remaining) / total_duration * 100 %>
           <div class="stat-figure">
-            <div
-              class="radial-progress"
-              style={"--value:#{progress_percent};"}
-              role="progressbar"
-            >
+            <div class="radial-progress" style={"--value:#{progress_percent};"} role="progressbar">
               <% cooldown_hours = trunc(cooldown_remaining / 3600)
               cooldown_minutes = trunc((cooldown_remaining - cooldown_hours * 3600) / 60)
               cooldown_seconds = rem(cooldown_remaining, 60) %>

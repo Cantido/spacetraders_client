@@ -1,13 +1,8 @@
 <main>
-    <div
-        phx-hook="SurveyStorage"
-        id="gamedata"
-        class="drawer drawer-open"
-    >
-
-      <input id="menu-drawer" type="checkbox" class="drawer-toggle" />
-      <div class="drawer-side">
-        <div class="flex flex-col h-full">
+  <div phx-hook="SurveyStorage" id="gamedata" class="drawer drawer-open">
+    <input id="menu-drawer" type="checkbox" class="drawer-toggle" />
+    <div class="drawer-side">
+      <div class="flex flex-col h-full">
         <div class="bg-neutral-700 text-neutral-content p-4 flex-none h-24">
           <.async_result :let={agent} assign={@agent}>
             <:loading><span class="loading loading-ring loading-lg"></span></:loading>
@@ -15,7 +10,7 @@
 
             <div>
               <.link class="hover:link" navigate={~p"/game/agent"}>
-                <span class="font-mono text-lg"><%= agent.symbol %></span>
+                <span class="font-mono text-lg">{agent.symbol}</span>
               </.link>
             </div>
           </.async_result>
@@ -28,39 +23,46 @@
               <span style="font-variant: small-caps;">credits</span>
               <span class="text-sm">
                 <.link patch={~p"/game/credits"} class="hover:link">
-                <%= Number.to_string!(agent.credits, format: :accounting, fractional_digits: 0) %>
+                  {Number.to_string!(agent.credits, format: :accounting, fractional_digits: 0)}
                 </.link>
               </span>
             </div>
           </.async_result>
-
         </div>
 
         <ul class="p-4 bg-base-300 menu w-56 grow">
-          <li >
-            <.link navigate={~p"/game/contracts"} class={if @app_section == :contracts, do: "menu-active", else: ""}>
-              <Heroicons.newspaper class="w-5 h-5" />
-              Contracts
+          <li>
+            <.link
+              navigate={~p"/game/contracts"}
+              class={if @app_section == :contracts, do: "menu-active", else: ""}
+            >
+              <Heroicons.newspaper class="w-5 h-5" /> Contracts
             </.link>
           </li>
           <li>
-            <.link navigate={~p"/game/fleet"} class={if @app_section == :fleet, do: "menu-active", else: ""}>
-              <Heroicons.rocket_launch class="w-5 h-5" />
-              Fleet
+            <.link
+              navigate={~p"/game/fleet"}
+              class={if @app_section == :fleet, do: "menu-active", else: ""}
+            >
+              <Heroicons.rocket_launch class="w-5 h-5" /> Fleet
             </.link>
           </li>
           <li>
-            <.link navigate={~p"/game/galaxy"} class={if @app_section == :galaxy, do: "menu-active", else: ""}>
-              <Heroicons.sparkles class="w-5 h-5" />
-              Galaxy
+            <.link
+              navigate={~p"/game/galaxy"}
+              class={if @app_section == :galaxy, do: "menu-active", else: ""}
+            >
+              <Heroicons.sparkles class="w-5 h-5" /> Galaxy
             </.link>
           </li>
           <li>
-            <.link navigate={~p"/game/automation"} class={if @app_section == :automation, do: "menu-active", else: ""}>
+            <.link
+              navigate={~p"/game/automation"}
+              class={if @app_section == :automation, do: "menu-active", else: ""}
+            >
               <Heroicons.cog class="w-5 h-5" />
               <span>
                 Automation
-
                 <.async_result :let={agent} assign={@agent}>
                   <:loading>
                     <div aria-label="status" class="status status-accent"></div>
@@ -68,20 +70,29 @@
                   <:failed :let={_failure}>
                     <div aria-label="status" class="status status-error"></div>
                   </:failed>
-                  <div :if={!agent.automation_enabled} aria-label="status" class="status status-neutral"></div>
-                  <div :if={agent.automation_enabled} aria-label="status" class="status status-success"></div>
+                  <div
+                    :if={!agent.automation_enabled}
+                    aria-label="status"
+                    class="status status-neutral"
+                  >
+                  </div>
+                  <div
+                    :if={agent.automation_enabled}
+                    aria-label="status"
+                    class="status status-success"
+                  >
+                  </div>
                 </.async_result>
               </span>
             </.link>
           </li>
         </ul>
-
-      </div>
-      </div>
-
-      <div class="drawer-content">
-        <.flash_group flash={@flash} />
-        <%= @inner_content %>
       </div>
     </div>
+
+    <div class="drawer-content">
+      <.flash_group flash={@flash} />
+      {@inner_content}
+    </div>
+  </div>
 </main>

@@ -11,7 +11,9 @@ defmodule SpacetradersClient.Automation.ShipTask do
   import Ecto.Changeset
 
   schema "ship_tasks" do
-    has_many :active_automation_ticks, ShipAutomationTick, foreign_key: :active_task_id, preload_order: [asc: :timestamp]
+    has_many :active_automation_ticks, ShipAutomationTick,
+      foreign_key: :active_task_id,
+      preload_order: [asc: :timestamp]
 
     field :name, :string
     field :utility, :float

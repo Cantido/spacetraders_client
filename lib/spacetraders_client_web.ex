@@ -41,6 +41,7 @@ defmodule SpacetradersClientWeb do
       use Phoenix.Controller,
         formats: [:html, :json],
         layouts: [html: SpacetradersClientWeb.Layouts]
+
       use Gettext, backend: SpacetradersClientWeb.Gettext
 
       import Plug.Conn

@@ -16,8 +16,8 @@ defmodule SpacetradersClientWeb.ShipCargoComponent do
       <tbody>
         <%= for item <- @ship.cargo_items do %>
           <tr>
-            <td><%= item.item.name %></td>
-            <td><%= item.units %></td>
+            <td>{item.item.name}</td>
+            <td>{item.units}</td>
             <td>
               <button
                 class="btn btn-xs btn-error"

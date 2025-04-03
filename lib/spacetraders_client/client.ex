@@ -7,22 +7,22 @@ defmodule SpacetradersClient.Client do
     Tesla.client(
       [
         {Tesla.Middleware.BaseUrl, "https://api.spacetraders.io"},
-        {Tesla.Middleware.Headers, [{"user-agent", "SpacetradersBot +https://github.com/Cantido/spacetraders_client"}]},
+        {Tesla.Middleware.Headers,
+         [{"user-agent", "SpacetradersBot +https://github.com/Cantido/spacetraders_client"}]},
         {Tesla.Middleware.BearerAuth, token: token},
         Tesla.Middleware.JSON,
         SpacetradersClient.RateLimit,
-
-      {
-        Tesla.Middleware.Retry,
-        delay: 5_000,
-        max_delay: 30_000,
-        should_retry: fn
-          {:ok, %{status: status}} when status == 429 -> true
-          {:ok, _} -> false
-          {:error, _} -> true
-        end
-      },
-      # Tesla.Middleware.Logger,
+        {
+          Tesla.Middleware.Retry,
+          delay: 5_000,
+          max_delay: 30_000,
+          should_retry: fn
+            {:ok, %{status: status}} when status == 429 -> true
+            {:ok, _} -> false
+            {:error, _} -> true
+          end
+        }
+        # Tesla.Middleware.Logger,
       ],
       {Tesla.Adapter.Finch, name: SpacetradersClient.Finch}
     )
@@ -60,7 +60,8 @@ defmodule SpacetradersClient.Client do
     Tesla.post(client, "/v2/my/ships/#{ship_symbol}/dock", "")
   end
 
-  def set_flight_mode(client, ship_symbol, flight_mode) when flight_mode in [:cruise, :burn, :drift, :stealth] do
+  def set_flight_mode(client, ship_symbol, flight_mode)
+      when flight_mode in [:cruise, :burn, :drift, :stealth] do
     mode_str =
       Atom.to_string(flight_mode)
       |> String.upcase()
@@ -69,7 +70,9 @@ defmodule SpacetradersClient.Client do
   end
 
   def navigate_to_waypoint(client, ship_symbol, waypoint_symbol) do
-    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/navigate", %{"waypointSymbol" => waypoint_symbol})
+    Tesla.post(client, "/v2/my/ships/#{ship_symbol}/navigate", %{
+      "waypointSymbol" => waypoint_symbol
+    })
   end
 
   def warp_to_system(client, ship_symbol, system_symbol) do

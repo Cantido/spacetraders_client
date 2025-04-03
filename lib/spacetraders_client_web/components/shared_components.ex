@@ -17,7 +17,7 @@ defmodule SpacetradersClientWeb.SharedComponents do
           phx-value-tab={id}
           phx-target={@target}
         >
-          <%= name %>
+          {name}
         </a>
       <% end %>
     </div>
@@ -45,7 +45,7 @@ defmodule SpacetradersClientWeb.SharedComponents do
           aria-label={tab.label}
           checked={Map.get(tab, :active, false)}
         />
-        <div class={["tab-content", Map.get(tab, :class)]} >
+        <div class={["tab-content", Map.get(tab, :class)]}>
           {render_slot(tab)}
         </div>
       <% end %>

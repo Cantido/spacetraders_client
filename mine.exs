@@ -7,7 +7,8 @@ defmodule Miner do
 
     :ok = mine_until_full(client, ship_symbol)
 
-    {:ok, %{body: body, status: 200}} = Client.navigate_to_waypoint(client, ship_symbol, "X1-BU22-H54")
+    {:ok, %{body: body, status: 200}} =
+      Client.navigate_to_waypoint(client, ship_symbol, "X1-BU22-H54")
   end
 
   def mine_until_full(client, ship_symbol) do
@@ -44,17 +45,23 @@ defmodule Miner do
             remaining_seconds =
               get_in(data, ["cooldown", "remainingSeconds"])
 
-            IO.puts("Mining successful: got #{get_in(data, ["extraction"])}, cargo at #{Float.round(cargo_used / cargo_capacity * 100, 2)}%, cooling down for #{remaining_seconds} seconds...")
+            IO.puts(
+              "Mining successful: got #{get_in(data, ["extraction"])}, cargo at #{Float.round(cargo_used / cargo_capacity * 100, 2)}%, cooling down for #{remaining_seconds} seconds..."
+            )
+
             Process.sleep(:timer.seconds(remaining_seconds))
 
             mine_until_full(client, ship_symbol)
           end
+
         409 ->
           remaining_seconds =
             Map.fetch!(resp, :body)
             |> get_in(["error", "data", "remainingSeconds"])
 
-          IO.puts("Mining failed: still on cooldown. Sleeping for #{remaining_seconds} seconds...")
+          IO.puts(
+            "Mining failed: still on cooldown. Sleeping for #{remaining_seconds} seconds..."
+          )
 
           Process.sleep(:timer.seconds(remaining_seconds))
 
@@ -79,5 +86,3 @@ client =
   |> Client.new()
 
 :ok = Miner.fulfill_contract(client, "C0SM1C_R05E-3")
-
-

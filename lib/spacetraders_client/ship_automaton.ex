@@ -570,7 +570,6 @@ defmodule SpacetradersClient.ShipAutomaton do
       Game.selling_markets(ship.nav_waypoint.system.symbol, item.item.symbol)
       |> Enum.flat_map(fn {market, price} ->
         market = Repo.preload(market, trade_goods: :item)
-        dbg(market)
 
         distance =
           Waypoint.distance(ship.nav_waypoint, Repo.get_by(Waypoint, symbol: market.symbol))
@@ -609,7 +608,7 @@ defmodule SpacetradersClient.ShipAutomaton do
               flight_mode: flight_mode,
               profit_over_time: profit_over_time,
               time_required: travel_time,
-              expense: avg_price * units
+              expense: Decimal.mult(avg_price, units) |> Decimal.to_integer()
             }
           )
         end)
