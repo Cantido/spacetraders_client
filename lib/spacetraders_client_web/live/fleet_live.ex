@@ -105,7 +105,7 @@ defmodule SpacetradersClientWeb.FleetLive do
 
   defp action_runtime(assigns) do
     ~H"""
-    <.stopwatch id={@automation_tick.ship_symbol <> "-task-duration"} start={List.first(@automation_tick.active_task.active_automation_ticks).timestamp} />
+    <.stopwatch id={@automation_tick.ship_id <> "-task-duration"} start={List.first(@automation_tick.active_task.active_automation_ticks).timestamp} />
     """
   end
 

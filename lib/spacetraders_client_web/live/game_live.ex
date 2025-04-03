@@ -389,7 +389,7 @@ defmodule SpacetradersClientWeb.GameLive do
 
         travel_time_human =
           Timex.diff(ship.nav_route_arrival_at, ship.nav_route_departure_at, :duration)
-          |> Timex.Format.Duration.Formatters.Humanized.format!()
+          |> Timex.Format.Duration.Formatters.Humanized.format()
 
         socket =
           socket

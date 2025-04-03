@@ -35,7 +35,7 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
       <%= if @ship.cooldown_expires_at && cooldown_remaining_seconds > 0 do %>
         <%
       cooldown_progress_seconds =
-        @ship.cooldown_total_seconds - cooldown_remaining_seconds
+        trunc(@ship.cooldown_total_seconds - cooldown_remaining_seconds)
 
       cooldown_progress_percent =
         cooldown_progress_seconds / @ship.cooldown_total_seconds * 100

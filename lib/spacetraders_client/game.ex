@@ -1,6 +1,7 @@
 defmodule SpacetradersClient.Game do
   alias Phoenix.PubSub
   alias SpacetradersClient.ShipTask
+  alias SpacetradersClient.Finance
   alias SpacetradersClient.Game.Agent
   alias SpacetradersClient.Game.Item
   alias SpacetradersClient.Game.Ship
@@ -351,6 +352,104 @@ defmodule SpacetradersClient.Game do
 
   def load_ship_cargo!(_ship_symbol) do
     # TODO
+  end
+
+  @doc """
+  Refuel a ship.
+
+  By default, fills a ship's fuel tank to its capacity.
+
+  If `:min_fuel` is a number, then this function will calculate the amount of fuel to buy with the goal of filling your tank in between two goal posts:
+    - `min_fuel + emergency_fuel` at the minimum end
+    - `ship.fuel_capacity - room_on_top` as a "soft cap," ignored if the minimum ends up being higher.
+
+  Since a "market unit" of fuel equals 100 fuel units, leaving at least 100 units of room means you won't waste fuel filling your tank past its capacity.
+
+  ## Options
+
+    - `:min_fuel` - the minimum amount of fuel you want in your tank after refueling. Default: :maximum, which fills your tank completely
+    - `:emergency_fuel` - an amount of fuel beyond the minimum to have after refueling. Default: 100
+    - `:room_on_top` - how much fuel capacity to leave empty. Default: 100
+  """
+  def refuel_ship(client, ship_symbol, opts \\ []) do
+    ship =
+      Repo.get_by(Ship, symbol: ship_symbol)
+      |> Repo.preload(:agent)
+
+    min_fuel_opt = Keyword.get(opts, :min_fuel, :maximum)
+
+    min_fuel =
+      if min_fuel_opt == :maximum do
+        ship.fuel_capacity
+      else
+        emergency_fuel = Keyword.get(opts, :emergency_fuel, 100)
+        room_on_top = Keyword.get(opts, :room_on_top, 100)
+
+        (min_fuel_opt + emergency_fuel)
+        |> max(ship.fuel_capacity - room_on_top)
+      end
+      |> min(ship.fuel_capacity)
+
+    # One fuel unit you buy on the market
+    # fills up 100 fuel units in your ship
+
+    fuel_units_needed =
+      max(0, min_fuel - ship.fuel_current)
+
+    market_units_to_buy =
+      Float.ceil(fuel_units_needed / 100)
+
+    fuel_units_to_buy = trunc(market_units_to_buy * 100)
+
+    if fuel_units_to_buy > 0 do
+      case Fleet.refuel_ship(client, ship_symbol, units: fuel_units_to_buy) do
+        {:ok, %{status: 200, body: body}} ->
+          agent =
+            ship.agent
+            |> Agent.changeset(body["data"]["agent"])
+            |> Repo.update!()
+
+          ship =
+            ship
+            |> Ship.fuel_changeset(body["data"]["fuel"])
+            |> Repo.update!()
+
+          tx = body["data"]["transaction"]
+          {:ok, ts, _} = DateTime.from_iso8601(tx["timestamp"])
+
+          if tx["units"] > 0 do
+            {:ok, _ledger} =
+              Finance.post_journal(
+                agent.symbol,
+                ts,
+                "#{tx["type"]} #{tx["tradeSymbol"]} × #{tx["units"]} @ #{tx["pricePerUnit"]}/u — #{ship.symbol} @ #{ship.nav_waypoint.symbol}",
+                "Fuel",
+                "Cash",
+                tx["totalPrice"]
+              )
+          end
+
+          PubSub.broadcast(
+            @pubsub,
+            "agent:#{agent.symbol}",
+            {:agent_updated, agent}
+          )
+
+          PubSub.broadcast(
+            @pubsub,
+            "agent:#{agent.symbol}",
+            {:ship_updated, ship_symbol, ship}
+          )
+
+          {:ok, %{agent: agent, ship: ship}}
+
+        err ->
+          Logger.error("Failed to refuel ship: #{inspect(err)}")
+          {:error, err}
+      end
+    else
+      {:ok, %{agent: ship.agent, ship: ship}}
+    end
   end
 
   def market(market_symbol) do
