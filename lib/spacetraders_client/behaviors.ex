@@ -390,26 +390,16 @@ defmodule SpacetradersClient.Behaviors do
 
   def navigate_ship_to_fuel_market do
     Node.action(fn state ->
-      case Fleet.navigate_ship(state.client, state.ship_symbol, state.fuel_market.symbol) do
-        {:ok, %{status: 200, body: body}} ->
-          ship =
-            Game.save_ship_nav!(state.ship_symbol, body["data"]["nav"])
-            |> Repo.preload(:agent)
+      case Game.navigate_ship(state.client, state.ship_symbol, state.fuel_market.symbol) do
+        {:ok, _ship} ->
+          :success
 
-          PubSub.broadcast(
-            @pubsub,
-            "agent:#{ship.agent.symbol}",
-            {:ship_updated, state.ship_symbol, ship}
-          )
-
-          {:success, state}
-
-        {:ok, %{status: 400, body: %{"error" => %{"code" => 4204}}}} ->
+        {:error, %{"code" => 4204}} ->
           :success
 
         err ->
           Logger.error("Failed to navigate ship: #{inspect(err)}")
-          {:failure, state}
+          :failure
       end
     end)
   end
@@ -427,9 +417,7 @@ defmodule SpacetradersClient.Behaviors do
             Fleet.get_ship_nav(state.client, state.ship_symbol)
 
           ship =
-            ship
-            |> Ship.nav_changeset(body["data"])
-            |> Repo.update!()
+            Game.save_ship_nav!(state.ship_symbol, body["data"])
 
           PubSub.broadcast(
             @pubsub,
