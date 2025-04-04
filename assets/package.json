@@ -10,6 +10,7 @@
     "countup.js": "^2.8.0",
     "moment": "^2.30.1",
     "tailwindcss": "^4.0.12",
+    "theme-change": "^2.5.0",
     "three": "^0.168.0"
   }
 }

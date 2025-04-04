@@ -1,4 +1,6 @@
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: all;
+}
 
 @variant dark (&:where(.dark, .dark *));
 

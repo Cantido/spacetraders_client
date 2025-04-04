@@ -90,6 +90,48 @@
             </.link>
           </li>
         </ul>
+        <div class="bg-base-100 p-2">
+            <select class="select" data-choose-theme>
+              <option value="">default</option>
+              <%= for theme <- [
+                  "light",
+                  "dark",
+                  "cupcake",
+                  "bumblebee",
+                  "emerald",
+                  "corporate",
+                  "synthwave",
+                  "retro",
+                  "cyberpunk",
+                  "valentine",
+                  "halloween",
+                  "garden",
+                  "forest",
+                  "aqua",
+                  "lofi",
+                  "pastel",
+                  "fantasy",
+                  "wireframe",
+                  "black",
+                  "luxury",
+                  "dracula",
+                  "cmyk",
+                  "autumn",
+                  "business",
+                  "acid",
+                  "lemonade",
+                  "night",
+                  "coffee",
+                  "winter",
+                  "dim",
+                  "nord",
+                  "sunset"
+                ] do %>
+              <option value={theme}>{theme}</option>
+            <% end %>
+          </select>
+
+        </div>
       </div>
     </div>
 
