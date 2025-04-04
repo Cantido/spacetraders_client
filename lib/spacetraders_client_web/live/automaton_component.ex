@@ -51,71 +51,57 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
 
             <div class="basis-1/2">
               <p class="mb-4 font-bold text-lg">Parameters</p>
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th class="w-1/2">Parameter</th>
-                    <th class="w-1/2">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for arg <- @selected_task.float_args do %>
-                    <tr>
-                      <td class="font-mono">{arg.name}</td>
-                      <td class="font-mono">{:erlang.float_to_binary(arg.value, decimals: 3)}</td>
-                    </tr>
-                  <% end %>
-                  <%= for arg <- @selected_task.string_args do %>
-                    <tr>
-                      <td class="font-mono">{arg.name}</td>
-                      <td class="font-mono">{inspect(arg.value)}</td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
+              <.parameters_table task={@selected_task} />
             </div>
 
             <div class="basis-1/2">
               <p class="mb-4 font-bold text-lg">Decision factors</p>
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th class="w-1/3">Factor</th>
-                    <th class="w-1/6">Input</th>
-                    <th class="w-1/6">Output</th>
-                    <th class="w-1/6">Weight</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for factor <- @selected_task.decision_factors do %>
-                    <tr>
-                      <td class="font-mono">{factor.name}</td>
-                      <td class="font-mono text-right tabular-nums">
-                        {:erlang.float_to_binary(factor.input_value, decimals: 3)}
-                      </td>
-                      <td class="font-mono text-right tabular-nums">
-                        {:erlang.float_to_binary(factor.output_value, decimals: 3)}
-                      </td>
-                      <td class="font-mono text-right tabular-nums">
-                        {:erlang.float_to_binary(factor.weight, decimals: 3)}
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
+              <.decision_factors_table task={@selected_task} />
             </div>
           </div>
 
           <section>
-            <p class="mb-4 font-bold text-lg">Task History</p>
-            <ul class="timeline timeline-vertical">
+            <p class="mb-4 font-bold text-xl">Task History</p>
+            <ul class="timeline timeline-compact timeline-vertical">
               <li :for={{task, index} <- Enum.with_index(@task_history)}>
                 <hr :if={index != 0} />
                 <div class="timeline-start text-xs text-base-content/50">
                   <time phx-hook="LocalDateTime" id={"task-#{task.task.id}-start-time"} datetime={DateTime.to_iso8601(ShipTask.start_time(task.task))}></time>
                 </div>
                 <div class="timeline-middle"><Heroicons.check_circle solid class="w-5 h-5" /></div>
-                <div class="timeline-end timeline-box">{task.task.name}</div>
+                <div class="timeline-end w-full">
+                  <div tabindex={index} class="collapse bg-base-300">
+                    <div class="collapse-title text-lg">
+                      {task.task.name}
+                    </div>
+                    <div class="collapse-content flex gap-8">
+                      <div class="basis-1/3 pb-4">
+                        <table class="table">
+                          <tbody>
+                            <tr>
+                              <th>utility</th>
+                              <td class="font-mono">{:erlang.float_to_binary(task.task.utility, decimals: 3)}</td>
+                            </tr>
+                            <tr>
+                              <th>outcome</th>
+                              <td>success</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div class="basis-1/3 pb-4">
+                        <p class="mb-4 font-bold text-lg">Parameters</p>
+                        <.parameters_table task={task.task} />
+                      </div>
+
+                      <div class="basis-1/3 pb-4">
+                        <p class="mb-4 font-bold text-lg">Decision factors</p>
+                        <.decision_factors_table task={task.task} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <hr :if={index < Enum.count(@task_history) - 1} />
               </li>
             </ul>
@@ -123,6 +109,68 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
         </div>
       </div>
     </div>
+    """
+  end
+
+  attr :task, ShipTask, required: true
+
+  defp parameters_table(assigns) do
+    ~H"""
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th class="w-1/2">Parameter</th>
+          <th class="w-1/2">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <%= for arg <- @task.float_args do %>
+          <tr>
+            <td class="font-mono">{arg.name}</td>
+            <td class="font-mono">{:erlang.float_to_binary(arg.value, decimals: 3)}</td>
+          </tr>
+        <% end %>
+        <%= for arg <- @task.string_args do %>
+          <tr>
+            <td class="font-mono">{arg.name}</td>
+            <td class="font-mono">{inspect(arg.value)}</td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    """
+  end
+
+  attr :task, ShipTask, required: true
+
+  defp decision_factors_table(assigns) do
+    ~H"""
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th class="w-1/3">Factor</th>
+          <th class="w-1/6 text-right">Input</th>
+          <th class="w-1/6 text-right">Output</th>
+          <th class="w-1/6 text-right">Weight</th>
+        </tr>
+      </thead>
+      <tbody>
+        <%= for factor <- @task.decision_factors do %>
+          <tr>
+            <td class="font-mono">{factor.name}</td>
+            <td class="font-mono text-right tabular-nums">
+              {:erlang.float_to_binary(factor.input_value, decimals: 3)}
+            </td>
+            <td class="font-mono text-right tabular-nums">
+              {:erlang.float_to_binary(factor.output_value, decimals: 3)}
+            </td>
+            <td class="font-mono text-right tabular-nums">
+              {:erlang.float_to_binary(factor.weight, decimals: 3)}
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
     """
   end
 
@@ -165,8 +213,9 @@ defmodule SpacetradersClientWeb.AutomatonComponent do
             task: t,
             started_tick_index: tstart.start_tick_index
           },
-          preload: :active_automation_ticks,
-          limit: 10
+          preload: [:active_automation_ticks, :float_args, :string_args, :decision_factors],
+          limit: 10,
+          offset: 1
       )
 
     socket =
