@@ -37,12 +37,18 @@ defmodule SpacetradersClientWeb.OrbitalsMenuComponent do
           <:failed :let={_failure}>There was an error loading the system.</:failed>
 
           <div class="w-72">
-            <div class="bg-neutral-600 p-4 h-24 hover:link">
+            <div class="bg-neutral-600 p-4 h-24 bg-neutral-600 hover:link">
               <.link patch={~p"/game/systems/#{system.symbol}"}>
-                <h1 class="text-xl font-bold bg-neutral-600">{system.name}</h1>
+                <h1 class="text-xl">
+                  <span class="font-bold font-mono">
+                  {system.name}
+                  </span>
+                </h1>
+                <span class="font-mono text-sm text-neutral-content/80">
+                  {system.type} system
+                </span>
               </.link>
               <span class="text-sm font-mono">
-                {system.symbol}
               </span>
             </div>
             <.menu

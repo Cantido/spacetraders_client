@@ -15,13 +15,13 @@ defmodule SpacetradersClientWeb.ShipComponent do
 
   def render(assigns) do
     ~H"""
-    <section class="flex flex-col overflow-y-auto p-4">
-      <header class="mb-4 flex-none">
-        <h1 class="text-2xl font-bold h-24 bg">
+    <section class="flex flex-col overflow-y-auto">
+      <header class="mb-4 flex-none h-24 p-4 bg-neutral-700">
+        <h1 class="text-xl font-bold font-mono">
           {@ship.symbol}
-          <div class="tooltip" data-tip="Force reload">
+          <div class="tooltip tooltip-bottom" data-tip="Force reload">
             <button
-              class="inline-block btn btn-square btn-sm"
+              class="inline-block btn btn-square btn-xs"
               phx-click="reload-ship"
               phx-value-ship-symbol={@ship.symbol}
             >
@@ -30,7 +30,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
           </div>
         </h1>
 
-        <span class="opacity-50 text-xl font-normal">
+        <span class="opacity-50 text-sm font-mono uppercase">
           {@ship.registration_role} ship
           <%= case @ship.nav_status do %>
             <% :docked -> %>
