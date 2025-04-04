@@ -33,7 +33,7 @@ defmodule SpacetradersClient.ShipAutomaton do
   end
 
   def tick(%__MODULE__{} = struct, client) do
-    struct =
+    tick =
       if struct.tree do
         previous_tick =
           Repo.one(
@@ -56,8 +56,6 @@ defmodule SpacetradersClient.ShipAutomaton do
           timestamp: DateTime.utc_now()
         }
         |> Repo.insert!()
-
-        struct
       else
         ship =
           Repo.get_by!(Ship, symbol: struct.ship_symbol)
@@ -110,14 +108,37 @@ defmodule SpacetradersClient.ShipAutomaton do
           timestamp: DateTime.utc_now()
         }
         |> Repo.insert!()
-
-        tree = Behaviors.for_task(active_task)
-
-        %{struct | tree: tree}
       end
 
-    {result, tree, _} =
-      Taido.BehaviorTree.tick(struct.tree, %{ship_symbol: struct.ship_symbol, client: client})
+    tree = if struct.tree, do: struct.tree, else: Behaviors.for_task(tick.active_task)
+
+    {result, tree} =
+      try do
+        {result, tree, _state} =
+          Taido.BehaviorTree.tick(tree, %{ship_symbol: struct.ship_symbol, client: client})
+
+        tick
+        |> Ecto.Changeset.change(%{
+          behavior_result: result
+        })
+        |> Repo.insert!()
+
+        {result, tree}
+      rescue
+        e ->
+          msg = Exception.format(:error, e, __STACKTRACE__)
+
+          Logger.error(msg)
+
+          tick
+          |> Ecto.Changeset.change(%{
+            behavior_result: :error,
+            error_description: msg
+          })
+          |> Repo.insert!()
+
+          {:error, nil}
+      end
 
     case result do
       :running ->
@@ -125,14 +146,10 @@ defmodule SpacetradersClient.ShipAutomaton do
 
       _ ->
         if struct.tree do
-          _ = Taido.BehaviorTree.terminate(struct.tree)
+          _ = Taido.BehaviorTree.terminate(tree)
         end
 
-        struct =
-          struct
-          |> Map.put(:tree, nil)
-
-        struct
+        %{struct | tree: nil}
     end
   end
 

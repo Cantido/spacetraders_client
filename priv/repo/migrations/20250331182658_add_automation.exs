@@ -60,6 +60,9 @@ defmodule SpacetradersClient.Repo.Migrations.AddAutomation do
 
       add :active_task_id,
           references(:ship_tasks, on_update: :update_all, on_delete: :delete_all)
+
+      add :behavior_result, :string, null: false
+      add :error_description, :string
     end
 
     create table(:ship_automation_tick_alternative_tasks, primary_key: false) do

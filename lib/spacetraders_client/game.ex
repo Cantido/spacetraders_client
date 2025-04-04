@@ -859,25 +859,24 @@ defmodule SpacetradersClient.Game do
   def nearest_fuel_waypoint(waypoint_symbol) do
     waypoint = Repo.get_by(Waypoint, symbol: waypoint_symbol)
 
-    waypoints_in_system =
-      from(
-        from wp in Waypoint,
-          where: wp.system_id == ^waypoint.system_id,
-          join: m in Market,
-          on: m.symbol == wp.symbol,
-          join: mtg in assoc(m, :items),
-          join: i in assoc(mtg, :item),
-          where: i.symbol == "FUEL",
-          select: wp
-      )
-      |> Repo.all()
-      |> Enum.sort_by(
-        fn market_waypoint ->
-          Waypoint.distance(waypoint, market_waypoint)
-        end,
-        :asc
-      )
-      |> List.first()
+    from(
+      from wp in Waypoint,
+        where: wp.system_id == ^waypoint.system_id,
+        join: m in Market,
+        on: m.symbol == wp.symbol,
+        join: mtg in assoc(m, :items),
+        join: i in assoc(mtg, :item),
+        where: i.symbol == "FUEL",
+        select: wp
+    )
+    |> Repo.all()
+    |> Enum.sort_by(
+      fn market_waypoint ->
+        Waypoint.distance(waypoint, market_waypoint)
+      end,
+      :asc
+    )
+    |> List.first()
   end
 
   def surveys(_waypoint_symbol) do
