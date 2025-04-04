@@ -15,19 +15,18 @@ defmodule SpacetradersClient.Application do
        query: Application.get_env(:spacetraders_client, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SpacetradersClient.PubSub},
       SpacetradersClient.Repo,
-      {Oban, Application.fetch_env!(:spacetraders_client, Oban)},
       {SpacetradersClient.Cache, []},
       {Task.Supervisor, name: SpacetradersClient.TaskSupervisor},
       Cldr.Currency,
-      {DynamicSupervisor, name: SpacetradersClient.AutomationSupervisor},
-      {DynamicSupervisor, name: SpacetradersClient.GameSupervisor},
       # Start the Finch HTTP client for sending emails
       {Finch, name: SpacetradersClient.Finch},
       # Start a worker by calling: SpacetradersClient.Worker.start_link(arg)
       # {SpacetradersClient.Worker, arg},
       SpacetradersClient.AutomationServer,
+      {Oban, Application.fetch_env!(:spacetraders_client, Oban)},
       # Start to serve requests, typically the last entry
-      SpacetradersClientWeb.Endpoint
+      SpacetradersClientWeb.Endpoint,
+
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

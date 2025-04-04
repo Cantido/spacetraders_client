@@ -38,7 +38,8 @@ defmodule SpacetradersClient.ShipAutomaton do
         previous_tick =
           Repo.one(
             from sat in ShipAutomationTick,
-              where: [ship_symbol: ^struct.ship_symbol],
+              join: s in assoc(sat, :ship),
+              where: s.symbol == ^struct.ship_symbol,
               order_by: [desc: :timestamp],
               limit: 1
           )
@@ -49,8 +50,8 @@ defmodule SpacetradersClient.ShipAutomaton do
           |> Repo.preload([:nav_waypoint, :cargo_items])
 
         %SpacetradersClient.Automation.ShipAutomationTick{
-          ship: ship,
-          active_task: previous_tick.active_task,
+          ship_id: ship.id,
+          active_task_id: previous_tick.active_task_id,
           alternative_tasks: previous_tick.alternative_tasks,
           timestamp: DateTime.utc_now()
         }

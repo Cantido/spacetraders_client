@@ -18,7 +18,7 @@ defmodule SpacetradersClient.AutomationServer do
   end
 
   def init(opts) do
-    {:ok, %{automata: %{}}, 0}
+    {:ok, %{automata: %{}}, 1_000}
   end
 
   def handle_info(:timeout, state) do

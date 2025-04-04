@@ -16,7 +16,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
   def render(assigns) do
     ~H"""
     <section class="flex flex-col overflow-y-auto">
-      <header class="mb-4 flex-none h-24 p-4 bg-neutral-700">
+      <header class="mb-4 flex-none h-24 p-4 bg-neutral-700 text-neutral-content">
         <h1 class="text-xl font-bold font-mono">
           {@ship.symbol}
           <div class="tooltip tooltip-bottom" data-tip="Force reload">
@@ -30,7 +30,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
           </div>
         </h1>
 
-        <span class="opacity-50 text-sm font-mono uppercase">
+        <span class="opacity-50 text-sm text-neutral-content font-mono uppercase">
           {@ship.registration_role} ship
           <%= case @ship.nav_status do %>
             <% :docked -> %>
@@ -70,14 +70,16 @@ defmodule SpacetradersClientWeb.ShipComponent do
       </section>
 
       <%= if @previous_automation_tick do %>
-        <.live_component
-          module={SpacetradersClientWeb.AutomatonComponent}
-          id="automaton-#{@ship_symbol}"
-          ship_automation_tick={@previous_automation_tick}
-        />
+        <div class="p-4">
+          <.live_component
+            module={SpacetradersClientWeb.AutomatonComponent}
+            id="automaton-#{@ship_symbol}"
+            ship_automation_tick={@previous_automation_tick}
+          />
+        </div>
       <% end %>
 
-      <div>
+      <div class="p-4">
         <.radio_tablist name="ship-tabs-#{@ship.symbol}" class="tabs-lift">
           <:tab label="Cargo" active={true} class="border-base-300">
             <SpacetradersClientWeb.ShipCargoComponent.cargo ship={@ship} />
@@ -191,7 +193,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
         stats_timestamp: DateTime.utc_now()
       })
       |> start_async(:tick_stats, fn ->
-        Process.sleep(250)
+        Process.sleep(1000)
 
         :ok
       end)
@@ -204,7 +206,7 @@ defmodule SpacetradersClientWeb.ShipComponent do
       socket
       |> assign(:stats_timestamp, DateTime.utc_now())
       |> start_async(:tick_stats, fn ->
-        Process.sleep(250)
+        Process.sleep(1000)
 
         :ok
       end)

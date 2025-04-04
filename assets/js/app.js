@@ -105,19 +105,29 @@ Hooks.CountUp = {
   }
 }
 
+Hooks.LocalDateTime = {
+  mounted() {
+    if (typeof this.el.dateTime === "string") {
+      const d = new Date(this.el.dateTime);
+      this.el.innerHTML = d.toLocaleString("en-us");
+    } else {
+      console.log("datetime not string")
+    }
+  },
+
+  updated() {
+    if (typeof this.el.dateTime === "string") {
+      const d = new Date(this.el.dateTime);
+      this.el.innerHTML = d.toLocaleString("en-us");
+    }
+  }
+
+}
+
 // LiveView hook into localstorage
 
 Hooks.SurveyStorage = {
   mounted() {
-    console.log("mounted time localizer");
-    const timeElements = Array.from(this.el.getElementsByTagName("time"));
-
-    timeElements.forEach((timeEl) => {
-      const d = new Date(timeEl.dateTime);
-      timeEl.innerHTML = d.toLocaleString("en-us");
-    });
-
-
     if (!localStorage.getItem("surveys")) {
       localStorage.setItem("surveys", "[]");
     }
@@ -144,15 +154,6 @@ Hooks.SurveyStorage = {
       localStorage.setItem("surveys", JSON.stringify(surveys));
     });
   },
-
-  updated() {
-    const timeElements = Array.from(this.el.getElementsByTagName("time"));
-
-    timeElements.forEach((timeEl) => {
-      const d = new Date(timeEl.dateTime);
-      timeEl.innerHTML = d.toLocaleString();
-    });
-  }
 };
 
 // ThreeJS hook into LiveView

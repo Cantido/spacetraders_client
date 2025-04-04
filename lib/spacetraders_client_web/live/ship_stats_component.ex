@@ -42,12 +42,12 @@ defmodule SpacetradersClientWeb.ShipStatsComponent do
             role="progressbar"
           >
             <div class="countdown font-mono text-xs">
-              <span style={"--value:#{div(cooldown_progress_seconds, 60)};"}></span>
-              : <span style={"--value:#{rem(cooldown_progress_seconds, 60)};"}></span>
+              <span style={"--value:#{div(trunc(cooldown_remaining_seconds), 60)};"}></span>
+              : <span style={"--value:#{rem(trunc(cooldown_remaining_seconds), 60)};"}></span>
             </div>
           </div>
         </div>
-        <div class="stat-value">Cooling</div>
+        <div class="stat-value">Cooling down</div>
       <% else %>
         <div class="stat-figure">
           <div class="radial-progress" style="--value:100;" role="progressbar">

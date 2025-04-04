@@ -3,7 +3,6 @@ defmodule SpacetradersClientWeb.AutomationLive do
 
   alias Phoenix.LiveView.AsyncResult
   alias SpacetradersClient.AutomationServer
-  alias SpacetradersClient.AutomationSupervisor
   alias SpacetradersClient.AgentAutomaton
   alias SpacetradersClient.Repo
 

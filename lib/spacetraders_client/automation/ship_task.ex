@@ -61,6 +61,11 @@ defmodule SpacetradersClient.Automation.ShipTask do
     |> put_assoc(:decision_factors, decision_factors)
   end
 
+  def start_time(%__MODULE__{} = task) do
+    Enum.map(task.active_automation_ticks, fn tick -> tick.timestamp end)
+    |> Enum.min(DateTime)
+  end
+
   def args(%__MODULE__{} = task) do
     (task.float_args ++ task.string_args)
     |> Map.new(fn arg ->

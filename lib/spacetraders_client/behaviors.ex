@@ -238,7 +238,7 @@ defmodule SpacetradersClient.Behaviors do
 
               PubSub.broadcast(
                 @pubsub,
-                "agent:#{ship.agent_symbol}",
+                "agent:#{ship.agent.symbol}",
                 {:ship_updated, ship.symbol, ship}
               )
 
@@ -369,7 +369,7 @@ defmodule SpacetradersClient.Behaviors do
 
   def fetch_nearest_fuel do
     Node.action(fn state ->
-      ship = Repo.get_by(Ship, symbol: state.ship_symbol)
+      ship = Repo.get_by(Ship, symbol: state.ship_symbol) |> Repo.preload(:nav_waypoint)
 
       fuel_wp = Game.nearest_fuel_waypoint(ship.nav_waypoint.symbol)
 
@@ -419,10 +419,11 @@ defmodule SpacetradersClient.Behaviors do
 
           ship =
             Game.save_ship_nav!(state.ship_symbol, body["data"])
+            |> Repo.preload(:agent)
 
           PubSub.broadcast(
             @pubsub,
-            "agent:#{ship.agent_symbol}",
+            "agent:#{ship.agent.symbol}",
             {:ship_updated, state.ship_symbol, ship}
           )
 
@@ -456,14 +457,14 @@ defmodule SpacetradersClient.Behaviors do
       wait_for_ship_cooldown(),
       Node.action(fn state ->
         ship =
-          Repo.get_by(Ship, symbol: state.ship_symbol)
-          |> Repo.preload(:agent, nav_waypoint: :system)
+          Repo.get_by!(Ship, symbol: state.ship_symbol)
+          |> Repo.preload([:agent, nav_waypoint: :system])
 
         case Fleet.siphon_resources(state.client, state.ship_symbol) do
           {:ok, %{status: 201, body: body}} ->
             Game.save_extraction!(ship.nav_waypoint.symbol, body["data"]["siphon"])
             Game.save_ship_cooldown!(ship.symbol, body["data"]["cooldown"])
-            Game.save_ship_cargo!(ship.sybmol, body["data"]["cargo"])
+            Game.save_ship_cargo!(ship.symbol, body["data"]["cargo"])
 
             yield_symbol = get_in(body, ~w(data siphon yield symbol))
             yield_units = get_in(body, ~w(data siphon yield units))
@@ -475,7 +476,7 @@ defmodule SpacetradersClient.Behaviors do
 
             {:ok, _ledger} =
               Finance.post_journal(
-                ship.agent_symbol,
+                ship.agent.symbol,
                 DateTime.utc_now(),
                 "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
                 "Merchandise",
@@ -494,7 +495,7 @@ defmodule SpacetradersClient.Behaviors do
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, state.ship_symbol, ship}
             )
 
@@ -527,7 +528,7 @@ defmodule SpacetradersClient.Behaviors do
       Node.action(fn state ->
         ship =
           Repo.get_by(Ship, symbol: state.ship_symbol)
-          |> Repo.preload(:agent, nav_waypoint: :system)
+          |> Repo.preload([:agent, nav_waypoint: :system])
 
         best_survey =
           Game.surveys(ship.nav_waypoint.symbol)
@@ -563,7 +564,7 @@ defmodule SpacetradersClient.Behaviors do
 
             {:ok, _ledger} =
               Finance.post_journal(
-                ship.agent_symbol,
+                ship.agent.symbol,
                 DateTime.utc_now(),
                 "Extraction of #{yield_units} × #{yield_symbol} — #{state.ship_symbol} @ #{ship.nav_waypoint.symbol}",
                 "Merchandise",
@@ -582,7 +583,7 @@ defmodule SpacetradersClient.Behaviors do
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, state.ship_symbol, ship}
             )
 
@@ -864,7 +865,7 @@ defmodule SpacetradersClient.Behaviors do
 
                 PubSub.broadcast(
                   @pubsub,
-                  "agent:#{ship.agent_symbol}",
+                  "agent:#{ship.agent.symbol}",
                   {:ship_updated, state.ship_symbol, ship}
                 )
 
@@ -969,13 +970,12 @@ defmodule SpacetradersClient.Behaviors do
             end)
 
             ship =
-              Repo.get_by(Ship, symbol: state.ship_symbol)
-              |> Ship.cooldown_changeset(body["data"]["cooldown"])
-              |> Repo.update!()
+              Game.save_ship_cooldown!(state.ship_symbol, body["data"]["cooldown"])
+              |> Repo.preload(:agent)
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, ship.symbol, ship}
             )
 
@@ -989,7 +989,7 @@ defmodule SpacetradersClient.Behaviors do
 
             PubSub.broadcast(
               @pubsub,
-              "agent:#{ship.agent_symbol}",
+              "agent:#{ship.agent.symbol}",
               {:ship_updated, ship.symbol, ship}
             )
 

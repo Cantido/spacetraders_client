@@ -84,6 +84,7 @@ defmodule SpacetradersClientWeb.FleetLive do
         from s in Ship,
           join: a in assoc(s, :agent),
           where: a.symbol == ^socket.assigns.agent.result.symbol,
+          order_by: [asc: :symbol],
           preload: [nav_waypoint: :system]
       )
 
@@ -115,7 +116,7 @@ defmodule SpacetradersClientWeb.FleetLive do
   defp action_runtime(assigns) do
     ~H"""
     <.stopwatch
-      id={@automation_tick.ship_id <> "-task-duration"}
+      id={to_string(@automation_tick.ship_id) <> "-task-duration"}
       start={List.first(@automation_tick.active_task.active_automation_ticks).timestamp}
     />
     """

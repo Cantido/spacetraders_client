@@ -102,7 +102,7 @@ defmodule SpacetradersClientWeb.GameLive do
         {:ok,
          %{
            fleet:
-             Repo.all(from s in Ship, where: [agent_id: ^agent_id])
+             Repo.all(from s in Ship, where: [agent_id: ^agent_id], order_by: [asc: :symbol])
              |> Repo.preload(nav_waypoint: :system)
          }}
       end)
@@ -632,7 +632,13 @@ defmodule SpacetradersClientWeb.GameLive do
 
   def handle_info(:fleet_updated, %Socket{} = socket) do
     old_fleet = Map.get(socket.assigns, :fleet, [])
-    new_fleet = Repo.all(from s in Ship, where: [agent_symbol: ^socket.assigns.agent_symbol])
+
+    new_fleet =
+      Repo.all(
+        from s in Ship,
+          where: [agent_symbol: ^socket.assigns.agent_symbol],
+          order_by: [asc: :symbol]
+      )
 
     new_ships_count = Enum.count(new_fleet) - Enum.count(old_fleet)
 

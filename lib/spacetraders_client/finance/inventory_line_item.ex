@@ -6,7 +6,7 @@ defmodule SpacetradersClient.Finance.InventoryLineItem do
   schema "inventory_line_items" do
     belongs_to :inventory, Inventory
 
-    field :timestamp, :utc_datetime_usec
+    field :timestamp, :utc_datetime
     field :quantity, :integer
     field :cost_per_unit, :integer
     field :total_cost, :integer

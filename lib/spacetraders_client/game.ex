@@ -406,7 +406,7 @@ defmodule SpacetradersClient.Game do
   def refuel_ship(client, ship_symbol, opts \\ []) do
     ship =
       Repo.get_by(Ship, symbol: ship_symbol)
-      |> Repo.preload(:agent)
+      |> Repo.preload([:agent, :nav_waypoint])
 
     min_fuel_opt = Keyword.get(opts, :min_fuel, :maximum)
 
@@ -859,25 +859,25 @@ defmodule SpacetradersClient.Game do
   def nearest_fuel_waypoint(waypoint_symbol) do
     waypoint = Repo.get_by(Waypoint, symbol: waypoint_symbol)
 
-    from(
-      m in Market,
-      join: w in Waypoint,
-      on: m.symbol == w.symbol,
-      join: s in assoc(w, :system),
-      join: mtg in assoc(m, :items),
-      join: i in assoc(mtg, :item),
-      where: i.symbol == "FUEL",
-      where: s.symbol == ^waypoint.system_symbol,
-      select: w
-    )
-    |> Repo.all()
-    |> Enum.sort_by(
-      fn market_waypoint ->
-        Waypoint.distance(waypoint, market_waypoint)
-      end,
-      :asc
-    )
-    |> List.first()
+    waypoints_in_system =
+      from(
+        from wp in Waypoint,
+          where: wp.system_id == ^waypoint.system_id,
+          join: m in Market,
+          on: m.symbol == wp.symbol,
+          join: mtg in assoc(m, :items),
+          join: i in assoc(mtg, :item),
+          where: i.symbol == "FUEL",
+          select: wp
+      )
+      |> Repo.all()
+      |> Enum.sort_by(
+        fn market_waypoint ->
+          Waypoint.distance(waypoint, market_waypoint)
+        end,
+        :asc
+      )
+      |> List.first()
   end
 
   def surveys(_waypoint_symbol) do

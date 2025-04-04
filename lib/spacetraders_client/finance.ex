@@ -153,18 +153,11 @@ defmodule SpacetradersClient.Finance do
   end
 
   def purchase_inventory_by_total(agent_symbol, item_symbol, timestamp, quantity, total_cost) do
-    inventory =
-      from(inv in Inventory,
-        join: a in assoc(inv, :agent),
-        join: i in assoc(inv, :item),
-        where: a.symbol == ^agent_symbol,
-        where: i.symbol == ^item_symbol
-      )
-      |> Repo.one!()
+    inventory = inventory!(agent_symbol, item_symbol)
 
     %InventoryLineItem{
       inventory_id: inventory.id,
-      timestamp: timestamp,
+      timestamp: DateTime.truncate(timestamp, :second),
       quantity: quantity,
       cost_per_unit: div(total_cost, quantity),
       total_cost: total_cost
@@ -173,18 +166,11 @@ defmodule SpacetradersClient.Finance do
   end
 
   def purchase_inventory_by_unit(agent_symbol, item_symbol, timestamp, quantity, cost_per_unit) do
-    inventory =
-      from(inv in Inventory,
-        join: a in assoc(inv, :agent),
-        join: i in assoc(inv, :item),
-        where: a.symbol == ^agent_symbol,
-        where: i.symbol == ^item_symbol
-      )
-      |> Repo.one!()
+    inventory = inventory!(agent_symbol, item_symbol)
 
     %InventoryLineItem{
       inventory_id: inventory.id,
-      timestamp: timestamp,
+      timestamp: DateTime.truncate(timestamp, :second),
       quantity: quantity,
       cost_per_unit: cost_per_unit,
       total_cost: quantity * cost_per_unit
@@ -223,9 +209,34 @@ defmodule SpacetradersClient.Finance do
     )
   end
 
+  defp inventory!(agent_symbol, item_symbol) do
+    existing_inventory =
+      Repo.one(
+        from(i in Inventory,
+          join: a in assoc(i, :agent),
+          join: item in assoc(i, :item),
+          where: a.symbol == ^agent_symbol,
+          where: item.symbol == ^item_symbol
+        )
+      )
+
+    if existing_inventory do
+      existing_inventory
+    else
+      agent = Repo.get_by!(Agent, symbol: agent_symbol)
+      item = Repo.get_by!(Item, symbol: item_symbol)
+
+      %Inventory{
+        agent_id: agent.id,
+        item_id: item.id
+      }
+      |> Repo.insert!()
+    end
+  end
+
   defp do_sell_inventory(agent_symbol, item_symbol, timestamp, quantity) do
     Repo.transaction(fn ->
-      inventory = inventory(agent_symbol, item_symbol)
+      inventory = inventory!(agent_symbol, item_symbol)
 
       goods_available = goods_available_for_sale(agent_symbol)
 
@@ -236,7 +247,7 @@ defmodule SpacetradersClient.Finance do
       line_item =
         %InventoryLineItem{
           inventory_id: inventory.id,
-          timestamp: timestamp,
+          timestamp: DateTime.truncate(timestamp, :second),
           quantity: -1 * quantity,
           cost_per_unit: cpu,
           total_cost: total_cost
@@ -267,13 +278,13 @@ defmodule SpacetradersClient.Finance do
           join: a in assoc(i, :agent),
           where: a.symbol == ^agent_symbol,
           select: %{
-            quantity: sum(il.quantity),
-            total_cost: sum(il.total_cost)
+            quantity: coalesce(sum(il.quantity), 0),
+            total_cost: coalesce(sum(il.total_cost), 0)
           }
         )
       )
 
-    if goods_available.quantity > 0 do
+    if not is_nil(goods_available) && goods_available.quantity > 0 do
       Map.put(
         goods_available,
         :cost_per_unit,
